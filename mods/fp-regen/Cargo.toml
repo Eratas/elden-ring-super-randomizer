@@ -1,0 +1,11 @@
+[package]
+name = "fp_regen"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+eldenring = "0.14"
+fromsoftware-shared = "0.14"

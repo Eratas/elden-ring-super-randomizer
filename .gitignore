@@ -1,0 +1,25 @@
+# game data and the game's own DLL are never committed
+*.bin
+*.dll
+# outputs
+randomized/
+/mapping.txt
+/weapons.txt
+/spells.txt
+/drops.txt
+/runes.txt
+/msg/
+# the window's own state (size, open sections, last paths, option values)
+/tools/settings.json
+/settings.json
+# python
+__pycache__/
+*.pyc
+.venv/
+# PyInstaller
+/build/
+/dist/
+*.spec
+/gui_error.log
+# Rust build cache for the fp-regen mod (regenerable with `cargo build`; ~240 MB, never commit)
+mods/fp-regen/target/
