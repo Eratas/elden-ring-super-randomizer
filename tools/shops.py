@@ -62,7 +62,7 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
         return ["# shop stock: no named items to draw from, nothing changed"]
     S = reg.param("ShopLineupParam", erreg.load_paramdef(HERE / "paramdef" / "ShopLineupParam.xml"))
     names = {cat: erreg.load_names(HERE / "names" / f"{NAMES[cat]}.txt") for cat in pools}
-    changed = {cat: 0 for cat in pools}
+    changed = dict.fromkeys(pools, 0)
     total = 0
     rows: list[tuple[int, int, int, int]] = []       # (slot id, category, old id, new id)
     for r in S.rows:

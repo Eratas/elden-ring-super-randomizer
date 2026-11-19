@@ -418,7 +418,8 @@ def test_real_file(path: str) -> None:
     except BaseException as e:                               # noqa: BLE001
         print(f"  (real-file tests skipped: cannot load {path}: {type(e).__name__}: {e})")
         return
-    dec = erreg.decrypt_regulation(open(path, "rb").read())
+    with open(path, "rb") as f:
+        dec = erreg.decrypt_regulation(f.read())
     bnd_prefix = erreg.read_dcx(dec).data[:0x8000]
     param_prefix = reg.raw("NpcParam")[:0x8000]
     pd = erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml")
@@ -786,10 +787,10 @@ def _argv_normalize(o, value):
     documented "no cap" (loot.py: `min(top, cap) if cap else top`).
     """
     if o.kind == "groups":
-        picked = set(x for x in str(value or "").split(",") if x)
-        return set(o.items) if not picked else picked
+        picked = {x for x in str(value or "").split(",") if x}
+        return picked or set(o.items)
     if o.key == "loot_max_level":
-        return None if not value else value
+        return value or None
     return value
 
 

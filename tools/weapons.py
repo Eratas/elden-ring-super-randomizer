@@ -359,8 +359,10 @@ class Weapons:
                 pool.setdefault(key, (self.names[b], self.orig_type[b]))
         pool_items = sorted(pool.items())
         n_shield = sum(1 for _, (_, t) in pool_items if t in SHIELD_TYPES)
+        shield_help = {"shields": "swap only among shield movesets", "none": "keep their own moveset",
+                       "all": "swap with everything"}
         lines = [f"# movesets: mode={mode}, {len(pool_items)} distinct movesets in the pool ({n_shield} from shields); "
-                 f"shields: {dict(shields='swap only among shield movesets', none='keep their own moveset', all='swap with everything')[shield_movesets]}"]
+                 f"shields: {shield_help[shield_movesets]}"]
         if mode == "bound":
             return lines + self._movesets_bound(rng, pool_items, variety, weptype_follows, shield_movesets) + lines_bows
         if mode == "weapon":
@@ -488,7 +490,7 @@ class Weapons:
         anim = {c: self.animated(c) for c in elig}
         # clusters: first category = least used so far, then greedily the ones sharing most ashes
         clusters: dict[int, list[int]] = {}
-        used: dict[int, int] = {c: 0 for c in elig}
+        used: dict[int, int] = dict.fromkeys(elig, 0)
         for a in range(1, 13):
             least = min(used.values())
             first = rng.choice([c for c in elig if used[c] == least])
@@ -971,7 +973,7 @@ class Weapons:
                 # the row's own vanilla numbers: an affinity row has its own profile (a Heavy Dagger
                 # needs less Dexterity than a plain one), and nothing has touched proper* yet
                 base = {st: g(row, f"proper{st}") for st in STATS}
-                req = {st: 0 for st in STATS}
+                req = dict.fromkeys(STATS, 0)
                 for st in STATS:
                     if st in scaling_stats:
                         if base.get(st, 0):

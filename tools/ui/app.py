@@ -114,7 +114,7 @@ class App:
         # the window opens in the language you last chose (English on a fresh install); --lang overrides it
         self.lang = saved_lang if saved_lang in {code for code, _ in i18n.LANGUAGES} else "en"
         self.sim_busy = False
-        self.outputs: dict[str, str] = {k: v for k, v in (self.cfg.get("outputs") or {}).items()}
+        self.outputs: dict[str, str] = dict(self.cfg.get("outputs") or {})
         self._last_input = ""
         self._t0 = 0.0
         self._save_job = None
@@ -1029,7 +1029,7 @@ class App:
         self.cfg["values"] = {k: (bool(v.get()) if isinstance(v, tk.BooleanVar) else v.get())
                               for k, v in self.vars.items()
                               if k in options.BY_KEY or k == "weapon_names_on"}
-        self.cfg["recent"] = {k: v for k, v in self.recent.items()}
+        self.cfg["recent"] = dict(self.recent)
         self.cfg["sections"] = {k: s.is_open for k, s in self.sections.items()}
         preset = self.preset_var.get()
         self.cfg["preset"] = preset if preset in presets.labels() else None
@@ -1120,14 +1120,15 @@ class App:
             v["dry_run"], v["repack"] = False, True
         else:
             v["dry_run"], v["repack"] = False, False
-            if not any(v.get(k) for k in self._masters()):
-                if not messagebox.askyesno(
+            # nothing ticked: confirm before writing what would be a recompressed copy of the input
+            if (not any(v.get(k) for k in self._masters())
+                    and not messagebox.askyesno(
                         self.t("dlg:title_nothing", "Nothing is switched on"),
                         self.t("dlg:nothing_body", "No randomization option is ticked, so the output would "
                                                    "be the input, recompressed.\n\n"
                                                    "Tick what you want to change, or choose Preview to "
-                                                   "try it anyway.")):
-                    return
+                                                   "try it anyway."))):
+                return
         try:
             v = options.validate(v)
         except ValueError as e:
