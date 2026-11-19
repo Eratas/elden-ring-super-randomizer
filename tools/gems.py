@@ -15,6 +15,7 @@ skill moves on its own, so the two can be switched on separately.
 """
 from __future__ import annotations
 
+import random
 from pathlib import Path
 
 import erreg

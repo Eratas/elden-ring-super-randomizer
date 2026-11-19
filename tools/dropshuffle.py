@@ -112,6 +112,8 @@ def shuffle(reg: erreg.Regulation, rng: random.Random, kind: str,
         for r in ed.run(k):
             rows.setdefault(r.id, r)
     for r in rows.values():
+        if ed.protected(r):                 # one-time flag drops and rows holding a key item are never moved
+            continue
         for i in range(1, SLOTS + 1):
             iid = ed.L.get(r, f"lotItemId0{i}")
             if ed.L.get(r, f"lotItemCategory0{i}") == cat and iid > 0 and ed.L.get(r, f"lotItemBasePoint0{i}") > 0:
@@ -120,6 +122,8 @@ def shuffle(reg: erreg.Regulation, rng: random.Random, kind: str,
     for k in here.get("ItemLotParam_map", {}):
         r = ed.M.by_id.get(k)
         if r is None:
+            continue
+        if ed.protected(r):                 # one-time / key-item map slots stay where they are
             continue
         for i in range(1, SLOTS + 1):
             iid = ed.M.get(r, f"lotItemId0{i}")

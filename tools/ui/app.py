@@ -209,6 +209,11 @@ class App:
         self._make_vars()
         for key, value in values.items():
             var = self.vars.get(key)
+            if var is None and key == "no_weapon_names":
+                # values() emits the inverse flag name (no_weapon_names); the rebuilt window tracks it
+                # as weapon_names_on, so map it back or the toggle silently resets on a language change
+                var = self.vars.get("weapon_names_on")
+                value = not bool(value)
             if var is None:
                 continue
             if isinstance(var, tk.BooleanVar):

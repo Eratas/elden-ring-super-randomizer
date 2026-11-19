@@ -13,13 +13,28 @@ folders: a user can browse, copy or delete them with Explorer.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
 
-BACKUP_DIR_NAME = "backups"
 MANIFEST = "manifest.json"
+BACKUP_DIR_NAME = "backups"
+
+
+def _atomic_copy(src: Path, dst: Path) -> None:
+    """Copy src onto dst atomically: write a sibling temp file, then os.replace() over dst, so a
+    crash or full disk mid-copy can never leave a half-written file over the user's original."""
+    tmp = dst.with_name(dst.name + ".tmp")
+    try:
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dst)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 ARCHIVE_NAME = "item_dlc02.msgbnd.dcx"
 KEEP_BACKUPS = 20
 
@@ -107,12 +122,14 @@ def restore(backup: Path) -> list[Path]:
     manifest = json.loads((Path(backup) / MANIFEST).read_text(encoding="utf-8"))
     restored: list[Path] = []
     for entry in manifest:
-        src = Path(backup) / entry["name"]
+        # the manifest's name is always a bare filename (make_backup writes target.name); force the
+        # basename so a tampered manifest cannot read a file from outside the backup folder
+        src = Path(backup) / Path(entry["name"]).name
         if not src.is_file():
             continue
         dst = Path(entry["original"])
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+        _atomic_copy(src, dst)
         restored.append(dst)
     return restored
 
@@ -135,11 +152,11 @@ def backup_and_replace(input_file: Path, output_file: Path, archives: list[Path]
         return None
     # replace the regulation.bin
     if output_file.is_file() and output_file.resolve() != input_file.resolve():
-        shutil.copy2(output_file, input_file)
+        _atomic_copy(output_file, input_file)
     # replace each msg archive with the patched copy the engine wrote next to the output
     msg_dir = output_file.resolve().parent / "msg"
     for archive in archive_files:
         patched = msg_dir / archive.parent.name / archive.name
         if patched.is_file() and patched.resolve() != archive.resolve():
-            shutil.copy2(patched, archive)
+            _atomic_copy(patched, archive)
     return backup

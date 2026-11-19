@@ -84,6 +84,11 @@ those invariants, the strict variant, and the staleness of both checked-in files
 
 * `dropshuffle.set_plan` — armour sets stay coherent (the test calls the production function; a
   hand-written copy of the branch once diverged from it on 200 of 200 seeds while both "passed");
+* `dropshuffle` protection — `shuffle()` leaves a one-time flagged drop and a row holding a key item
+  untouched, and the items it does move stay conserved (a permutation);
+* loot upgrade caps and rarity tiers — `--loot-max-level` with `--zone-loot-levels` never collapses a
+  zone's cap to 0 (which would roll the full ceiling), and the half-open tiers cover every upgrade
+  level with none double-counted;
 * `erreg` round-trips — DCX (zstd + deflate), AES-256-CBC encrypt/decrypt, and a BND4 rebuilt
   byte-for-byte from the shipped `msg` archive;
 * `erreg` robustness — truncated or corrupt input fails as a clean `ValueError`, never a raw
@@ -96,6 +101,12 @@ those invariants, the strict variant, and the staleness of both checked-in files
 * empty pools — `new_prices`, the price passes and `talkmsg.read_fmg` must report "nothing to do", not
   crash on a regulation.bin that does not fill them;
 * `version.py` vs `version_info.txt` — the window footer and the exe's PE resource must not drift.
+
+`test_weapons_synthetic.py` builds a small regulation in memory (real paramdefs, a few weapon types,
+40 distinct Ashes of War, enemy lots and a boss) and drives every `weapons.py` / `enemy_drops.py` pass
+over it: `--somber-infusable`, the three `--random-movesets` modes, `--random-default-ash`,
+`--random-weapon-effects`, `--random-stats`, the enemy-drop and HP passes, a same-seed determinism
+check, and the degenerate cases (too few Ashes, a single moveset) failing soft.
 
 ## Layout
 
@@ -110,3 +121,5 @@ those invariants, the strict variant, and the staleness of both checked-in files
 * `tools/randomize.py` — the engine: parse, run the passes, write the output and the reports.
 * `tools/backup.py` — backup-and-replace, revert and backup pruning.
 * `tools/test_logic.py` — the logic tests above; also used by `gui.py --self-test` inside the frozen exe.
+* `tools/test_weapons_synthetic.py` — the weapons / enemy-drops passes on a built regulation; part of
+  the gate (`tools/gate.py`).

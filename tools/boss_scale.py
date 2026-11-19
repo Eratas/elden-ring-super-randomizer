@@ -37,6 +37,8 @@ def apply(reg: erreg.Regulation, rng: random.Random, boss: set[int], orig: dict,
                 N.set(r, "hp", round(N.get(r, "hp") * rng.uniform(lo, hi)))
         lines.append(f"# boss HP x U({lo:g},{hi:g}): {len(boss)} bosses scaled")
     if couple and orig:
+        # reads the CURRENT hp (already multiplied above when boss HP scaling ran first), so a scaled
+        # boss also yields more runes; a later rune_scale then multiplies the coupled bounty on top
         for r in N.rows:
             oh, os_ = orig.get(r.id, (0, 0))
             if oh > 0:

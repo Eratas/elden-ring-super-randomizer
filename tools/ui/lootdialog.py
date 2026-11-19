@@ -13,11 +13,15 @@ import traceback
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import options  # noqa: E402
 from ui import theme  # noqa: E402
 from ui.widgets import Tooltip  # noqa: E402
+
+if TYPE_CHECKING:                       # type hint only: no runtime import, so no cycle with ui.app
+    from ui.app import App
 
 
 class QueueWriter:

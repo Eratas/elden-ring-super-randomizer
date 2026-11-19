@@ -2,8 +2,8 @@
 
 Prices (`ShopLineupParam.value`), the stock mask and the cost type stay as they are, so a slot keeps
 selling at its vanilla price and the existing price passes still apply.  Each slot is drawn
-independently - nothing is permuted between merchants, so there is no "swap" and no merchant ends up
-selling the same thing twice because of the shuffle.
+independently and with replacement - nothing is permuted between merchants, so a single shop can end
+up selling the same item in two of its slots (this is a per-slot reroll, not a swap).
 
 Merchants cannot refresh their stock on a timer: that would need a runtime hook.  What this does is the
 static half of it - every shop in the game sells something else, and the seed decides what.

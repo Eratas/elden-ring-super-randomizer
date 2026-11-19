@@ -10,7 +10,8 @@ Runs, in order, and stops at the first failure:
   3. test_phases.py                                    (the progress bar cannot drift),
   4. test_packs.py                                     (the pack contract: keys, placeholders, tips),
   5. md2nexus.py --check                               (NEXUS_DESCRIPTION.txt matches README.md),
-  6. test_logic.py                                     (pure helpers + binary round-trips: no game file needed).
+  6. test_logic.py                                     (pure helpers + binary round-trips: no game file needed),
+  7. test_weapons_synthetic.py                         (weapons/enemy_drops passes on a built regulation).
 
 Exit code 0 when all pass, 1 otherwise.  This is the local gate; CI runs the same steps.
 """
@@ -45,6 +46,7 @@ def main() -> int:
         ("pack contract", [py, str(HERE / "test_packs.py")]),
         ("nexus description", [py, str(HERE / "md2nexus.py"), "--check"]),
         ("logic tests", [py, str(HERE / "test_logic.py")]),
+        ("weapons/enemy_drops synthetic", [py, str(HERE / "test_weapons_synthetic.py")]),
     ]
     for label, argv in steps:
         if not run(label, argv):

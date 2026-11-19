@@ -105,6 +105,26 @@ class Loot:
         top = self.max_level(base)
         return min(top, cap) if cap else top
 
+    @staticmethod
+    def _tier_range(chosen, top: int) -> tuple[int, int]:
+        """Inclusive [lo, hi] upgrade levels for a tier `chosen` = (frac_lo, frac_hi, weight) at a
+        given ceiling `top`.  Tiers are half-open [a, b) so each level belongs to exactly one tier and
+        a boundary level is not counted twice (the old closed-interval ceil/floor double-counted any
+        level where b*top is a whole number, e.g. +20 of a +25 weapon).  The top tier (b == 1.0)
+        includes the ceiling itself."""
+        eps = 1e-9
+        lo = int(math.ceil(chosen[0] * top - eps))
+        hi = top if chosen[1] >= 1.0 else int(math.ceil(chosen[1] * top - eps)) - 1
+        return lo, max(lo, hi)
+
+    @staticmethod
+    def _zone_cap(top: int, share: float, max_level: int | None) -> int:
+        """The upgrade ceiling for a drop: the (max-level-capped) `top` scaled by the zone's `share`,
+        floored at 1.  A 0 would mean "no cap" to _top() and roll the full ceiling, ignoring both the
+        zone and the user's --loot-max-level (the bug where an early zone with a low max-level produced
+        +25 drops); max(1, ...) keeps the cap meaningful while still letting an early zone reach +1."""
+        return max(1, int(top * share)) if share < 1.0 else max_level
+
     def curve_for(self, rarity: str, boss: bool, bonus: str, zone: int | None = None) -> str:
         """The curve a drop uses: the chosen one, one step higher for a boss with the bonus on, and
         shifted toward "even" for later zones (item 5) so the *average* climbs with the zone, not just
@@ -137,9 +157,10 @@ class Loot:
             if roll <= upto:
                 chosen = tier
                 break
-        lo = int(math.ceil(chosen[0] * top))
-        hi = int(math.floor(chosen[1] * top))
-        level = max(0, min(top, rng.randint(min(lo, hi), max(lo, hi))))
+        # Half-open tiers [a, b): each level belongs to exactly one tier, so a boundary level is not
+        # counted twice; the top tier (b == 1.0) includes the ceiling.  See _tier_range().
+        lo, hi = self._tier_range(chosen, top)
+        level = max(0, min(top, rng.randint(lo, hi)))
         return base + affinity * 100 + level, level
 
     def _weapon_name(self, iid: int) -> str:
@@ -189,7 +210,7 @@ class Loot:
                     if iid <= 0 or P.get(r, f"lotItemBasePoint0{i}") <= 0:
                         continue
                     top = self._top(iid - iid % 10000, max_level)
-                    cap = int(top * share) if share < 1.0 else max_level
+                    cap = self._zone_cap(top, share, max_level)
                     new, level = self._roll(iid, rng, curve, cap)
                     if new != iid:
                         P.set(r, f"lotItemId0{i}", new)
@@ -212,7 +233,7 @@ class Loot:
             curve = self.curve_for(base_curve, False, boss_bonus, zone)
             share = zones.max_share(zone) if zone is not None else 1.0
             top = self._top(iid - iid % 10000, max_level)
-            cap = int(top * share) if share < 1.0 else max_level
+            cap = self._zone_cap(top, share, max_level)
             new, level = self._roll(iid, rng, curve, cap)
             if new != iid:
                 self.S.set(r, "equipId", new)

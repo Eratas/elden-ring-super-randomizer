@@ -56,6 +56,7 @@ import flasks
 import gear
 import gems
 import goods
+import loot
 import oodle
 import options
 import randomize
@@ -1309,7 +1310,7 @@ def _md_inline(rng: random.Random) -> str:
         elif roll < 0.36:
             parts.append(f"`{word}`")
         elif roll < 0.43:
-            parts.append(f"`a|b`")                 # a pipe inside a code span must not split a table
+            parts.append("`a|b`")                 # a pipe inside a code span must not split a table
         elif roll < 0.50:
             parts.append(f"[{word}](https://example.com/{word})")
         else:
@@ -1399,7 +1400,7 @@ def test_md2nexus_fuzz() -> None:
             label = f"{head} (strict={strict})"
             out = md2nexus.render(doc, strict=strict)
             bad = md2nexus.problems(out, strict=strict)
-            bad += [f"render is not deterministic"] if md2nexus.render(doc, strict=strict) != out else []
+            bad += ["render is not deterministic"] if md2nexus.render(doc, strict=strict) != out else []
             missing = sorted(w for w in words if w not in out)
             if missing:
                 bad.append(f"words lost: {missing[:8]}")
@@ -1413,12 +1414,102 @@ def test_md2nexus_fuzz() -> None:
                 check(True, "")
 
 
+# --------------------------------------------------------------------------- loot zone cap + tiers
+def test_loot_zone_cap() -> None:
+    # LL-001: a zone cap must never collapse to 0 (0 means "no cap" to Loot._top and rolls the FULL
+    # ceiling, ignoring both the zone and the user's --loot-max-level).  max(1, int(top*share)) fixes it.
+    zc = loot.Loot._zone_cap
+    check(zc(25, 0.15, None) == 3, f"_zone_cap(25, 0.15, None) = {zc(25, 0.15, None)}, want 3")
+    check(zc(5, 0.15, 5) == 1, f"_zone_cap(5, 0.15, 5) = {zc(5, 0.15, 5)}, want 1 (not 0)")
+    check(zc(25, 0.5, None) == 12, f"_zone_cap(25, 0.5, None) = {zc(25, 0.5, None)}, want 12")
+    # no zone (share == 1.0): max_level passes through unchanged (None / 0 / a positive cap)
+    check(zc(25, 1.0, 5) == 5, "zone share 1.0 should return max_level 5")
+    check(zc(25, 1.0, None) is None, "zone share 1.0 should return None (no cap)")
+    check(zc(25, 1.0, 0) == 0, "zone share 1.0 with max_level 0 should stay 0 (no cap)")
+    # the cap is actually honoured by the roll: cap=1 -> level 0 or 1 only
+    L = loot.Loot.__new__(loot.Loot)
+    L._ceilings = {1000: 25}
+    rng = random.Random(3)
+    check(all(L._roll(1000, rng, "common", 1)[1] <= 1 for _ in range(500)),
+          "_roll with cap=1 produced a level > 1")
+
+
+def test_loot_tiers() -> None:
+    # LL-002: the half-open tier ranges must cover every level 0..top with no gap (every upgrade
+    # level reachable), and at realistic ceilings each level belongs to exactly one tier (a closed-
+    # interval ceil/floor double-counted boundary levels such as +3/+9/+15/+20 of a +25 weapon).
+    for top in (1, 2, 3, 5, 7, 10, 13, 25):
+        for curve, tiers in loot.TIERS.items():
+            counts: dict[int, int] = {}
+            for chosen in tiers:
+                lo, hi = loot.Loot._tier_range(chosen, top)
+                check(0 <= lo <= hi <= top,
+                      f"{curve} top={top} tier {chosen}: bad range {lo}..{hi} (want 0<={lo}<={hi}<={top})")
+                for lv in range(lo, hi + 1):
+                    counts[lv] = counts.get(lv, 0) + 1
+            missing = [lv for lv in range(top + 1) if lv not in counts]
+            check(not missing, f"{curve} top={top}: upgrade levels never reachable: {missing}")
+            # tiny ceilings (<=3 levels, fewer than the tiers) unavoidably overlap; at >=5 they must not
+            if top >= 5:
+                dups = sorted(lv for lv, n in counts.items() if n > 1)
+                check(not dups, f"{curve} top={top}: boundary levels double-counted: {dups}")
+
+
+# --------------------------------------------------------------------------- dropshuffle protection
+def test_dropshuffle_protection() -> None:
+    # DS-001: shuffle() must NOT move a one-time flagged row or a row that holds a key item, and must
+    # leave the items it does move conserved (a permutation).  Drives the real shuffle() with a fake
+    # EnemyDrops (no regulation.bin), the same shape test_dropshuffle_sets uses for set_plan.
+    class _Row:
+        def __init__(self, rid: int) -> None:
+            self.id = rid
+            self.data: dict[str, int] = {}
+
+    class _P:
+        def __init__(self, rows: list) -> None:
+            self.rows = rows
+            self.by_id = {r.id: r for r in rows}
+
+        def get(self, row, field): return row.data.get(field, 0)
+        def set(self, row, field, val): row.data[field] = val
+
+    captured: dict = {}
+
+    class _Ed:
+        def __init__(self, reg) -> None:
+            self.r1 = _Row(1); self.r1.data = {"lotItemCategory01": 1, "lotItemId01": 100, "lotItemBasePoint01": 10,
+                                              "lotItemCategory02": 1, "lotItemId02": 101, "lotItemBasePoint02": 10}
+            self.r2 = _Row(2); self.r2.data = {"getItemFlagId": 777,
+                                              "lotItemCategory01": 1, "lotItemId01": 200, "lotItemBasePoint01": 10}
+            self.r3 = _Row(3); self.r3.data = {"lotItemCategory01": 1, "lotItemId01": 300, "lotItemBasePoint01": 10}
+            self.L = _P([self.r1, self.r2, self.r3]); self.M = _P([]); self.S = _P([])
+            captured["ed"] = self
+
+        def lots(self): return [1]
+        def run(self, first): return [self.r1, self.r2, self.r3]
+        def protected(self, r): return "one-time drop" if r.id == 2 else ""
+
+    orig = dropshuffle.EnemyDrops
+    dropshuffle.EnemyDrops = lambda reg: _Ed(reg)
+    try:
+        dropshuffle.shuffle(object(), random.Random(1), "goods", keep_sets=False)
+    finally:
+        dropshuffle.EnemyDrops = orig
+    ed = captured["ed"]
+    check(ed.r2.data.get("lotItemId01") == 200,
+          f"protected one-time row slot moved: {ed.r2.data.get('lotItemId01')} != 200")
+    unprotected = sorted([ed.r1.data.get("lotItemId01"), ed.r1.data.get("lotItemId02"),
+                          ed.r3.data.get("lotItemId01")])
+    check(unprotected == [100, 101, 300],
+          f"unprotected slots not conserved: {unprotected} != [100, 101, 300]")
+
+
 # --------------------------------------------------------------------------- main
 # Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
-                 test_dropshuffle_sets, test_dropshuffle_plan_fuzz, test_erreg_roundtrip,
-                 test_erreg_malformed, test_erreg_writer, test_erreg_cap, test_zones,
+                 test_dropshuffle_sets, test_dropshuffle_plan_fuzz, test_loot_zone_cap, test_loot_tiers,
+                 test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer, test_erreg_cap, test_zones,
                  test_argv_roundtrip, test_argv_fuzz, test_argv_pairs, test_backup, test_empty_pools,
                  test_version_resource)
 
@@ -1441,7 +1532,8 @@ def main() -> int:
         if i + 1 < len(args):
             fuzz_path = args[i + 1]
 
-    for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz):
+    for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
+                               test_dropshuffle_protection):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")
@@ -1456,9 +1548,9 @@ def main() -> int:
         return 1
     extra = " + writer + corrupt-input" + (" + real-file" if fuzz_path else "")
     print(f"LOGIC PASS - {_CHECKS} checks green "
-          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets + plan fuzz, "
-          f"erreg round-trips + malformed, argv round trip + fuzz + pairs, backup, empty pools, "
-          f"nexus description + fuzz{extra})")
+          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets + plan fuzz + "
+          f"protection, loot zone cap + tier coverage, erreg round-trips + malformed, argv round trip "
+          f"+ fuzz + pairs, backup, empty pools, nexus description + fuzz{extra})")
     return 0
 
 

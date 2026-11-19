@@ -278,7 +278,7 @@ class Weapons:
         ref_msgs0 = {g(eref0, f) for f in MSG_SLOTS} - {-1}
         added_msgs = [m for f in MSG_SLOTS if (m := g(erefa, f)) != -1 and m not in ref_msgs0]
         removed_msgs = [m for m in ref_msgs0 if m not in {g(erefa, f) for f in MSG_SLOTS}]
-        added = replaced = removed = False
+        added = removed = False
         for i, fe in enumerate(EFFECT_SLOTS):
             r0, ra = g(eref0, fe), g(erefa, fe)
             if r0 == ra:
@@ -290,7 +290,7 @@ class Weapons:
             fam = self.status_family(ra)
             same = [j for j, e in enumerate(eff) if e != -1 and (e == r0 or (fam and self.status_family(e) == fam))]
             if same:
-                eff[same[0]], replaced = ra, True
+                eff[same[0]] = ra
             else:
                 empty = [j for j in ([i] + list(range(3))) if eff[j] == -1]
                 eff[empty[0] if empty else i], added = ra, True
@@ -385,6 +385,8 @@ class Weapons:
             vs = self.variants(b)
             cand = pool_items if shield_movesets == "all" else (shield_items if is_shield else weapon_items)
             others = [p for p in cand if p[0] != own]
+            if not others:
+                continue                            # degenerate pool (only this moveset exists): keep the row as is
             if mode == "weapon":
                 key, (donor, dtype) = rng.choice(others)
                 for a in vs:
@@ -479,6 +481,9 @@ class Weapons:
             by_cat = {c: ds for c, ds in by_cat.items() if ds}
         # skip perfume / hand-to-hand / plain shield style sets with few skill animations
         elig = sorted(c for c in by_cat if len(self.animated(c)) >= MIN_ASHES_PER_CATEGORY)
+        if not elig:
+            return [f"# bound mode: no animation category has at least {MIN_ASHES_PER_CATEGORY} ashes, "
+                    "nothing changed"]
         variety = max(1, min(variety, len(elig)))
         anim = {c: self.animated(c) for c in elig}
         # clusters: first category = least used so far, then greedily the ones sharing most ashes
@@ -560,7 +565,7 @@ class Weapons:
         weapon it can be mounted on uses an animation category without that ash's animation.
         An ash not yet mountable on every shield type is opened to all shield types when at least
         one affinity animates on every shield row (shields got weapon movesets)."""
-        G, W = self.G, self.W
+        G = self.G
         attr = [f"configurableWepAttr{a:02d}" for a in range(13)]
         off = G.pd["canMountWep_Dagger"].offset
         shield_mask = 0
@@ -782,7 +787,7 @@ class Weapons:
                 groups.setdefault(self.orig_type[b], []).append(b)
         total = sum(len(v) for v in groups.values())
         if total < 2:
-            return [f"# weapon effects: fewer than two weapons, nothing changed"]
+            return ["# weapon effects: fewer than two weapons, nothing changed"]
         lines = [f"# weapon effects: {total} weapons, {len(fields)} fields shuffled inside "
                  f"each class ({', '.join(f'{k} {len(v)}' for k, v in sorted(groups.items()))})",
                  "# weapon  <-  effects of"]
