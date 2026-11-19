@@ -466,6 +466,13 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Highest upgrade level a dropped weapon can roll.\n\n"
            "0 or empty means no cap: a weapon may reach its own ceiling (+25, or +10 for somber). "
            "Example: 10 keeps every drop at +10 or lower."),
+    _o("zone_loot_levels", "--zone-loot-levels", group="drops", needs=("random_loot_levels",),
+       label="Zone-aware loot levels",
+       tip="Scales weapon upgrade levels by the area, so an early chest is not a +25 weapon: Limgrave / "
+           "Weeping Peninsula stay low, Liurnia / Caelid / Altus mid, Mountaintops / Haligtree / Farum "
+           "Azula high, the Land of Shadow at the full ceiling.\n\n"
+           "Enemy drops are not tied to a place, so only chests, boss rewards and shops scale. Needs "
+           "Random upgrade levels on loot."),
     _o("unique_drops", "--unique-drops", group="drops", needs=("random_enemy_drops",),
        label="Rare unique weapons",
        tip="Now and then an enemy drops a unique weapon - one that cannot be infused or reinforced - "
@@ -877,6 +884,8 @@ def argv_from_values(values: dict) -> list[str]:
         a += ["--boss-min-runes", str(values["boss_min_runes"])]
     if values.get("random_loot_levels"):
         a.append("--random-loot-levels")
+    if values.get("zone_loot_levels"):
+        a.append("--zone-loot-levels")
         if values.get("loot_boss_bonus") and values["loot_boss_bonus"] != "better":
             a += ["--loot-boss-bonus", values["loot_boss_bonus"]]
         if values.get("loot_max_level"):

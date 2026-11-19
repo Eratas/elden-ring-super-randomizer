@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -308,6 +309,10 @@ class App:
         self.status_label.pack(side="left", padx=(PAD, 8), pady=5)
         self.clock = tk.StringVar(value="")
         ttk.Label(actions, textvariable=self.clock, style="Muted.TLabel").pack(side="left", padx=(0, 8))
+        self.open_btn = ttk.Button(actions, text=self.t("ui:open_output", "Open output folder"),
+                                   style="TButton", command=self._open_output)
+        self.open_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.open_btn, self.t("ui:tip_open_output", "Open the folder the output regulation.bin is written to."))
 
         self.run_btn = ttk.Button(actions, text=self.t("ui:randomize", "Randomize"), style="Run.TButton",
                                   command=lambda: self._run("run"))
@@ -1163,6 +1168,16 @@ class App:
         self.root.after(120, self._poll)
 
     def _phase(self, phase: str) -> None:
+        if phase == phases.COMPRESSING:
+            # compression is one long blocking C call with no progress; show an indeterminate bar and a
+            # time hint so it does not look frozen (the slow part is ~1-3 min at max effort)
+            self.progress.configure(mode="indeterminate")
+            self.progress.start(15)
+            self.status.set(self.t("ui:compressing", "compressing... (1-3 min)"))
+            self.status_label.configure(style="Muted.TLabel")
+            return
+        self.progress.stop()
+        self.progress.configure(mode="determinate")
         try:
             index = PHASES.index(phase)
         except ValueError:
@@ -1185,9 +1200,26 @@ class App:
         if head and not self.running:
             self.status.set(line.lstrip("#").strip()[:110])
 
+    def _open_output(self) -> None:
+        out = (self.vars["output"].get() or "").strip()
+        folder = os.path.dirname(out) if out else ""
+        if not folder or not os.path.isdir(folder):
+            folder = os.getcwd()
+        try:
+            if sys.platform == "win32":
+                os.startfile(folder)               # noqa: S606 - opening a local folder in Explorer
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", folder])
+            else:
+                subprocess.Popen(["xdg-open", folder])
+        except Exception:
+            pass
+
     def _finish(self) -> None:
         self.running = False
         self.clock.set("")
+        self.progress.stop()
+        self.progress.configure(mode="determinate")
         if not self._failed:
             self.status.set(self.t("ui:done", "done"))
         self.progress["value"] = 100

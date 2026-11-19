@@ -75,7 +75,17 @@ def read_dcx(buf: bytes) -> Dcx:
     payload = buf[0x4C:0x4C + comp]
     if fmt == b"ZSTD":
         try:
-            out = zstandard.ZstdDecompressor().decompressobj().decompress(payload)
+            fp = zstandard.get_frame_parameters(payload)
+            if fp.content_size != zstandard.CONTENTSIZE_UNKNOWN:
+                # known size (write_dcx writes it): cap it, so a corrupt/hostile frame that declares
+                # more than the DCX's own uncompressed size is rejected before it can expand (D2)
+                if fp.content_size > uncomp + 0x1000:
+                    raise ValueError(f"DCX: ZSTD frame declares {fp.content_size} bytes, over the {uncomp} expected")
+                out = zstandard.ZstdDecompressor().decompress(payload)
+            else:
+                # unknown size (older / external frames, e.g. the ERR regulation): stream it; the
+                # len(out) != uncomp check below still rejects a size mismatch
+                out = zstandard.ZstdDecompressor().decompressobj().decompress(payload)
         except zstandard.ZstdError as e:       # corrupt / empty / truncated frame -> clean ValueError
             raise ValueError(f"DCX: ZSTD decompression failed ({e})") from e
         codec = CODEC_ZSTD
@@ -112,8 +122,10 @@ def write_dcx(dcx: Dcx, window_log: int = 16, level: int | None = None) -> bytes
     detects the codec from the stream itself).  `level` is the Oodle effort (oodle.LEVELS:
     "fast" in a fraction of a second, "max" much smaller but minutes slower)."""
     if dcx.codec == CODEC_ZSTD:
+        # write_content_size=1 so the frame is self-describing: read_dcx can then cap the output at
+        # the declared size (D2) and reject a corrupt/hostile frame that would expand without limit
         params = zstandard.ZstdCompressionParameters.from_level(
-            dcx.level, window_log=window_log, write_content_size=0, write_checksum=0, threads=0)
+            dcx.level, window_log=window_log, write_content_size=1, write_checksum=0, threads=0)
         comp = zstandard.ZstdCompressor(compression_params=params).compress(dcx.data)
         tag, level_byte = b"ZSTD", dcx.level
     elif dcx.codec == CODEC_DEFLATE:          # DCX DFLT level 9: what the randomizers write for msgbnd / msb / emevd

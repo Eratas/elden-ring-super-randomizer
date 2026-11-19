@@ -67,13 +67,17 @@ NOMAD = re.compile(r"^(?:Isolated |Hermit |Imprisoned )?Merchant - ")  # nomadic
 
 
 def load_locations(path: Path = LOCATIONS_FILE) -> dict[str, dict[int, str]]:
-    """table -> {row id: 'base' | 'dlc'}."""
+    """table -> {row id: the row's vanilla content, e.g. "[Stormveil - Godrick] Godrick's Great Rune"}.
+    Callers only need the row ids (membership); the content is what --zone-loot-levels reads to place a
+    lot in a progress zone (the base/dlc tag is not used by any caller)."""
     locs: dict[str, dict[int, str]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.startswith("#"):
             continue
-        table, rid, tag, *_ = line.split("\t")
-        locs.setdefault(table, {})[int(rid)] = tag
+        parts = line.split("\t")
+        table, rid = parts[0], parts[1]
+        content = parts[3] if len(parts) > 3 else ""
+        locs.setdefault(table, {})[int(rid)] = content
     return locs
 
 

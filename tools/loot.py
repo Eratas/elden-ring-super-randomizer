@@ -28,6 +28,7 @@ from pathlib import Path
 
 import bosses
 import erreg
+import zones
 from enemy_drops import EnemyDrops
 from flasks import load_locations
 
@@ -104,14 +105,16 @@ class Loot:
         top = self.max_level(base)
         return min(top, cap) if cap else top
 
-    def curve_for(self, rarity: str, boss: bool, bonus: str) -> str:
-        """The curve a drop uses: the chosen one, or one step higher for a boss with the bonus on."""
-        if not boss or bonus == "same":
-            return rarity
-        if bonus == "best":
-            return "legendary"
+    def curve_for(self, rarity: str, boss: bool, bonus: str, zone: int | None = None) -> str:
+        """The curve a drop uses: the chosen one, one step higher for a boss with the bonus on, and
+        shifted toward "even" for later zones (item 5) so the *average* climbs with the zone, not just
+        the ceiling.  CURVE_ORDER = (even, common, legendary); a zone shift lowers the index toward even."""
         i = CURVE_ORDER.index(rarity) if rarity in CURVE_ORDER else 1
-        return CURVE_ORDER[min(i + 1, len(CURVE_ORDER) - 1)]
+        if boss and bonus != "same":
+            i = len(CURVE_ORDER) - 1 if bonus == "best" else min(i + 1, len(CURVE_ORDER) - 1)
+        if zone is not None:
+            i = max(0, i - zones.ZONE_CURVE_SHIFT.get(zone, 0))
+        return CURVE_ORDER[i]
 
     # ------------------------------------------------------------------ the change
     def _roll(self, iid: int, rng: random.Random, rarity: str = "common",
@@ -144,11 +147,13 @@ class Loot:
         return f"{self.weapon_names.get(base, f'weapon {base}')}" + (f" +{level}" if level else "")
 
     def randomize(self, rng: random.Random, rarity: str = "common", boss_bonus: str = "better",
-                  max_level: int | None = None) -> list[str]:
+                  max_level: int | None = None, zone_levels: bool = False) -> list[str]:
         base_curve = rarity if rarity in TIERS else "common"
         boss_note = ("# every enemy rolls the same curve" if boss_bonus == "same"
                      else f"# boss enemies roll one curve higher ({boss_bonus})")
         cap_note = f"# levels capped at +{max_level}" if max_level else ""
+        zone_note = ("# zone-aware: map lots and shops scale with the area (early zones low, late zones high)"
+                     if zone_levels else "")
         lines = [f"# loot levels: every weapon in the drop tables, map lots and shops gets a random upgrade "
                  f"level ({base_curve} curve; 0-25, somber 0-10, unique 0)",
                  boss_note,
@@ -156,6 +161,8 @@ class Loot:
                  "# source  :  old item  ->  new item"]
         if cap_note:
             lines.insert(2, cap_note)
+        if zone_note:
+            lines.insert(2, zone_note)
         n = {"enemy": 0, "map": 0, "shop": 0}
         top_drops: list[tuple[float, int, str, int, bool]] = []
         legendary: list[str] = []
@@ -169,26 +176,31 @@ class Loot:
             if share >= LEGENDARY_SHARE:
                 legendary.append(f"# LEGENDARY drop: {self._weapon_name(new)} (+{level} of +{top})")
 
-        def do_lot(P: erreg.Param, rows: list, tag: str) -> None:
+        def do_lot(P: erreg.Param, rows: list, tag: str, zone_fn=None) -> None:
             for r in rows:
                 boss = tag == "enemy" and self.lot_boss.get(r.id, False)
-                curve = self.curve_for(base_curve, boss, boss_bonus)
+                zone = zone_fn(r.id) if (zone_levels and zone_fn) else None
+                curve = self.curve_for(base_curve, boss, boss_bonus, zone)
+                share = zones.max_share(zone) if zone is not None else 1.0
                 for i in range(1, SLOTS + 1):
                     if P.get(r, f"lotItemCategory0{i}") != CATEGORY_WEAPON:
                         continue
                     iid = P.get(r, f"lotItemId0{i}")
                     if iid <= 0 or P.get(r, f"lotItemBasePoint0{i}") <= 0:
                         continue
-                    new, level = self._roll(iid, rng, curve, max_level)
+                    top = self._top(iid - iid % 10000, max_level)
+                    cap = int(top * share) if share < 1.0 else max_level
+                    new, level = self._roll(iid, rng, curve, cap)
                     if new != iid:
                         P.set(r, f"lotItemId0{i}", new)
                         n[tag] += 1
-                        note(iid, new, level, self._top(iid - iid % 10000, max_level),
+                        note(iid, new, level, self._top(iid - iid % 10000, cap),
                              f"{r.id} {'boss' if boss else tag}")
 
         do_lot(self.L, self.drop_rows, "enemy")
         here = load_locations()
-        do_lot(self.M, [self.M.by_id[k] for k in here.get("ItemLotParam_map", {}) if k in self.M.by_id], "map")
+        do_lot(self.M, [self.M.by_id[k] for k in here.get("ItemLotParam_map", {}) if k in self.M.by_id], "map",
+               zone_fn=lambda rid: zones.zone_of(here.get("ItemLotParam_map", {}).get(rid, "")))
         shops = [self.S.by_id[k] for k in here.get("ShopLineupParam", {}) if k in self.S.by_id]
         for r in shops:
             if self.S.get(r, "equipType") != SHOP_TYPE_WEAPON:
@@ -196,11 +208,16 @@ class Loot:
             iid = self.S.get(r, "equipId")
             if iid <= 0:
                 continue
-            new, level = self._roll(iid, rng, base_curve, max_level)
+            zone = zones.zone_of(here.get("ShopLineupParam", {}).get(r.id, "")) if zone_levels else None
+            curve = self.curve_for(base_curve, False, boss_bonus, zone)
+            share = zones.max_share(zone) if zone is not None else 1.0
+            top = self._top(iid - iid % 10000, max_level)
+            cap = int(top * share) if share < 1.0 else max_level
+            new, level = self._roll(iid, rng, curve, cap)
             if new != iid:
                 self.S.set(r, "equipId", new)
                 n["shop"] += 1
-                note(iid, new, level, self._top(iid - iid % 10000, max_level), f"{r.id} shop")
+                note(iid, new, level, self._top(iid - iid % 10000, cap), f"{r.id} shop")
 
         summary = (f"# loot levels: {n['enemy']} enemy drop slots, {n['map']} map lots and {n['shop']} shop "
                    f"entries changed ({len(self._ceilings)} upgradeable weapons; 0-25, somber 0-10, unique 0)")

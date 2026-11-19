@@ -426,7 +426,9 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["goods"]:
             pool = build_pool(P, names, v["include_flasks"], v["include_remembrances"])
             if len(pool) < 2:
-                print("pool too small", file=sys.stderr)
+                # stdout, not stderr: the GUI captures stdout, so in a quiet run (loot sim) this
+                # message still reaches the log instead of vanishing into a console nobody sees
+                print("pool too small: not enough items to randomize", file=sys.stdout)
                 return 1
         else:
             pool = []
@@ -569,7 +571,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if loot_levels is not None:
             say(phases.LOOT_LEVELS)
             llines = [f"# seed={seed}"] + loot_levels.randomize(rng, v["loot_rarity"], v["loot_boss_bonus"],
-                                                              v.get("loot_max_level"))
+                                                              v.get("loot_max_level"), v.get("zone_loot_levels", False))
             print("\n".join(l for l in llines if l.startswith("#")))
 
         wnames = None

@@ -51,6 +51,7 @@ import talkmsg
 import textarchives
 import weapon_names
 import weapons
+import zones
 from dropshuffle import _set_key
 
 _CHECKS = 0
@@ -497,12 +498,24 @@ def test_real_file(path: str) -> None:
     rune_after = sorted(N2.get(r, "getSoul") for r in N2.rows if N2.get(r, "getSoul") > 0)
     check(rune_before == rune_after, "runes.randomize shuffle did not conserve the rune multiset")
 
-    # boss_scale: a range scaler, not a permutation -> every scaled value stays positive
+    # boss_scale (item): range scaling keeps values positive; --couple recomputes bounty from final HP
     boss = boss_scale.boss_ids(N2, 0)
     if boss:
+        van = {r.id: (N2.get(r, "hp"), N2.get(r, "getSoul")) for r in N2.rows if r.id in boss}
         boss_scale.apply(reg, random.Random(9), boss, {}, (0.75, 1.5), (0.75, 1.5), False)
         check(all(N2.get(r, "hp") >= 1 for r in N2.rows if r.id in boss), "boss_scale: a boss hp dropped below 1")
         check(all(N2.get(r, "getSoul") >= 1 for r in N2.rows if r.id in boss), "boss_scale: a boss rune bounty dropped below 1")
+        # couple: getSoul = round(hp_final * vanilla_soul / vanilla_hp) for every boss with a vanilla hp
+        boss_scale.apply(reg, random.Random(10), boss, van, (1.0, 1.0), (1.0, 1.0), couple=True)
+        ok = True
+        for r in N2.rows:
+            if r.id in boss and r.id in van and van[r.id][0] > 0:
+                oh, os_ = van[r.id]
+                expected = round(N2.get(r, "hp") * os_ / oh)
+                if N2.get(r, "getSoul") != expected:
+                    ok = False
+                    break
+        check(ok, "boss_scale couple did not recompute the bounty from the final HP")
 
     # goods: the (maxNum, maxRepositoryNum) pair is permuted among stackable items -> pair multiset conserved
     G = reg.param("EquipParamGoods", erreg.load_paramdef(HERE / "paramdef" / "EquipParamGoods.xml"))
@@ -566,6 +579,17 @@ def test_real_file(path: str) -> None:
             check(sum(written.values()) >= 1, "talkmsg.patch_fmgs wrote to no FMG")
         finally:
             shutil.rmtree(tmp.parent, ignore_errors=True)
+
+    # weapon_names (item 8): every affixed name keeps its base name (prefix + base + suffix)
+    wn = weapon_names.WeaponNames(reg, [str(a) for a in weapon_names.shipped_archives()])
+    wn.prepare()
+    if wn.patches:
+        _src, wtexts, _anchor = wn.patches[0]
+        fm = weapon_names.read_fmgs(_src)
+        base_names = set(fm[weapon_names.FMG_NAME].values())
+        check(all(any(bn in nn for bn in base_names)
+                  for nn in wtexts.get(weapon_names.FMG_NAME, {}).values()),
+              "weapon_names: an affixed name does not contain its base name")
 
     # durations (item 9): shuffle mode permutes the per-buff durations -> the multiset is conserved
     D = durations.Durations(reg)
@@ -634,10 +658,37 @@ def test_real_file(path: str) -> None:
 
 
 # --------------------------------------------------------------------------- main
+def test_erreg_cap() -> None:
+    # D2: a DCX whose declared uncompressed size is far smaller than the zstd frame's content size is
+    # rejected (the one-shot decompress + content-size cap stops a corrupt/hostile expanding frame)
+    w = bytearray(erreg.write_dcx(erreg.Dcx(16, b"x" * 5000, erreg.CODEC_ZSTD)))
+    struct.pack_into(">I", w, 0x1C, 10)           # lie: uncomp=10, but the frame content size is 5000
+    try:
+        erreg.read_dcx(bytes(w))
+        check(False, "DCX with an oversized frame content size was accepted")
+    except ValueError:
+        check(True, "")
+
+
+# --------------------------------------------------------------------------- main
+def test_zones() -> None:
+    # the zone classifier maps known locations to the right tier, and the cap scales with the zone (item 5)
+    check(zones.zone_of("[Stormveil - Godrick] Godrick's Great Rune") == 0, "zone_of Stormveil/Limgrave != 0")
+    check(zones.zone_of("[Leyndell - Morgott] Remembrance of the Omen King") == 1, "zone_of Leyndell != 1")
+    check(zones.zone_of("[Farum Azula - Maliketh] Remembrance of the Black Blade") == 2, "zone_of Farum Azula != 2")
+    check(zones.zone_of("Heart of Bayle") == 3, "zone_of Land of Shadow != 3")
+    check(zones.zone_of("base") == 1, "zone_of an unknown location should default to the middle tier")
+    check(zones.max_share(0) < zones.max_share(2), "early-zone cap should be lower than the late-zone cap")
+    check(zones.ZONE_CURVE_SHIFT.get(2, 0) > zones.ZONE_CURVE_SHIFT.get(0, 0),
+          "later zones should shift the rarity curve toward even (stronger average, not just a higher cap)")
+
+
+# --------------------------------------------------------------------------- main
 # Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.  gui.py
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
-                 test_dropshuffle_sets, test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer)
+                 test_dropshuffle_sets, test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer,
+                 test_erreg_cap, test_zones)
 
 
 def run_self_test() -> tuple[int, int]:
