@@ -15,9 +15,10 @@ wrong output in the field* rather than a crash:
      decoded and rebuilt byte-for-byte from the shipped msg archive (no DLL needed - it is zstd);
  * erreg robustness: truncated / corrupt input to read_bnd4, Param and read_dcx fails as a clean
      ValueError (no raw struct.error / IndexError, and never the read_bnd4 name-scan hang);
- * the options dict -> argv -> dict round trip for EVERY option: the GUI builds the command line with
-     options.argv_from_values() and runs it verbatim, so an option it forgets to emit is silently
-     ignored by the engine (--goods, --spells, --loot-rarity and --no-backup-replace all were).
+ * the options dict -> argv -> dict round trip for EVERY option, and again over hundreds of random
+     *combinations* of options: the GUI builds the command line with options.argv_from_values() and
+     runs it verbatim, so an option it forgets to emit is silently ignored by the engine (--goods,
+     --spells, --loot-rarity and --no-backup-replace all were).
 
 Run directly with `python tools/test_logic.py` or through tools/gate.py.
 """
@@ -744,9 +745,17 @@ def _argv_value(o, d: dict):
 
 
 def _argv_normalize(o, value):
-    """Compare groups as a set (order is not part of the contract) and everything else verbatim."""
+    """Compare groups as a set (order is not part of the contract) and everything else verbatim.
+
+    Two spellings of "no restriction" are one value: an empty group list is the documented "every item"
+    (options.py: `default=""`, randomize.py: `_kinds("")` -> None), and `loot_max_level` 0 is the
+    documented "no cap" (loot.py: `min(top, cap) if cap else top`).
+    """
     if o.kind == "groups":
-        return set(x for x in str(value or "").split(",") if x)
+        picked = set(x for x in str(value or "").split(",") if x)
+        return set(o.items) if not picked else picked
+    if o.key == "loot_max_level":
+        return None if not value else value
     return value
 
 
@@ -805,6 +814,102 @@ def test_argv_roundtrip() -> None:
     # 7. a raw (unvalidated) dict must not crash: a pair option's default is still the string "1.0,1.0"
     argv = options.argv_from_values(_argv_dict())
     check(isinstance(argv, list) and "--input" in argv, "argv_from_values crashed on a raw value dict")
+
+
+# --------------------------------------------------------------------------- argv fuzz
+# The per-option test above proves each switch survives on its own.  This one throws random *sets* of
+# options at the same round trip, because the interesting failures are interactions: a master switch
+# that turns off, a group list plus its master, the --weapons shorthand, two options whose emission
+# gates collide.  Deterministic (fixed seed), so a failure is reproducible from the seed in the message.
+_ARGV_FUZZ_SEED = 20261119
+_ARGV_FUZZ_SAMPLES = 600
+# options that are only part of the command line in one mode: (mode key, the value that uses them)
+_ARGV_FUZZ_MODES = {"price_min": ("price_mode", "range"), "price_max": ("price_mode", "range"),
+                    "sell_min": ("price_mode", "range"), "sell_max": ("price_mode", "range"),
+                    "rune_min": ("rune_mode", "range"), "rune_max": ("rune_mode", "range"),
+                    "hp_min": ("hp_mode", "range"), "hp_max": ("hp_mode", "range"),
+                    "duration_min": ("duration_mode", "range"), "duration_max": ("duration_mode", "range"),
+                    "moveset_variety": ("moveset_mode", "bound")}
+_ARGV_FUZZ_INTS = {"zstd_window": [16, 18, 22], "max_size": [None, 2_000_000, 2_359_296],
+                   "seed": [None, "", 0, 1, 12345], "boss_min_runes": [0, 3000, 9000],
+                   "loot_max_level": [None, 0, 5, 12], "enemy_drop_rolls": [None, 1, 3, 8],
+                   "enemy_drop_chance": [1, 25, 50, 90, 100],
+                   "price_min": [None, 1, 10, 500], "price_max": [None, 100, 900, 99999],
+                   "sell_min": [None, 1, 10], "sell_max": [None, 100, 9999],
+                   "rune_min": [None, 1, 100], "rune_max": [None, 500, 99999],
+                   "hp_min": [None, 1, 100], "hp_max": [None, 500, 99999],
+                   "duration_min": [None, 5, 30], "duration_max": [None, 60, 600],
+                   "moveset_variety": [1, 2, 3, 4],
+                   "stamina_rate": [(0.8, 1.2), (0.5, 1.0), (1.0, 2.0)],
+                   "boss_hp_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)],
+                   "boss_rune_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)]}
+
+
+def _argv_random_dict(rng: random.Random) -> dict:
+    """A random value dict: masters, enums, ints, pairs and group lists all over the place."""
+    d = _argv_dict()
+    for o in options.OPTIONS:
+        if o.key in _ARGV_SKIP or o.kind == "paths":
+            continue
+        if o.kind == "bool":
+            # both directions, explicitly: an option whose default is True (backup_replace,
+            # armour_keep_sets) is only exercised by a False, and that is exactly where a dropped
+            # --no-<flag> hides
+            d[o.key] = rng.random() < 0.5
+        elif o.kind == "enum":
+            d[o.key] = rng.choice(o.choices)
+        elif o.kind == "int":
+            d[o.key] = rng.choice(_ARGV_FUZZ_INTS.get(o.key, [None, 1, 7]))
+        elif o.kind == "pair":
+            d[o.key] = rng.choice(_ARGV_FUZZ_INTS[o.key])
+        elif o.kind == "groups":
+            items = list(o.items)
+            if rng.random() < 0.6:
+                d[o.key] = rng.choice(items + [",".join(rng.sample(items, rng.randint(1, len(items))))])
+        elif o.kind in ("str", "path"):
+            d[o.key] = rng.choice([None, "X"])
+    return d
+
+
+def _argv_gated(o, gui: dict) -> bool:
+    """True when `o` is legitimately absent from the command line in this configuration."""
+    if not options.is_active(o, gui):           # its master switch is off
+        return True
+    if o.key in _ARGV_FUZZ_MODES:
+        mode_key, wanted = _ARGV_FUZZ_MODES[o.key]
+        return gui.get(mode_key) != wanted
+    if o.key == "enemy_drop_chance":            # only meaningful together with explicit rolls
+        return gui.get("enemy_drop_rolls") in (None, "")
+    return False
+
+
+def test_argv_fuzz() -> None:
+    rng = random.Random(_ARGV_FUZZ_SEED)
+    valid = 0
+    for i in range(_ARGV_FUZZ_SAMPLES):
+        try:
+            gui = options.validate(_argv_random_dict(rng))
+        except (ValueError, SystemExit):
+            continue                            # a combination the rules reject is not a round trip
+        valid += 1
+        argv = options.argv_from_values(gui)
+        try:
+            back = options.validate(options.values_from_args(
+                options.build_argparse(prog="t").parse_args(argv)))
+        except SystemExit as e:
+            check(False, f"argv fuzz #{i} (seed {_ARGV_FUZZ_SEED}) produced an unparsable argv "
+                         f"({e}): {argv}")
+            continue
+        for o in options.OPTIONS:
+            if o.key in _ARGV_SKIP or o.kind == "paths":
+                continue
+            if _argv_normalize(o, gui.get(o.key)) != _argv_normalize(o, back.get(o.key)) \
+                    and not _argv_gated(o, gui):
+                check(False, f"argv fuzz #{i} (seed {_ARGV_FUZZ_SEED}) lost {o.key}: "
+                             f"{gui.get(o.key)!r} -> {back.get(o.key)!r} in {argv}")
+    check(valid >= _ARGV_FUZZ_SAMPLES // 3,
+          f"only {valid} of {_ARGV_FUZZ_SAMPLES} random option sets were valid - the generator or "
+          f"validate() changed shape and the fuzz is no longer covering the space")
 
 
 # --------------------------------------------------------------------------- empty pools
@@ -879,7 +984,7 @@ def test_version_resource() -> None:
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
                  test_dropshuffle_sets, test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer,
-                 test_erreg_cap, test_zones, test_argv_roundtrip, test_empty_pools,
+                 test_erreg_cap, test_zones, test_argv_roundtrip, test_argv_fuzz, test_empty_pools,
                  test_version_resource)
 
 
@@ -917,7 +1022,7 @@ def main() -> int:
     extra = " + writer + corrupt-input" + (" + real-file" if fuzz_path else "")
     print(f"LOGIC PASS - {_CHECKS} checks green "
           f"(derangement, round_price, cap_total, new_prices, dropshuffle sets, erreg round-trips + malformed,"
-          f" argv round trip, empty pools{extra})")
+          f" argv round trip + fuzz, empty pools{extra})")
     return 0
 
 
