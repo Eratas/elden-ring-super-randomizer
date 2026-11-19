@@ -564,8 +564,8 @@ TIPS: dict[str, str] = {
     "loot_boss_bonus": (
         "Bosses roll their upgrade level from a better curve than ordinary enemies.\n\n"
         "same gives every enemy the chosen curve. better lets bosses use the next curve up (even to common, "
-        "common to legendary). best makes bosses always use the legendary curve. A boss is an enemy worth "
-        "5000 runes or more in the unmodified game.\n"
+        "common to legendary). best makes bosses always use the legendary curve. A boss is an enemy with the "
+        "isSoulGetByBoss flag set; --boss-min-runes adds every enemy worth at least that many runes on top.\n"
         "Example: with common and best, a boss can drop a +24 while a soldier drops a +2.\n"
         "Needs: Random upgrade levels on loot."
     ),
