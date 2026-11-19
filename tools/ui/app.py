@@ -109,7 +109,7 @@ class App:
         self._save_job = None
         self._failed = False
 
-        root.title("Elden Ring Randomizer")
+        root.title("Elden Ring Super Randomizer")
         root.minsize(*MIN_SIZE)
         self._geometry()
         self._make_vars()
@@ -226,7 +226,7 @@ class App:
     def _build(self) -> None:
         top = ttk.Frame(self.root, style="Bar.TFrame")
         top.pack(fill="x", side="top")
-        ttk.Label(top, text=self.t("ui:title", "Elden Ring Randomizer"), style="Title.TLabel").pack(
+        ttk.Label(top, text=self.t("ui:title", "Elden Ring Super Randomizer"), style="Title.TLabel").pack(
             side="left", padx=(PAD, 8), pady=6)
         ttk.Label(top, text=f"v{version.__version__}", style="Muted.TLabel").pack(side="left", padx=(0, 8))
         self.preset_var = tk.StringVar(value=self.cfg.get("preset") or self.t("ui:presets", "Presets"))
@@ -1303,7 +1303,7 @@ class App:
         win.transient(self.root)
         frame = ttk.Frame(win, padding=16)
         frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text=self.t("ui:title", "Elden Ring Randomizer"),
+        ttk.Label(frame, text=self.t("ui:title", "Elden Ring Super Randomizer"),
                   style="Title.TLabel").pack(anchor="w")
         ttk.Label(frame, text=f"v{version.__version__}", style="Muted.TLabel").pack(anchor="w")
         ttk.Separator(frame).pack(fill="x", pady=8)

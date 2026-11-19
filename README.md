@@ -1,4 +1,4 @@
-# Elden Ring Randomizer (Super Randomizer)
+# Elden Ring Super Randomizer
 
 A window and a command line tool for **regulation.bin** – the single parameter file that holds every
 item, weapon, spell, enemy drop, shop price, spell effect and flask location in Elden Ring. The tool
@@ -300,7 +300,7 @@ build_exe.bat
 ```
 
 Needs PyInstaller (installed automatically into the same venv). The result is
-`dist\ERFurtherRandom.exe` (Linux/macOS: `dist/ERFurtherRandom`) plus `dist\msg\` next to it – ship
+`dist\EldenRingSuperRandomizer.exe` (Linux/macOS: `dist/EldenRingSuperRandomizer`) plus `dist\msg\` next to it – ship
 both, and the user adds the game's `oo2core_6_win64.dll`.
 
 ---
@@ -312,8 +312,8 @@ other kind of file, because the packer's runtime behaviour (a one-file binary un
 temporary folder and running from there) looks like a dropper. The result is a false positive, not a
 real detection – but it still stops users from running the tool. What lowers the risk, cheapest first:
 
-1. **Code signing (the real fix).** Sign `ERFurtherRandom.exe` with an Authenticode certificate
-   (`signtool sign /fd sha256 /a ERFurtherRandom.exe`). A valid signature, especially with a
+1. **Code signing (the real fix).** Sign `EldenRingSuperRandomizer.exe` with an Authenticode certificate
+   (`signtool sign /fd sha256 /a EldenRingSuperRandomizer.exe`). A valid signature, especially with a
    reputation-building EV certificate, clears SmartScreen and most AV heuristics. Without a certificate
    this step is not possible; everything below is mitigation.
 2. **The build already embeds PE version metadata** (`tools/version_info.txt` via PyInstaller

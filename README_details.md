@@ -1,4 +1,4 @@
-# Elden Ring Randomizer — details
+# Elden Ring Super Randomizer — details
 
 Everything the tool does, pass by pass, plus the file layout and the design notes behind the parts that
 look arbitrary. The short version is in [README.md](README.md).

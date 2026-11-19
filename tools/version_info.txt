@@ -1,6 +1,6 @@
 # UTF-8
 #
-# Windows PE version resource for ERFurtherRandom.exe, passed to PyInstaller with --version-file.
+# Windows PE version resource for EldenRingSuperRandomizer.exe, passed to PyInstaller with --version-file.
 #
 # Why this exists: an unsigned PyInstaller executable with NO version resource looks generic, and
 # generic unsigned binaries are exactly what antivirus heuristics and Microsoft SmartScreen flag most
@@ -30,9 +30,9 @@ VSVersionInfo(
         [StringStruct('CompanyName', 'Elden Ring Super Randomizer'),
          StringStruct('FileDescription', 'Elden Ring regulation.bin randomizer'),
          StringStruct('FileVersion', '1.0.0.0'),
-         StringStruct('InternalName', 'ERFurtherRandom'),
+         StringStruct('InternalName', 'EldenRingSuperRandomizer'),
          StringStruct('LegalCopyright', ''),
-         StringStruct('OriginalFilename', 'ERFurtherRandom.exe'),
+         StringStruct('OriginalFilename', 'EldenRingSuperRandomizer.exe'),
          StringStruct('ProductName', 'Elden Ring Super Randomizer'),
          StringStruct('ProductVersion', '1.0.0.0')])
       ]),

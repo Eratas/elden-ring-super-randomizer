@@ -1,5 +1,5 @@
 @echo off
-rem Pack the window into one executable: dist\ERFurtherRandom.exe (PyInstaller).
+rem Pack the window into one executable: dist\EldenRingSuperRandomizer.exe (PyInstaller).
 rem tools\paramdef and tools\names go inside the exe; tools\msg\engus\item_dlc02.msgbnd.dcx (the weapon names) is
 rem copied next to it as dist\msg\engus\..., because it is a text archive the game loads, not a Python file.
 rem oo2core_6_win64.dll does not: keep it next to the exe or pick it in the window.
@@ -48,7 +48,7 @@ rem on failure it is shown in full.
 if not exist build mkdir build
 set "LOG=%~dp0build\pyinstaller.log"
 echo Packing, this takes a minute or two; the full output is written to %LOG% ...
-"%VENV%\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name ERFurtherRandom ^
+"%VENV%\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name EldenRingSuperRandomizer ^
   --version-file "%~dp0tools\version_info.txt" ^
   --hidden-import test_logic ^
   --add-data "%~dp0tools\paramdef;paramdef" --add-data "%~dp0tools\names;names" ^
@@ -59,11 +59,11 @@ echo Packing, this takes a minute or two; the full output is written to %LOG% ..
   goto :fail
 )
 findstr /i /c:"WARNING" /c:"ERROR" "%LOG%"
-if not exist "dist\ERFurtherRandom.exe" (
+if not exist "dist\EldenRingSuperRandomizer.exe" (
   echo.
-  echo PyInstaller reported no error, but dist\ERFurtherRandom.exe does not exist. Most likely Windows Defender
+  echo PyInstaller reported no error, but dist\EldenRingSuperRandomizer.exe does not exist. Most likely Windows Defender
   echo quarantined the fresh exe - PyInstaller programs are often false positives. Open "Windows Security -
-  echo Virus and threat protection - Protection history", restore and allow ERFurtherRandom.exe, or add this
+  echo Virus and threat protection - Protection history", restore and allow EldenRingSuperRandomizer.exe, or add this
   echo folder to the exclusions and run this script again. If the history shows nothing, send %LOG%.
   goto :fail
 )
@@ -74,9 +74,9 @@ for /d %%L in (tools\msg\*) do (
   )
 )
 echo.
-for %%F in (dist\ERFurtherRandom.exe) do echo built %%~fF  (%%~zF bytes)
+for %%F in (dist\EldenRingSuperRandomizer.exe) do echo built %%~fF  (%%~zF bytes)
 dir /b /s dist\msg
-echo Upload ERFurtherRandom.exe together with the msg folder: the weapon names read msg\^<language^>\item_dlc02 next to the exe.
+echo Upload EldenRingSuperRandomizer.exe together with the msg folder: the weapon names read msg\^<language^>\item_dlc02 next to the exe.
 echo The game's oo2core_6_win64.dll is not shipped; users copy it from the game folder.
 echo If double-clicking it shows no window, the error is shown in a message box.
 pause

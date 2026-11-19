@@ -36,7 +36,7 @@ if __name__ == "__main__":
         except OSError:
             pass
         try:
-            messagebox.showinfo("ERFurtherRandom self-test", msg)
+            messagebox.showinfo("Elden Ring Super Randomizer self-test", msg)
         except tk.TclError:
             pass
         root.destroy()

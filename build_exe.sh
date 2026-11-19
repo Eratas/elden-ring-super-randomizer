@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pack the window into one executable with PyInstaller: dist/ERFurtherRandom (for the platform this runs on;
+# Pack the window into one executable with PyInstaller: dist/EldenRingSuperRandomizer (for the platform this runs on;
 # PyInstaller cannot cross-compile, use build_exe.bat on Windows).  paramdef/, names/ and liblinoodle.so go
 # inside the executable; the game's oo2core_6_win64.dll does not (keep it next to the executable).
 # tools/msg/<language>/item_dlc02.msgbnd.dcx (the weapon names) is copied next to the executable as
@@ -33,13 +33,13 @@ $tkenv
 EOF
 "$VENV/bin/python" -c 'import PyInstaller' 2>/dev/null \
   || "$VENV/bin/python" -m pip install --quiet pyinstaller
-"$VENV/bin/python" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name ERFurtherRandom \
+"$VENV/bin/python" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name EldenRingSuperRandomizer \
   --version-file "$PWD/tools/version_info.txt" \
   --hidden-import test_logic \
   --add-data "$PWD/tools/paramdef:paramdef" --add-data "$PWD/tools/names:names" \
   --add-data "$PWD/tools/linoodle/liblinoodle.so:linoodle" \
   --distpath dist --workpath build --specpath build tools/gui.py
-[ -x dist/ERFurtherRandom ] || { echo "PyInstaller reported success but dist/ERFurtherRandom is missing"; exit 1; }
+[ -x dist/EldenRingSuperRandomizer ] || { echo "PyInstaller reported success but dist/EldenRingSuperRandomizer is missing"; exit 1; }
 for f in tools/msg/*/item_dlc02.msgbnd.dcx; do
   [ -e "$f" ] || continue
   lang="$(basename "$(dirname "$f")")"
@@ -47,5 +47,5 @@ for f in tools/msg/*/item_dlc02.msgbnd.dcx; do
   cp "$f" "dist/msg/$lang/"
 done
 echo
-ls -l dist/ERFurtherRandom dist/msg/*/
-echo "ship dist/ERFurtherRandom together with the dist/msg folder (the weapon names); the user adds the game's oo2core_6_win64.dll"
+ls -l dist/EldenRingSuperRandomizer dist/msg/*/
+echo "ship dist/EldenRingSuperRandomizer together with the dist/msg folder (the weapon names); the user adds the game's oo2core_6_win64.dll"
