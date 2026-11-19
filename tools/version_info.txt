@@ -13,8 +13,8 @@
 # StringStruct / VarFileInfo / VarStruct, so it must not import them itself.
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 1, 0),
-    prodvers=(1, 0, 1, 0),
+    filevers=(1, 0, 2, 0),
+    prodvers=(1, 0, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -29,12 +29,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Elden Ring Super Randomizer'),
          StringStruct('FileDescription', 'Elden Ring regulation.bin randomizer'),
-         StringStruct('FileVersion', '1.0.1.0'),
+         StringStruct('FileVersion', '1.0.2.0'),
          StringStruct('InternalName', 'EldenRingSuperRandomizer'),
          StringStruct('LegalCopyright', ''),
          StringStruct('OriginalFilename', 'EldenRingSuperRandomizer.exe'),
          StringStruct('ProductName', 'Elden Ring Super Randomizer'),
-         StringStruct('ProductVersion', '1.0.1.0')])
+         StringStruct('ProductVersion', '1.0.2.0')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]

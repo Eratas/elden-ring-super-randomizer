@@ -12,7 +12,7 @@ can stack this on top of them.
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.1**.
+every setting. Current version: **1.0.2**.
 
 ```
 Files and output
