@@ -810,6 +810,52 @@ def master_switches() -> tuple[Opt, ...]:
 
 
 # -------------------------------------------------------------------------------- argv
+def _unless_default(a: list[str], values: dict, key: str, flag: str) -> None:
+    """Append `flag value` when `key` differs from its own default in the option table.
+
+    The CLI's fallback is the table default, so a value equal to it needs no flag - and every other
+    value must be passed, or the run silently uses the default instead.  Comparing against the option's
+    real default (rather than a hard-coded sibling value) is the whole point: "fast" compression once
+    meant "max" and "auto" compression once meant "kraken" because the test was inverted here.
+    """
+    value = values.get(key)
+    if value in (None, ""):
+        return
+    if value == BY_KEY[key].default:
+        return
+    a += [flag, str(value)]
+
+
+def _pair(raw, default: tuple[float, float]) -> tuple[float, float]:
+    """A (lo, hi) pair from either form of the value dict.
+
+    A validated dict carries a tuple; a raw dict (a preset, a test) still carries the option's own
+    default, which is the string "1.0,1.0".  Unpacking the string raises "too many values to unpack",
+    so the raw form is parsed here instead of being handed to `lo, hi = ...`.
+    """
+    if raw in (None, ""):
+        return default
+    if isinstance(raw, (list, tuple)):
+        return (float(raw[0]), float(raw[1])) if len(raw) == 2 else default
+    parts = [p.strip() for p in str(raw).replace(";", ",").split(",") if p.strip()]
+    return (float(parts[0]), float(parts[1])) if len(parts) == 2 else default
+
+
+def _groups_value(values: dict, key: str) -> list[str]:
+    """The selected items of a `groups` option, in canonical order (empty selection = every item).
+
+    Accepts the comma string the GUI holds and the list a validated dict carries.  `g in "<string>"`
+    would be a substring test, which is wrong as soon as one item name is contained in another.
+    """
+    every = list(BY_KEY[key].items)
+    raw = values.get(key)
+    if isinstance(raw, (list, tuple)):
+        picked = [str(g).strip() for g in raw if str(g).strip()]
+    else:
+        picked = [g.strip() for g in str(raw or "").split(",") if g.strip()]
+    return [g for g in every if not picked or g in picked]
+
+
 def argv_from_values(values: dict) -> list[str]:
     """A value dict -> the argument list randomize.py takes.  The GUI shows this and runs it verbatim."""
     a: list[str] = []
@@ -817,22 +863,20 @@ def argv_from_values(values: dict) -> list[str]:
         a += ["--input", str(values.get("input") or "regulation.bin"),
               "--output", str(values.get("output") or "randomized/regulation.bin"),
               "--repack"]
-        if values.get("compression") and values["compression"] != "auto":
-            a += ["--compression", values["compression"]]
-        if values.get("compression_level") and values["compression_level"] != "fast":
-            a += ["--compression-level", values["compression_level"]]
+        _unless_default(a, values, "compression", "--compression")
+        _unless_default(a, values, "compression_level", "--compression-level")
         if values.get("oodle_dll"):
             a += ["--oodle-dll", str(values["oodle_dll"])]
+        if not values.get("backup_replace", True):
+            a.append("--no-backup-replace")
         return a
 
     a += ["--input", str(values.get("input") or "regulation.bin"),
           "--output", str(values.get("output") or "randomized/regulation.bin")]
     if values.get("seed") not in (None, ""):
         a += ["--seed", str(values["seed"])]
-    if values.get("compression") and values["compression"] != "auto":
-        a += ["--compression", values["compression"]]
-    if values.get("compression_level") and values["compression_level"] != "fast":
-        a += ["--compression-level", values["compression_level"]]
+    _unless_default(a, values, "compression", "--compression")
+    _unless_default(a, values, "compression_level", "--compression-level")
     if values.get("oodle_dll"):
         a += ["--oodle-dll", str(values["oodle_dll"])]
     if values.get("max_size"):
@@ -842,8 +886,11 @@ def argv_from_values(values: dict) -> list[str]:
     zw = values.get("zstd_window")
     if zw not in (None, "", 16, "16"):
         a += ["--zstd-window", str(zw)]
+    if not values.get("backup_replace", True):
+        a.append("--no-backup-replace")
 
     if values.get("goods"):
+        a.append("--goods")
         if values.get("mode") and values["mode"] != "shuffle":
             a += ["--mode", values["mode"]]
         if values.get("include_flasks"):
@@ -852,6 +899,9 @@ def argv_from_values(values: dict) -> list[str]:
             a.append("--include-remembrances")
         if values.get("split_anim") and values["split_anim"] != "none":
             a += ["--split-anim", values["split_anim"]]
+
+    if values.get("spells"):
+        a.append("--spells")
 
     for key, flag in (("random_prices", "--random-prices"),
                       ("random_shop_stock", "--random-shop-stock"),
@@ -884,19 +934,23 @@ def argv_from_values(values: dict) -> list[str]:
         if values.get(key):
             a.append(flag)
     for key, flag in (("boss_hp_scale", "--boss-hp-scale"), ("boss_rune_scale", "--boss-rune-scale")):
-        lo, hi = values.get(key) or (1.0, 1.0)
-        if (float(lo), float(hi)) != (1.0, 1.0):
-            a += [flag, f"{float(lo):g},{float(hi):g}"]
+        lo, hi = _pair(values.get(key), (1.0, 1.0))
+        if (lo, hi) != (1.0, 1.0):
+            a += [flag, f"{lo:g},{hi:g}"]
     if values.get("boss_min_runes"):
         a += ["--boss-min-runes", str(values["boss_min_runes"])]
     if values.get("random_loot_levels"):
         a.append("--random-loot-levels")
-    if values.get("zone_loot_levels"):
-        a.append("--zone-loot-levels")
+        # these three hang off --random-loot-levels, not off --zone-loot-levels: the boss bonus and the
+        # level cap describe how a drop is rolled, zone scaling only changes the cap it rolls against.
+        if values.get("loot_rarity") and values["loot_rarity"] != "common":
+            a += ["--loot-rarity", values["loot_rarity"]]
         if values.get("loot_boss_bonus") and values["loot_boss_bonus"] != "better":
             a += ["--loot-boss-bonus", values["loot_boss_bonus"]]
         if values.get("loot_max_level"):
             a += ["--loot-max-level", str(values["loot_max_level"])]
+    if values.get("zone_loot_levels"):
+        a.append("--zone-loot-levels")
     if values.get("random_armor_fresh") and not values.get("armour_keep_sets", True):
         a.append("--no-armor-keep-sets")
 
@@ -936,15 +990,13 @@ def argv_from_values(values: dict) -> list[str]:
               "--enemy-drop-chance", str(values.get("enemy_drop_chance") or 50)]
     if values.get("random_enemy_drops"):
         o = BY_KEY["enemy_drop_kinds"]
-        every = list(o.items)
-        have = [g for g in every if g in (values.get("enemy_drop_kinds") or every)]
-        if len(have) != len(every):
+        have = _groups_value(values, "enemy_drop_kinds")
+        if len(have) != len(o.items):
             a += ["--enemy-drop-kinds", ",".join(have)]
     if values.get("random_shop_stock"):
         o = BY_KEY["shop_stock_kinds"]
-        every = list(o.items)
-        have = [g for g in every if g in (values.get("shop_stock_kinds") or every)]
-        if len(have) != len(every):
+        have = _groups_value(values, "shop_stock_kinds")
+        if len(have) != len(o.items):
             a += ["--shop-stock-kinds", ",".join(have)]
 
     # weapons: --weapons when all four are on, else the individual flags
@@ -981,16 +1033,20 @@ def argv_from_values(values: dict) -> list[str]:
     if values.get("random_stats"):
         o = BY_KEY["stat_groups"]
         every = list(o.items)
-        have = list(values.get("stat_groups") or every)
+        raw = values.get("stat_groups")
+        # A comma list may arrive as a string (the GUI var) or a list (a validated dict); list() on a
+        # string splits it into single characters, so "attack,guard" would become a,t,t,a,c,k,...
+        have = ([str(g).strip() for g in raw if str(g).strip()] if isinstance(raw, (list, tuple))
+                else [g.strip() for g in str(raw or "").split(",") if g.strip()]) or every
         groups = [g for g in every if g in have]
         extras = [g for g in have if g not in every]
         if len(groups) != len(every) or extras:
             a += ["--stat-groups", ",".join(groups + extras)]
         if values.get("req_mode") and values["req_mode"] != "tight":
             a += ["--req-mode", values["req_mode"]]
-        lo, hi = values.get("stamina_rate") or (0.8, 1.2)
-        if (float(lo), float(hi)) != (0.8, 1.2):
-            a += ["--stamina-rate", f"{float(lo):g},{float(hi):g}"]
+        lo, hi = _pair(values.get("stamina_rate"), (0.8, 1.2))
+        if (lo, hi) != (0.8, 1.2):
+            a += ["--stamina-rate", f"{lo:g},{hi:g}"]
 
     if values.get("flask_where") and values["flask_where"] != "anywhere":
         a += ["--flask-where", values["flask_where"]]

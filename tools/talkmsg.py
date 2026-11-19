@@ -18,7 +18,14 @@ import erreg
 
 
 def read_fmg(buf: bytes) -> dict[int, str]:
-    """FMG version 2 (DS3 / Elden Ring, UTF-16): groups of consecutive ids pointing into an offset table."""
+    """FMG version 2 (DS3 / Elden Ring, UTF-16): groups of consecutive ids pointing into an offset table.
+
+    A user-supplied text archive (--weapon-names <folder>) reaches this, so a truncated or empty file
+    has to fail as a clean ValueError rather than an IndexError from `buf[0]` or a struct.error from a
+    short read - and a bogus group count must not turn into a two-billion-iteration loop.
+    """
+    if len(buf) < 0x28:
+        raise ValueError(f"not an FMG: {len(buf)} bytes (a version 2 header needs 0x28)")
     if buf[0] != 0 or buf[1] != 0 or buf[2] != 2:
         raise ValueError("not a little-endian FMG version 2")
     groups, strings = struct.unpack_from("<ii", buf, 0x0C)
@@ -26,9 +33,15 @@ def read_fmg(buf: bytes) -> dict[int, str]:
     text: dict[int, str] = {}
     pos = 0x28
     for _ in range(groups):
+        if pos + 0x10 > len(buf):
+            raise ValueError(f"truncated FMG: {groups} groups do not fit in {len(buf)} bytes")
         first_index, first_id, last_id = struct.unpack_from("<iii", buf, pos)
         pos += 0x10
-        for i in range(last_id - first_id + 1):
+        count = last_id - first_id + 1
+        if count < 0 or offsets_at < 0 or offsets_at + 8 * (first_index + count) > len(buf):
+            raise ValueError(f"broken FMG group: {count} ids at offset table {offsets_at} "
+                             f"do not fit in {len(buf)} bytes")
+        for i in range(count):
             off = struct.unpack_from("<q", buf, offsets_at + 8 * (first_index + i))[0]
             if off == 0:
                 continue

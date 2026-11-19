@@ -265,8 +265,8 @@ class Flasks:
                 for x in [dest.row] + dest.alternatives:
                     for f, v in zip(LOT_SLOT, flask):
                         L.set(x, f, v)
-                where = place(dest.row.id, dest.name)
-                spot = (f"lot {dest.row.id}: {dest.name}" + (f" ({where})" if where else "")
+                at = place(dest.row.id, dest.name)         # not `where`: that is the filter argument
+                spot = (f"lot {dest.row.id}: {dest.name}" + (f" ({at})" if at else "")
                         + (f" [also rows {', '.join(str(x.id) for x in dest.alternatives)}: the same spot by another route]"
                            if dest.alternatives else ""))
             else:

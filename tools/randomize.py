@@ -193,8 +193,16 @@ def round_price(v: float) -> int:
 def new_prices(old: list[int], rng: random.Random, mode: str, lo: int | None, hi: int | None,
                what: str) -> list[int]:
     """shuffle: a permutation of the existing prices (an entry may land on its own price again);
-    range: log-uniform draws between lo and hi (default: the lowest / highest existing price),
-    rounded to 2 significant digits."""
+       range: log-uniform draws between lo and hi (default: the lowest / highest existing price),
+       rounded to 2 significant digits.
+
+    An empty pool has neither an entry to permute nor a lowest/highest to draw between, so it yields an
+    empty list.  Every caller that passes a pool the regulation.bin may not fill (a shop table with no
+    priced goods) would otherwise die on `min()` of nothing with "min() iterable argument is empty",
+    which names neither the pass nor the file.
+    """
+    if not old:
+        return []
     if mode == "shuffle":
         new = old[:]
         rng.shuffle(new)
@@ -227,7 +235,8 @@ def randomize_equipment_sell(reg: erreg.Regulation, rng: random.Random, mode: st
         old = [P.get(r, "sellValue") for r in heads]
         new = new_prices(old, rng, mode, smin, smax, f"{what} sell price")
         lines += ["", f"# {what} sell prices: mode={mode} entries={len(heads)}  ({param}.sellValue"
-                  + ("; every affinity row of a weapon gets its price)" if weapon else ")"),
+                  + ("; every affinity row of a weapon gets its price)" if weapon else ")")
+                  + ("" if old else "  (no sellable rows, left alone)"),
                   "# item  old -> new (runes)"]
         for r, o, n in zip(heads, old, new):
             for m in members[r.id]:
@@ -254,7 +263,7 @@ def randomize_prices(reg: erreg.Regulation, rng: random.Random, mode: str,
             and Sh.get(r, "value") > 0]            # free (0) and non-rune entries are left alone
     old = [Sh.get(r, "value") for r in rows]
     new = new_prices(old, rng, mode, pmin, pmax, "price")
-    lines = [f"# prices: mode={mode} entries={len(rows)}",
+    lines = [f"# prices: mode={mode} entries={len(rows)}" + ("" if old else "  (no shop slot sells goods for runes, left alone)"),
              "# shop entry  [merchant] item sold  old -> new (runes)   (slot: what the slot sells in vanilla,"
              " shown when an item randomizer put something else there)"]
     for r, o, n in zip(rows, old, new):
@@ -272,7 +281,8 @@ def randomize_prices(reg: erreg.Regulation, rng: random.Random, mode: str,
     srows = [r for r in G.rows if G.get(r, "sellValue") > 0 and r.id in goods]   # named rows only: ids 23-99 are debug items
     sold = [G.get(r, "sellValue") for r in srows]
     snew = new_prices(sold, rng, mode, smin, smax, "sell price")
-    lines += ["", f"# sell prices: mode={mode} entries={len(srows)}  (EquipParamGoods.sellValue)",
+    lines += ["", f"# sell prices: mode={mode} entries={len(srows)}  (EquipParamGoods.sellValue)"
+              + ("" if sold else "  (no named sellable goods, left alone)"),
               "# item  old -> new (runes)"]
     for r, o, n in zip(srows, sold, snew):
         G.set(r, "sellValue", n)

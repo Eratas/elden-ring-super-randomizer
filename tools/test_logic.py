@@ -8,20 +8,24 @@ wrong output in the field* rather than a crash:
     permutation for n >= 2 - both randomize.py and spells.py;
   * round_price / cap_total / new_prices (shuffle) - the shared price/quantity maths and the
     conservation invariant "a shuffle is a permutation, so no id is lost or duplicated";
-  * the keep_sets armour coherence invariant in dropshuffle (a set that maps to itself must stay a
-    coherent set - the bug fixed in run 20261118);
-  * the erreg binary round-trips: DCX (zstd + deflate), AES-256-CBC encrypt/decrypt, and a BND4
-    decoded and rebuilt byte-for-byte from the shipped msg archive (no DLL needed - it is zstd);
-  * erreg robustness: truncated / corrupt input to read_bnd4, Param and read_dcx fails as a clean
-    ValueError (no raw struct.error / IndexError, and never the read_bnd4 name-scan hang).
+ * the keep_sets armour coherence invariant in dropshuffle (a set that maps to itself must stay a
+     coherent set - the bug fixed in run 20261118); this test drives dropshuffle.set_plan itself, not
+     a copy of it;
+ * the erreg binary round-trips: DCX (zstd + deflate), AES-256-CBC encrypt/decrypt, and a BND4
+     decoded and rebuilt byte-for-byte from the shipped msg archive (no DLL needed - it is zstd);
+ * erreg robustness: truncated / corrupt input to read_bnd4, Param and read_dcx fails as a clean
+     ValueError (no raw struct.error / IndexError, and never the read_bnd4 name-scan hang);
+ * the options dict -> argv -> dict round trip for EVERY option: the GUI builds the command line with
+     options.argv_from_values() and runs it verbatim, so an option it forgets to emit is silently
+     ignored by the engine (--goods, --spells, --loot-rarity and --no-backup-replace all were).
 
-The set-coherence block mirrors dropshuffle.shuffle()'s keep_sets branch; keep the two in sync.
 Run directly with `python tools/test_logic.py` or through tools/gate.py.
 """
 from __future__ import annotations
 
 import os
 import random
+import re
 import shutil
 import struct
 import subprocess
@@ -42,6 +46,7 @@ import gear
 import gems
 import goods
 import oodle
+import options
 import randomize
 import runes
 import shops
@@ -49,6 +54,7 @@ import spells
 import start_items
 import talkmsg
 import textarchives
+import version
 import weapon_names
 import weapons
 import zones
@@ -130,35 +136,16 @@ def test_new_prices() -> None:
 
 # --------------------------------------------------------------------------- dropshuffle keep_sets
 def _set_aware_shuffle(found, names, rng):
-    """Mirror of dropshuffle.shuffle()'s keep_sets armour branch (lines ~95-123).  found[n] is a
-    mutable one-cell list [iid]; returns nothing, mutates found in place."""
-    groups: dict[str, list[int]] = {}
-    for n, cell in enumerate(found):
-        key = _set_key(names.get(cell[0], ""))
-        if key:
-            groups.setdefault(key, []).append(n)
-    sets = [v for v in groups.values() if len(v) > 1]
-    by_size: dict[int, list[list[int]]] = {}
-    for group in sets:
-        by_size.setdefault(len(group), []).append(group)
-    moved: set[int] = set()
-    for size in sorted(by_size):
-        bucket = by_size[size]
-        donors = bucket[:]
-        rng.shuffle(donors)
-        for group, donor in zip(bucket, donors):
-            if group is donor:
-                moved.update(group)            # the fix: hold a self-mapped set out of `rest`
-                continue
-            data = [found[t][0] for t in donor]
-            for n, iid in zip(group, data):
-                found[n][0] = iid
-                moved.add(n)
-    rest = [n for n in range(len(found)) if n not in moved]
-    ids = [found[n][0] for n in rest]
-    rng.shuffle(ids)
-    for n, iid in zip(rest, ids):
-        found[n][0] = iid
+    """Apply the production dropshuffle.set_plan to a list of one-cell lists (the fixture shape).
+
+    This used to be a hand-written copy of the keep_sets branch.  The copy read the mutable cells
+    (`found[t][0]`) where the real branch reads the original ids (`found[t][3]`), so the two produced
+    different assignments on 200 of 200 seeds while both "passed" - the test guarded a copy of the
+    logic, not the logic.  It now calls the real function, so a regression in set_plan fails here.
+    """
+    plan = dropshuffle.set_plan([cell[0] for cell in found], names, rng)
+    for cell, new in zip(found, plan):
+        cell[0] = new
 
 
 def test_dropshuffle_sets() -> None:
@@ -705,12 +692,195 @@ def test_zones() -> None:
           "later zones should shift the rarity curve toward even (stronger average, not just a higher cap)")
 
 
+# --------------------------------------------------------------------------- argv round trip
+# The window does not call the engine itself: it builds a command line with options.argv_from_values()
+# and hands that to randomize.main().  An option that function forgets to emit therefore looks ticked
+# in the window, appears ticked in the saved preset, and does nothing at all - which is exactly how
+# --goods, --spells, --loot-rarity and --no-backup-replace shipped dead.  This locks the contract
+# from the module docstring ("dict -> argv -> dict") for every option, not just the ones that broke.
+_ARGV_SKIP = {"input", "output", "archives", "weapon_names", "repack", "dry_run", "simulate",
+              "weapons", "no_weapon_names"}          # not a pass switch: handled by their own tests
+# (key, value) overrides that a single option needs to survive validate() on its own
+_ARGV_NEEDS = {"random_prices": {"price_mode": "shuffle"}, "random_runes": {"rune_mode": "shuffle"},
+               "random_enemy_hp": {"hp_mode": "shuffle"}, "random_durations": {"duration_mode": "shuffle"},
+               "random_stats": {"stat_groups": "attack"}, "somber_infusable": {"no_weapon_names": True},
+               "loot_rarity": {"random_loot_levels": True},
+               "loot_boss_bonus": {"random_loot_levels": True},
+               "loot_max_level": {"random_loot_levels": True},
+               # these are only part of the command line in their own mode; in the default mode they are
+               # correctly left out, so the test has to ask for the mode that uses them
+               "price_min": {"price_mode": "range"}, "price_max": {"price_mode": "range"},
+               "sell_min": {"price_mode": "range"}, "sell_max": {"price_mode": "range"},
+               "rune_min": {"rune_mode": "range"}, "rune_max": {"rune_mode": "range"},
+               "hp_min": {"hp_mode": "range"}, "hp_max": {"hp_mode": "range"},
+               "duration_min": {"duration_mode": "range"}, "duration_max": {"duration_mode": "range"},
+               "moveset_variety": {"moveset_mode": "bound"},
+               "enemy_drop_chance": {"enemy_drop_rolls": 3}}
+_ARGV_INT = {"zstd_window": 18, "max_size": 2_000_000}     # the defaults are not "a different value"
+
+
+def _argv_dict() -> dict:
+    d = {o.key: o.default for o in options.OPTIONS}
+    d.update({"input": "in.bin", "output": "out/regulation.bin", "repack": False,
+              "dry_run": False, "simulate": None})
+    return d
+
+
+def _argv_value(o, d: dict):
+    """A value for `o` that differs from its default (or None when there is no such value)."""
+    if o.kind == "bool":
+        return not o.default
+    if o.kind == "enum":
+        return next((c for c in o.choices if c != o.default), None)
+    if o.kind == "int":
+        return _ARGV_INT.get(o.key, 7)
+    if o.kind == "pair":
+        return (0.5, 1.5)
+    if o.kind == "groups":
+        return ",".join(list(o.items)[:2])
+    if o.kind == "paths":
+        return ()
+    return "X"
+
+
+def _argv_normalize(o, value):
+    """Compare groups as a set (order is not part of the contract) and everything else verbatim."""
+    if o.kind == "groups":
+        return set(x for x in str(value or "").split(",") if x)
+    return value
+
+
+def test_argv_roundtrip() -> None:
+    # 1. every option: set it apart from its default, argv it, parse it back - the value must survive
+    for o in options.OPTIONS:
+        if o.key in _ARGV_SKIP or o.kind == "paths":
+            continue
+        d = _argv_dict()
+        for k in o.needs:                       # a dependent option needs its master on
+            d[k] = True
+        d.update(_ARGV_NEEDS.get(o.key, {}))
+        d[o.key] = _argv_value(o, d)
+        v = options.validate(d)
+        argv = options.argv_from_values(v)
+        back = options.validate(options.values_from_args(options.build_argparse(prog="t").parse_args(argv)))
+        check(_argv_normalize(o, v.get(o.key)) == _argv_normalize(o, back.get(o.key)),
+              f"argv round trip lost {o.key}: {v.get(o.key)!r} -> {back.get(o.key)!r} (argv: {argv})")
+
+    # 2. the switches that were dead: they must appear in the command line verbatim
+    argv = options.argv_from_values(options.validate(dict(_argv_dict(), goods=True, spells=True)))
+    check("--goods" in argv, f"--goods missing from the argv of a goods run: {argv}")
+    check("--spells" in argv, f"--spells missing from the argv of a spell run: {argv}")
+
+    # 3. --no-backup-replace must reach the engine, or the opt-out silently overwrites the user's files
+    for repack in (False, True):
+        argv = options.argv_from_values(dict(_argv_dict(), repack=repack, backup_replace=False))
+        check("--no-backup-replace" in argv,
+              f"--no-backup-replace missing (repack={repack}): {argv}")
+    check("--no-backup-replace" not in options.argv_from_values(dict(_argv_dict(), backup_replace=True)),
+          "--no-backup-replace emitted for a run that asked for a backup")
+
+    # 4. compression: the CLI default is the table default, so every other value must be passed.  The
+    # old test compared against a sibling value and so inverted both knobs ("fast" meant "max",
+    # "auto" meant "kraken").
+    for level in ("fast", "max"):
+        for codec in ("auto", "kraken", "zstd"):
+            argv = options.argv_from_values(dict(_argv_dict(), compression_level=level, compression=codec))
+            back = options.values_from_args(options.build_argparse(prog="t").parse_args(argv))
+            check((back["compression_level"], back["compression"]) == (level, codec),
+                  f"compression {level}/{codec} became {back['compression_level']}/{back['compression']}")
+
+    # 5. loot: rarity / boss bonus / level cap hang off --random-loot-levels, not off --zone-loot-levels
+    argv = options.argv_from_values(options.validate(
+        dict(_argv_dict(), random_loot_levels=True, loot_rarity="even",
+             loot_boss_bonus="same", loot_max_level=12)))
+    for flag, value in (("--loot-rarity", "even"), ("--loot-boss-bonus", "same"), ("--loot-max-level", "12")):
+        check(flag in argv and value in argv, f"{flag} {value} missing without --zone-loot-levels: {argv}")
+
+    # 6. a groups value may be the comma string of the GUI var or a list; list() on a string would
+    #    split it into characters and emit "--stat-groups a,t,t,a,c,k,..."
+    argv = options.argv_from_values(dict(_argv_dict(), random_stats=True, stat_groups="attack,guard"))
+    check("--stat-groups" in argv and argv[argv.index("--stat-groups") + 1] == "attack,guard",
+          f"stat_groups string was not passed through verbatim: {argv}")
+
+    # 7. a raw (unvalidated) dict must not crash: a pair option's default is still the string "1.0,1.0"
+    argv = options.argv_from_values(_argv_dict())
+    check(isinstance(argv, list) and "--input" in argv, "argv_from_values crashed on a raw value dict")
+
+
+# --------------------------------------------------------------------------- empty pools
+def test_empty_pools() -> None:
+    """A pool the regulation.bin does not fill must be a no-op, not a crash.
+
+    `new_prices(range)` derives its limits from the pool, so an empty one used to raise
+    "min() iterable argument is empty" - naming neither the pass nor the file.  read_fmg is fed
+    user-supplied archives (--weapon-names <folder>), so a truncated one must be a clean ValueError.
+    """
+    for mode in ("shuffle", "range"):
+        check(randomize.new_prices([], random.Random(1), mode, None, None, "price") == [],
+              f"new_prices([], {mode!r}) should return [], not raise")
+    check(randomize.new_prices([], random.Random(1), "range", 10, 90, "price") == [],
+          "new_prices([], 'range') with explicit limits should still return []")
+
+    class _Empty:                                   # a param table whose rows are all filtered out
+        rows: list = []
+
+        def get(self, r, f):
+            return 0
+
+    class _Reg:
+        def param(self, name, pd):
+            return _Empty()
+
+    for mode in ("shuffle", "range"):
+        lines = randomize.randomize_prices(_Reg(), random.Random(1), mode, None, None, sell=True)
+        check(any("left alone" in x for x in lines),
+              f"randomize_prices on an empty pool should say so (mode {mode!r}): {lines}")
+        lines = randomize.randomize_equipment_sell(_Reg(), random.Random(1), mode, None, None)
+        check(any("left alone" in x for x in lines),
+              f"randomize_equipment_sell on an empty pool should say so (mode {mode!r}): {lines}")
+
+    for buf in (b"", b"\x00", b"\x00\x00\x02", b"\x00\x00\x02" + b"\x00" * 36):
+        try:
+            talkmsg.read_fmg(buf)
+        except ValueError:
+            continue
+        except BaseException as e:                  # IndexError, struct.error: the raw failures
+            check(False, f"read_fmg({buf!r}) raised {type(e).__name__}: {e} (expected ValueError)")
+        else:
+            check(False, f"read_fmg({buf!r}) returned instead of raising ValueError")
+
+
+# --------------------------------------------------------------------------- version resource
+def test_version_resource() -> None:
+    """tools/version.py and tools/version_info.txt are two spellings of one number.
+
+    Both files say they must stay in step and nothing checked it: bump one and the exe reports a
+    version the window does not (or the other way round), which also breaks the offline update check,
+    since it compares latest_version.txt against __version__.  Skipped inside a frozen bundle, which
+    consumes version_info.txt at build time and does not ship it.
+    """
+    path = HERE / "version_info.txt"
+    if not path.is_file():
+        return
+    want = tuple(int(x) for x in version.__version__.split("."))
+    text = path.read_text(encoding="utf-8")
+    for field in ("filevers", "prodvers", "FileVersion", "ProductVersion"):
+        match = re.search(rf"{field}\s*=?\s*\(?([\d,\s.'\"]+)", text)
+        check(match is not None, f"version_info.txt has no {field}")
+        if not match:
+            continue
+        got = tuple(int(x) for x in re.findall(r"\d+", match.group(1)))
+        check(got[:len(want)] == want,
+              f"version_info.txt {field} {got} != version.py {want}")
+
+
 # --------------------------------------------------------------------------- main
 # Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.  gui.py
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
                  test_dropshuffle_sets, test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer,
-                 test_erreg_cap, test_zones)
+                 test_erreg_cap, test_zones, test_argv_roundtrip, test_empty_pools,
+                 test_version_resource)
 
 
 def run_self_test() -> tuple[int, int]:
@@ -746,7 +916,8 @@ def main() -> int:
         return 1
     extra = " + writer + corrupt-input" + (" + real-file" if fuzz_path else "")
     print(f"LOGIC PASS - {_CHECKS} checks green "
-          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets, erreg round-trips + malformed{extra})")
+          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets, erreg round-trips + malformed,"
+          f" argv round trip, empty pools{extra})")
     return 0
 
 

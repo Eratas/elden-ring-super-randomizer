@@ -50,6 +50,52 @@ def _item_name(names: dict[int, str], iid: int, cat: int) -> str:
     return names.get(iid, f"{WORD.get(cat, 'item')} {iid}")
 
 
+def set_plan(iids: list[int], names: dict[int, str], rng: random.Random) -> list[int]:
+    """Which original item each slot receives when armour sets move as a unit (keep_sets).
+
+    Pure by design: it reads only `iids` (the ORIGINAL item id of every slot) and `names`, never the
+    live param rows, so the result depends on the inputs and the seed alone and can be tested directly
+    (test_logic.test_dropshuffle_sets drives this function, not a copy of it).
+
+    Slots whose item belongs to a named set of two or more pieces are dealt out set by set, and groups
+    of equal size are permuted among themselves: set A's helm, chest, gauntlets and greaves all become
+    set B's pieces, so looting one piece still tells you what the rest of that set is.  A set that maps
+    to itself keeps its own pieces and is held out of the loose shuffle, which would otherwise split it.
+    Every remaining slot shuffles among itself.
+
+    Returns `plan`, where `plan[n]` is the original item id that slot `n` ends up holding.
+    """
+    groups: dict[str, list[int]] = {}
+    for n, iid in enumerate(iids):
+        key = _set_key(names.get(iid, ""))
+        if key:
+            groups.setdefault(key, []).append(n)
+    sets = [v for v in groups.values() if len(v) > 1]
+    by_size: dict[int, list[list[int]]] = {}
+    for group in sets:
+        by_size.setdefault(len(group), []).append(group)
+    moved: set[int] = set()
+    plan = list(iids)
+    for size in sorted(by_size):
+        bucket = by_size[size]
+        donors = bucket[:]
+        rng.shuffle(donors)
+        for group, donor in zip(bucket, donors):
+            if group is donor:
+                moved.update(group)
+                continue
+            data = [iids[t] for t in donor]
+            for n, iid in zip(group, data):
+                plan[n] = iid
+                moved.add(n)
+    rest = [n for n in range(len(iids)) if n not in moved]
+    ids = [iids[n] for n in rest]
+    rng.shuffle(ids)
+    for n, iid in zip(rest, ids):
+        plan[n] = iid
+    return plan
+
+
 def shuffle(reg: erreg.Regulation, rng: random.Random, kind: str,
             keep_sets: bool = False) -> list[str]:
     if kind not in CATEGORIES:
@@ -91,39 +137,11 @@ def shuffle(reg: erreg.Regulation, rng: random.Random, kind: str,
     if len(found) < 2:
         return [f"# {WORD[cat]} drops: fewer than two slots, nothing moved"]
 
-    # set-aware mode for armour: group the slots by the set of their item, then move sets as a unit
+    # set-aware mode for armour: the pieces of an armour set are moved as a unit
     if keep_sets and cat == 3:
-        groups: dict[str, list[int]] = {}
-        for n, (P, r, i, iid) in enumerate(found):
-            key = _set_key(names.get(iid, ""))
-            if key:
-                groups.setdefault(key, []).append(n)
-        sets = [v for v in groups.values() if len(v) > 1]
-        by_size: dict[int, list[list[int]]] = {}
-        for group in sets:
-            by_size.setdefault(len(group), []).append(group)
-        moved: set[int] = set()
-        for size in sorted(by_size):
-            bucket = by_size[size]
-            donors = bucket[:]
-            rng.shuffle(donors)
-            for group, donor in zip(bucket, donors):
-                if group is donor:
-                    # a set keeps its own (already-coherent) pieces; hold its slots out of `rest` so
-                    # the loose-item shuffle below cannot split the set
-                    moved.update(group)
-                    continue
-                data = [found[t][3] for t in donor]
-                for n, iid in zip(group, data):
-                    P, r, i, _old = found[n]
-                    _write(P, r, i, iid)
-                    moved.add(n)
-        rest = [n for n in range(len(found)) if n not in moved]
-        ids = [found[n][3] for n in rest]
-        rng.shuffle(ids)
-        for n, iid in zip(rest, ids):
-            P, r, i, _old = found[n]
-            _write(P, r, i, iid)
+        plan = set_plan([f[3] for f in found], names, rng)
+        for (P, r, i, _old), new in zip(found, plan):
+            _write(P, r, i, new)
         unit = "; sets move as a unit"
     else:
         donors = [f[3] for f in found]

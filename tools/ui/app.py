@@ -1076,8 +1076,14 @@ class App:
     # ------------------------------------------------------------------ running
     def _dll_error(self, v: dict) -> str | None:
         """Why the run cannot write kraken, or None.  Without this the engine would ask for the DLL on
-        the console the window was started from, which nobody is looking at."""
-        if v["repack"] or v.get("simulate") or v["compression"] not in ("kraken", "leviathan", "auto"):
+           the console the window was started from, which nobody is looking at.
+
+        A preview writes nothing and the engine forces zstd for it (randomize.main: `codec = ZSTD if
+        dry_run or simulate`), so blocking a preview on a DLL it never uses was a false alarm - it
+        stopped the one mode that works without the DLL from running.
+        """
+        if (v["repack"] or v.get("simulate") or v.get("dry_run")
+                or v["compression"] not in ("kraken", "leviathan", "auto")):
             return None
         if oodle.missing_dll():
             return (f"{oodle.DLL_NAME} was not found, so the game's own kraken format cannot be written.\n\n"
@@ -1292,7 +1298,9 @@ class App:
         self.progress.configure(mode="determinate")
         if not self._failed:
             self.status.set(self.t("ui:done", "done"))
-        self.progress["value"] = 100
+            # only a completed run may fill the bar: a run that died in the weapons pass used to end at
+            # 100 % with a full bar and the word "failed" next to it, which reads as "finished"
+            self.progress["value"] = 100
         self._refresh()
 
     def _show_about(self) -> None:
