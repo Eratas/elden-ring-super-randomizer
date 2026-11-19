@@ -7,6 +7,8 @@ use it, see [README.md](README.md).
 
 * **Python 3.10–3.14** (developed on 3.14, which `.python-version` pins). Tk must be available (on
   Windows, tick *tcl/tk and IDLE* in the python.org installer; on Linux, `sudo apt install python3-tk`).
+  **3.15 is not supported**: `zstandard` publishes no 3.15 wheel, so pip falls back to a source build
+  (needs MSVC) and the install fails; `findpython.bat` and the launchers deliberately skip it.
 * Two dependencies only: `zstandard` (zstd output) and `cryptography` (the file's AES-256-CBC
   encryption). `oo2core_6_win64.dll` is **not** a dependency: it is RAD Game Tools' and ships with the
   game; without it the tool writes zstd instead of kraken.
@@ -39,19 +41,35 @@ randomize_gui.bat                  rem the window, using the venv above
 ## The gate
 
 ```bat
-python tools\gate.py               rem byte-compile + packs + phases + contract + nexus + logic tests
+python tools\gate.py               rem byte-compile + packs + phases + contract + nexus + logic + synthetic + lint
 ```
 
 `gate.py` runs, in order: byte-compile every `tools/*.py`, `check_packs.py --min-tip 120
 --strict-structure` (the language packs), `test_phases.py` (the progress bar cannot drift from the
 engine), `test_packs.py` (keys, placeholders, paragraphs, choices), `md2nexus.py --check` (the Nexus
-description matches the README), and `test_logic.py`. Exit code 0 means all green.
+description matches the README), `test_logic.py`, `test_weapons_synthetic.py` (the weapons / gems /
+gear / enemy-drop passes on a built regulation), and `lint.py` (ruff's pyflakes + syntax checks).
+Exit code 0 means all green.
 
 Against a real `regulation.bin` (slow, needs the game's DLL for the kraken round-trip):
 
 ```bat
 python tools\test_logic.py --fuzz "C:\Games\ELDEN RING\Game\regulation.bin"
 ```
+
+## Linting
+
+`tools/lint.py` runs ruff's real-bug checks (pyflakes `F` + syntax `E9`) over `tools/`. Ruff is a dev
+tool, not a runtime dependency, so the lint step is *skipped* (not failed) when it is not installed:
+
+```bat
+pip install ruff
+python tools\lint.py             rem or directly: python -m ruff check tools\ --select F,E9
+```
+
+`gate.py` runs it as its last step, so a green gate also means no undefined names (an annotation that
+references a module that was never imported), unused locals, or f-strings without a placeholder
+slipped in.
 
 ## The Nexus description
 

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Deep pass coverage for weapons.py and enemy_drops.py on a hand-built synthetic regulation.
+"""Deep pass coverage for weapons.py, gems.py, gear.py and enemy_drops.py on a synthetic regulation.
 
 The other logic tests cover the pure helpers (derangement, price maths, dropshuffle.set_plan, the
-binary round-trips).  The weapon and enemy-drop passes are harder to pin because they read a real
-regulation.bin, so this builds a small one in memory - real paramdefs, real named ids, a few weapon
-types, 40 distinct Ashes of War, a couple of enemy lots and a boss - and drives every pass over it.
+binary round-trips).  The randomizer passes are harder to pin because they read a real regulation.bin,
+so this builds a small one in memory - real paramdefs, real named ids, a few weapon types, 40 distinct
+Ashes of War, armour and talisman rows, two enemy lots and a boss - and drives every pass over it.
 
 It asserts behaviour, not just "did not crash":
 
   * --somber-infusable turns a one-row weapon into the full 13-row affinity block;
   * the three --random-movesets modes, --random-default-ash, --random-weapon-effects and
     --random-stats all produce a report and change the tables;
+  * --random-gem-skills / --random-gem-effects and the armour / talisman passes shuffle without
+    losing or duplicating a value (a permutation keeps each column's multiset);
   * the enemy-drop passes change the lot rows and the HP pass changes NpcParam.hp;
   * the same seed gives byte-identical output (reproducibility: a set/dict iterated in a random
     order before an RNG draw would break this on some interpreter);
@@ -31,6 +33,8 @@ sys.path.insert(0, str(HERE))
 
 import enemy_drops  # noqa: E402
 import erreg  # noqa: E402
+import gear  # noqa: E402
+import gems  # noqa: E402
 import weapons  # noqa: E402
 
 MELEE = [1, 3, 5, 13]          # dagger, straight sword, greatsword, katana (wepType)
@@ -128,6 +132,7 @@ def build() -> erreg.Regulation:
     for i, gid in enumerate(ash_ids):
         r = _addrow(G, gid)
         G.set(r, "swordArtsParamId", i + 1)   # distinct skill per row -> 40 distinct Ashes
+        G.set(r, "spEffectId0", i + 1)        # distinct on-hit effect, so the triple shuffle changes rows
         G.set(r, "sortId", i + 1)
         r.data[goff:goff + 8] = melee_mask.to_bytes(8, "little")
         for a in range(13):
@@ -167,10 +172,16 @@ def build() -> erreg.Regulation:
     reg._params["EquipParamGoods"] = GD
 
     PR = _mkparam(_loadpd("EquipParamProtector"))
-    for i, pid in enumerate((100000, 100001, 200000, 200001, 300000, 300001, 400000, 400001)):
+    # real armour ids (names/EquipParamProtector.txt), two per slot, with distinct numbers so a
+    # permutation is observable; gear.py groups by protectorCategory (0 head, 1 body, 2 arms, 3 legs)
+    for i, (pid, cat) in enumerate(((100000, 0), (200000, 0), (40000, 1), (40100, 1),
+                                    (40200, 2), (40300, 3))):
         rr = _addrow(PR, pid)
-        PR.set(rr, "protectorCategory", i % 4)
-        PR.set(rr, "weight", 5.0)
+        PR.set(rr, "protectorCategory", cat)
+        PR.set(rr, "weight", 1.0 + i)
+        PR.set(rr, "neutralDamageCutRate", 0.5 + i * 0.05)
+        PR.set(rr, "resistPoison", 10 + i)
+        PR.set(rr, "saDurability", 20 + i)
     _finalize(PR)
     reg._params["EquipParamProtector"] = PR
 
@@ -258,6 +269,53 @@ def run() -> None:
     check(N.get(N.by_id[100000], "hp") != 200, "--random-enemy-hp: hp unchanged")
     check(len(out) > 1, "--random-enemy-hp: empty report")
 
+    # --- gems: skills and effect triples shuffle within the shared weapon-mask group ---
+    reg = build()
+    ashes = gems.Ashes(reg)
+    sk_before = sorted(ashes.P.get(r, "swordArtsParamId") for r in ashes.P.rows)
+    check(len(ashes.randomize_skills(random.Random(1))) > 1, "--random-gem-skills: empty report")
+    check(sk_before == sorted(ashes.P.get(r, "swordArtsParamId") for r in ashes.P.rows),
+          "--random-gem-skills: skill multiset changed (must be a shuffle)")
+
+    reg = build()
+    ashes = gems.Ashes(reg)
+    fx_before = sorted(ashes.P.get(r, "spEffectId0") for r in ashes.P.rows)
+    check(len(ashes.randomize_effects(random.Random(1))) > 1, "--random-gem-effects: empty report")
+    check(fx_before == sorted(ashes.P.get(r, "spEffectId0") for r in ashes.P.rows),
+          "--random-gem-effects: effect multiset changed (must be a shuffle)")
+
+    # --- gear: armour columns permuted within a slot; talismans shuffled whole ---
+    reg = build()
+    armour = gear.Armour(reg)
+    w_before = sorted(armour.P.get(r, "weight") for r in armour.P.rows
+                      if armour.P.get(r, "protectorCategory") == 0)
+    check(len(armour.randomize(random.Random(1))) > 1, "--random-armour: empty report")
+    check(w_before == sorted(armour.P.get(r, "weight") for r in armour.P.rows
+                             if armour.P.get(r, "protectorCategory") == 0),
+          "--random-armour: weight multiset changed (must be a permutation)")
+    check(len(gear.Armour(build()).randomize_fresh(random.Random(1))) > 1,
+          "--random-armour (fresh): empty report")
+
+    # Talismans uses erreg.Param.loose (raw rows, no paramdef); the synthetic reg has no BND to read
+    # from, so inject a stand-in loose param for EquipParamAccessory and run the pass under it.
+    tal = object.__new__(erreg.Param)
+    tal.pd = erreg.ParamDef("EquipParamAccessory", 0, [], 16)
+    tal.header = bytes(0x40)
+    tal.param_type = "EquipParamAccessory"
+    tal.rows = [erreg.ParamRow(i, bytes([i & 0xFF]) * 16) for i in (1000, 1001, 1002, 1010, 1011, 1012)]
+    tal.by_id = {r.id: r for r in tal.rows}
+    tal.dirty = False
+    _orig_loose = erreg.Param.loose
+    erreg.Param.loose = staticmethod(lambda reg, name: tal)
+    try:
+        ids_before = sorted(r.id for r in tal.rows)
+        tal_out = gear.Talismans(build()).randomize(random.Random(1))
+        ids_after = sorted(r.id for r in tal.rows)
+    finally:
+        erreg.Param.loose = _orig_loose
+    check(len(tal_out) > 1, "--random-talismans: empty report")
+    check(ids_before == ids_after, "--random-talismans: row count changed")
+
     # --- reproducibility: same seed -> byte-identical output ---
     a = weapons.Weapons(build()).random_movesets(random.Random(1), mode="affinity")
     b = weapons.Weapons(build()).random_movesets(random.Random(1), mode="affinity")
@@ -294,7 +352,8 @@ def main() -> int:
             print(f"  - {msg}")
         return 1
     print(f"WEAPONS SYNTHETIC PASS - {_CHECKS} checks green "
-          f"(somber, movesets x3, ash, effects, stats, enemy drops, hp, determinism, degenerate guards)")
+          f"(somber, movesets x3, ash, effects, stats, gems, armour, talismans, enemy drops, hp, "
+          f"determinism, degenerate guards)")
     return 0
 
 
