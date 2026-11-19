@@ -47,9 +47,9 @@ python tools\gate.py               rem byte-compile + packs + phases + contract 
 `gate.py` runs, in order: byte-compile every `tools/*.py`, `check_packs.py --min-tip 120
 --strict-structure` (the language packs), `test_phases.py` (the progress bar cannot drift from the
 engine), `test_packs.py` (keys, placeholders, paragraphs, choices), `md2nexus.py --check` (the Nexus
-description matches the README), `test_logic.py`, `test_weapons_synthetic.py` (the weapons / gems /
-gear / enemy-drop passes on a built regulation), and `lint.py` (ruff's pyflakes + syntax checks).
-Exit code 0 means all green.
+description matches the README), `test_logic.py`, `test_passes_synthetic.py` (the weapons / gems /
+gear / spells / goods / shops / enemy-drop passes on a built regulation), and `lint.py` (ruff's
+pyflakes + syntax checks). Exit code 0 means all green.
 
 Against a real `regulation.bin` (slow, needs the game's DLL for the kraken round-trip):
 
@@ -63,7 +63,7 @@ python tools\test_logic.py --fuzz "C:\Games\ELDEN RING\Game\regulation.bin"
 tool, not a runtime dependency, so the lint step is *skipped* (not failed) when it is not installed:
 
 ```bat
-pip install ruff
+pip install -r requirements-dev.txt    rem installs ruff (dev only; the tool itself needs requirements.txt)
 python tools\lint.py             rem or directly: python -m ruff check tools\ --select F,E9
 ```
 
@@ -120,11 +120,12 @@ those invariants, the strict variant, and the staleness of both checked-in files
   crash on a regulation.bin that does not fill them;
 * `version.py` vs `version_info.txt` — the window footer and the exe's PE resource must not drift.
 
-`test_weapons_synthetic.py` builds a small regulation in memory (real paramdefs, a few weapon types,
-40 distinct Ashes of War, enemy lots and a boss) and drives every `weapons.py` / `enemy_drops.py` pass
-over it: `--somber-infusable`, the three `--random-movesets` modes, `--random-default-ash`,
-`--random-weapon-effects`, `--random-stats`, the enemy-drop and HP passes, a same-seed determinism
-check, and the degenerate cases (too few Ashes, a single moveset) failing soft.
+`test_passes_synthetic.py` builds a small regulation in memory (real paramdefs, a few weapon types,
+40 distinct Ashes of War, armour and talisman rows, a handful of sorceries, enemy lots and a boss) and
+drives every randomizer pass over it: `--somber-infusable`, the three `--random-movesets` modes,
+`--random-default-ash`, `--random-weapon-effects`, `--random-stats`, the gem / armour / talisman /
+spell / goods / shop passes, an FMG write/read round trip, the enemy-drop and HP passes, a same-seed
+determinism check, and the degenerate cases (too few Ashes, a single moveset) failing soft.
 
 ## Layout
 
@@ -139,5 +140,5 @@ check, and the degenerate cases (too few Ashes, a single moveset) failing soft.
 * `tools/randomize.py` — the engine: parse, run the passes, write the output and the reports.
 * `tools/backup.py` — backup-and-replace, revert and backup pruning.
 * `tools/test_logic.py` — the logic tests above; also used by `gui.py --self-test` inside the frozen exe.
-* `tools/test_weapons_synthetic.py` — the weapons / enemy-drops passes on a built regulation; part of
-  the gate (`tools/gate.py`).
+* `tools/test_passes_synthetic.py` — the randomizer passes (weapons, gems, gear, spells, goods, shops,
+  enemy-drops) on a built regulation; part of the gate (`tools/gate.py`).

@@ -10,18 +10,18 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 
-BG = "#15171c"          # window and section background
-PANEL = "#1c1f26"       # entry / combobox field, log
-BAR = "#101216"         # top and bottom bars
-FG = "#e7e9ee"
-MUTED = "#98a0b0"
-ACCENT = "#7aa2f7"
-ACCENT_DARK = "#33518f"
-ACCENT_HOVER = "#8fb4ff"
-BORDER = "#2b303b"
-OK = "#8fbf7f"
-WARN = "#e2b877"
-ERR = "#e58080"
+BG = "#0e0d0b"          # window and section background - a warm near-black, the ER menu's base
+PANEL = "#191611"       # entry / combobox field, log - a lifted warm dark
+BAR = "#080706"         # top and bottom bars - the deepest tone
+FG = "#e9e0c9"          # parchment / bone text
+MUTED = "#9b9079"       # aged gold-grey for secondary text
+ACCENT = "#c6a24a"      # antique gold - the run button, section markers, the progress bar
+ACCENT_DARK = "#5f4a17" # dark bronze - secondary buttons and scrollbar troughs
+ACCENT_HOVER = "#e2c268"  # bright gold - hover / pressed
+BORDER = "#3a3222"      # dark bronze border
+OK = "#8fa06a"          # muted moss green
+WARN = "#d8a542"        # amber gold
+ERR = "#b9564c"         # muted blood red
 
 FONT = "Segoe UI"
 MONO = "Consolas"
@@ -69,18 +69,18 @@ def init(root: tk.Tk) -> dict[str, tkfont.Font]:
     style.configure("Error.TLabel", background=BG, foreground=ERR)
     style.configure("Mono.TLabel", background=BG, foreground=FG, font=fonts["mono"])
 
-    style.configure("TButton", background=ACCENT_DARK, foreground="#ffffff", borderwidth=0,
+    style.configure("TButton", background=ACCENT_DARK, foreground="#f2ead6", borderwidth=0,
                     focusthickness=1, focuscolor=ACCENT, padding=(12, 5), font=fonts["plain"])
     style.map("TButton",
-              background=[("disabled", "#242833"), ("pressed", ACCENT), ("active", ACCENT_HOVER)],
+              background=[("disabled", "#1b1812"), ("pressed", ACCENT), ("active", ACCENT_HOVER)],
               foreground=[("disabled", MUTED)])
     style.configure("Small.TButton", padding=(6, 2), font=fonts["small"], focusthickness=1)
     style.configure("Section.TButton", background=BG, foreground=FG, borderwidth=0, padding=(2, 4),
                     font=fonts["bold"], anchor="w", focusthickness=1)
     style.map("Section.TButton", background=[("active", PANEL)])
-    style.configure("Run.TButton", background=ACCENT, foreground="#0b0d11", font=fonts["bold"],
+    style.configure("Run.TButton", background=ACCENT, foreground="#0e0d0b", font=fonts["bold"],
                     padding=(16, 7), focusthickness=1)
-    style.map("Run.TButton", background=[("disabled", "#242833"), ("active", ACCENT_HOVER)],
+    style.map("Run.TButton", background=[("disabled", "#1b1812"), ("active", ACCENT_HOVER)],
               foreground=[("disabled", MUTED)])
 
     style.configure("Check.TCheckbutton", background=BG, foreground=FG, padding=(2, 1),

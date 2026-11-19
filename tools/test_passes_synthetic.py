@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Deep pass coverage for weapons.py, gems.py, gear.py and enemy_drops.py on a synthetic regulation.
+"""Deep pass coverage for weapons.py, gems.py, gear.py, spells.py, goods.py, shops.py and
+enemy_drops.py on a synthetic regulation.
 
 The other logic tests cover the pure helpers (derangement, price maths, dropshuffle.set_plan, the
 binary round-trips).  The randomizer passes are harder to pin because they read a real regulation.bin,
 so this builds a small one in memory - real paramdefs, real named ids, a few weapon types, 40 distinct
-Ashes of War, armour and talisman rows, two enemy lots and a boss - and drives every pass over it.
+Ashes of War, armour and talisman rows, a handful of sorceries, enemy lots and a boss - and drives
+every pass over it.
 
 It asserts behaviour, not just "did not crash":
 
   * --somber-infusable turns a one-row weapon into the full 13-row affinity block;
   * the three --random-movesets modes, --random-default-ash, --random-weapon-effects and
     --random-stats all produce a report and change the tables;
-  * --random-gem-skills / --random-gem-effects and the armour / talisman passes shuffle without
-    losing or duplicating a value (a permutation keeps each column's multiset);
+  * --random-gem-skills / --random-gem-effects and the armour / talisman / goods passes shuffle
+    without losing or duplicating a value (a permutation keeps the column's multiset);
+  * --random-spells moves effects with no fixed point (a derangement) and lands every spell on one
+    memory slot; the shop pass rerolls its weapon slots; an FMG survives a write -> read round trip;
   * the enemy-drop passes change the lot rows and the HP pass changes NpcParam.hp;
   * the same seed gives byte-identical output (reproducibility: a set/dict iterated in a random
     order before an RNG draw would break this on some interpreter);
@@ -20,7 +24,7 @@ It asserts behaviour, not just "did not crash":
     report "nothing changed" instead of raising.
 
 No regulation.bin, no game install and no oo2core DLL are needed: it only uses shipped paramdefs and
-names.  Run directly (`python tools/test_weapons_synthetic.py`) or through tools/gate.py.
+names.  Run directly (`python tools/test_passes_synthetic.py`) or through tools/gate.py.
 """
 from __future__ import annotations
 
@@ -35,6 +39,10 @@ import enemy_drops  # noqa: E402
 import erreg  # noqa: E402
 import gear  # noqa: E402
 import gems  # noqa: E402
+import goods  # noqa: E402
+import shops  # noqa: E402
+import spells  # noqa: E402
+import talkmsg  # noqa: E402
 import weapons  # noqa: E402
 
 MELEE = [1, 3, 5, 13]          # dagger, straight sword, greatsword, katana (wepType)
@@ -165,9 +173,11 @@ def build() -> erreg.Regulation:
     reg._params["SpEffectParam"] = S
 
     GD = _mkparam(_loadpd("EquipParamGoods"))
-    for gid in (5000, 5001, 5002):
+    for i, gid in enumerate((5000, 5001, 5002)):
         rr = _addrow(GD, gid)
         GD.set(rr, "goodsType", 0)
+        GD.set(rr, "maxNum", 10 * (i + 1))            # distinct stack sizes, so the pair swap shows
+        GD.set(rr, "maxRepositoryNum", 99 * (i + 1))
     _finalize(GD)
     reg._params["EquipParamGoods"] = GD
 
@@ -224,6 +234,17 @@ def build() -> erreg.Regulation:
     rr = _addrow(N, 100002); N.set(rr, "hp", 5000); N.set(rr, "getSoul", 20000); N.set(rr, "isSoulGetByBoss", 1)
     _finalize(N)
     reg._params["NpcParam"] = N
+
+    # Magic: a few sorceries with distinct effects and memory slots, for the spell passes
+    M = _mkparam(_loadpd("Magic"))
+    for i, sid in enumerate((4000, 4001, 4010, 4020, 4021, 4030, 4040, 4050)):
+        rr = _addrow(M, sid)
+        M.set(rr, "slotLength", 1)
+        M.set(rr, "refId1", 100 + i)
+        M.set(rr, "mp", 10 + i)
+        M.set(rr, "refType", i)
+    _finalize(M)
+    reg._params["Magic"] = M
 
     return reg
 
@@ -316,6 +337,37 @@ def run() -> None:
     check(len(tal_out) > 1, "--random-talismans: empty report")
     check(ids_before == ids_after, "--random-talismans: row count changed")
 
+    # --- spells: effects shuffle with no fixed point; stats land on one memory slot ---
+    reg = build()
+    sp = spells.Spells(reg)
+    check(len(sp.pool) >= 2, "spells: pool too small")
+    ref_before = sorted(sp.P.get(r, "refId1") for r in sp.pool)
+    check(len(sp.randomize_effects(random.Random(1), "shuffle", None)) > 1,
+          "--random-spells: empty report")
+    check(ref_before == sorted(sp.P.get(r, "refId1") for r in sp.pool),
+          "--random-spells: effect multiset changed (must be a shuffle)")
+    fixed = sum(1 for i, r in enumerate(sp.pool) if sp.P.get(r, "refId1") == 100 + i)
+    check(fixed == 0, f"--random-spells: {fixed} spells kept their own effect (derangement broken)")
+    check(len(spells.Spells(build()).random_stats(random.Random(1))) > 1,
+          "--random-spell-stats: empty report")
+
+    # --- goods: (maxNum, maxRepositoryNum) pairs swap without changing the multiset ---
+    reg = build()
+    gd = reg._params["EquipParamGoods"]
+    pairs_before = sorted((gd.get(r, "maxNum"), gd.get(r, "maxRepositoryNum")) for r in gd.rows)
+    check(len(goods.randomize(reg, {5000: "Item A", 5001: "Item B", 5002: "Item C"}, random.Random(1))) > 1,
+          "--random-goods: empty report")
+    pairs_after = sorted((gd.get(r, "maxNum"), gd.get(r, "maxRepositoryNum")) for r in gd.rows)
+    check(pairs_before == pairs_after, "--random-goods: (max, repo) multiset changed (must be a swap)")
+
+    # --- shops: every weapon slot rerolls from the named weapon pool ---
+    check(len(shops.randomize(build(), random.Random(1))) > 1, "--random-shops: empty report")
+
+    # --- talkmsg: an FMG survives a write -> read round trip ---
+    entries = {100000: "Longsword", 100001: "Lordsworn's Straight Sword", 200000: " padded "}
+    check(talkmsg.read_fmg(talkmsg.write_fmg(entries)) == entries,
+          "talkmsg: FMG write->read round trip lost data")
+
     # --- reproducibility: same seed -> byte-identical output ---
     a = weapons.Weapons(build()).random_movesets(random.Random(1), mode="affinity")
     b = weapons.Weapons(build()).random_movesets(random.Random(1), mode="affinity")
@@ -351,9 +403,9 @@ def main() -> int:
         for msg in _FAILS[:20]:
             print(f"  - {msg}")
         return 1
-    print(f"WEAPONS SYNTHETIC PASS - {_CHECKS} checks green "
-          f"(somber, movesets x3, ash, effects, stats, gems, armour, talismans, enemy drops, hp, "
-          f"determinism, degenerate guards)")
+    print(f"PASSES SYNTHETIC PASS - {_CHECKS} checks green "
+          f"(somber, movesets x3, ash, effects, stats, gems, armour, talismans, spells, goods, "
+          f"shops, talkmsg, enemy drops, hp, determinism, degenerate guards)")
     return 0
 
 

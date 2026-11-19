@@ -1,0 +1,4 @@
+# Development only - linting. Not needed to run, test or package the tool.
+# Install with:  pip install -r requirements-dev.txt
+# (the runtime dependencies live in requirements.txt: cryptography, zstandard)
+ruff
