@@ -1,0 +1,503 @@
+[heading]Elden Ring Super Randomizer[/heading]
+
+A window and a command line tool for [b]regulation.bin[/b] — the single parameter file that holds every item, weapon, spell, enemy drop, shop price, buff duration and flask location in Elden Ring. It rewrites that file into a new mod folder, with a plain-text report of every change.
+
+Written for game version [b]1.17.1[/b] (Shadow of the Erdtree included) and the [url=https://www.nexusmods.com/site/mods/617]Mod Engine 2[/url] [b]1.4[/b] / [b]ERR[/b] mod loaders. Vanilla, the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url] and [url=https://www.nexusmods.com/eldenring/mods/11542]Elden Ring Reforged[/url] output all work as input, so you can stack this on top of them.
+
+[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.3[/b].
+
+[quote]
+Files and output
+  Input   C:\Games\ELDEN RING\Game\regulation.bin
+  Output  D:\mods\my-randomizer\regulation.bin
+  Compression  kraken      Effort  max
+
+Consumables and buffs
+  [ ] Shuffle consumable effects
+  [ ] Shuffle buff durations
+
+Weapons
+  [ ] Make somber weapons infusable
+  [ ] Shuffle movesets
+  [ ] Random default skill and affinity
+  [ ] Randomize weapon stats
+
+[Preview]  [Repack only]  [Randomize]
+[/quote]
+
+[line]
+
+[heading]Quick start[/heading]
+
+[b]Windows[/b]
+
+Double-click [b]randomize_gui.bat[/b]. It creates %USERPROFILE%\.venvs\er_mod on first run, installs the two dependencies, and opens the window. A console stays behind it to show errors.
+
+Command line:
+
+[quote]
+randomize.bat --input "C:\Games\ELDEN RING\Game\regulation.bin" --output "D:\mods\my-mod\regulation.bin" --seed 12345 --weapons --random-loot-levels
+randomize.bat --help
+[/quote]
+
+[b]Linux / macOS[/b]
+
+[quote]
+./randomize_gui.sh                  # the window (needs python3-tk)
+./randomize.sh --help
+./randomize.sh --seed 12345 --weapons --dry-run
+[/quote]
+
+The venv lives at ~/.venvs/er_mod (the project drive is exFAT and cannot hold a venv's symlinks).
+
+[b]Requirements[/b]
+
+[list]
+[*] [b]Windows 10/11[/b] for the window; Linux and macOS work through the .sh launchers.
+[*] [b]Python 3.10 – 3.14[/b] (the dependencies publish no wheels for 3.15 yet). The launchers find a suitable Python themselves; no uv needed.
+[*] [b]tkinter[/b] for the window — included in the python.org Windows installer, sudo apt install python3-tk on Ubuntu/WSL.
+[*] Two dependencies only: zstandard (zstd output) and cryptography (the file's AES-256-CBC encryption). [b]oo2core_6_win64.dll is not a dependency[/b] — it is RAD Game Tools' and ships with the game; without it the tool writes zstd instead of kraken.
+[/list]
+
+[b]The output[/b]
+
+A [b]mod folder[/b], not a single file:
+
+[quote]
+D:\mods\my-mod\
+  regulation.bin          <- load with Mod Engine 2 (or copy over the game's, backup first)
+  msg\engus\...           <- only when weapon names are patched: ship it next to regulation.bin
+  mapping.txt             <- item <- effect taken from, shop prices, sell prices, durations, flasks, start items
+  weapons.txt             <- movesets, default skills, per-row stats
+  gear.txt                <- armour columns, talisman rows
+  loot.txt                <- which drop/chest/shop weapon got which upgrade level
+  spells.txt              <- spell effects, spell stats
+  drops.txt               <- enemy drop tables
+  hp.txt, runes.txt       <- enemy hit points and rune drops
+[/quote]
+
+With Mod Engine 2:
+
+[quote]
+[extension.regulation]
+priority = 2               # higher than Fog Gate Randomizer, so it loads after it
+[/quote]
+
+Stacking with the Item and Enemy Randomizer / Fog Gate Randomizer: run their configured regulation.bin through this tool. The last loaded file wins per row, and a row this tool [i]added[/i] (a synthesized somber affinity) does not exist in theirs, so their pass cannot see it.
+
+[line]
+
+[heading]What it changes[/heading]
+
+[list]
+[*] [b]Area | Options[/b]
+[*] [b]Consumables[/b] | every usable item (pots, greases, meats, boluses, tools, usable key items) receives another item's use effect; shuffle (every effect used exactly once) or random (repeats allowed); the use [b]animation[/b] can stay with the effect, come from another item of the same class, or from any item; flasks and remembrances can join the pool; [b]stack sizes[/b] shuffled; buff [b]durations[/b] shuffled separately
+[*] [b]Spells[/b] | every sorcery and incantation receives another spell's effect (one pool for both); the cast animation can stay, come from a spell with the same signature, or from any spell; [b]spell stats[/b] (FP / stamina cost and requirements) randomized independently of the weapon stats
+[*] [b]Prices[/b] | shop prices (ShopLineupParam.value) and sell prices (EquipParamGoods.sellValue) shuffled, or redrawn inside a range; sell prices optional; weapons, armour and Ashes of War can join the sell pool
+[*] [b]Shops[/b] | every merchant slot can be filled with a random item of its own category, price untouched — every shop sells something else
+[*] [b]Weapons[/b] | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; [b]requirements stay in the weapon's own tier[/b] so looted weapons stay usable; on-hit and holder [b]properties[/b] shuffled
+[*] [b]Ashes of War[/b] | every Ash of War can receive another ash's [b]skill[/b] (Lion's Claw becomes Sky Shot) and/or another ash's [b]on-hit effects[/b]; donors come only from ashes that fit the same weapon types, and the two switches are independent
+[*] [b]Loot[/b] | every enemy drops something random (choose the kinds); 1…N rolls per enemy at P% each; weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a [b]rarity curve[/b], and [b]bosses roll a better curve[/b]; [b]rare unique weapons[/b] and [b]upgrade materials[/b] can turn up
+[*] [b]Where loot drops[/b] | every category can be [b]moved between enemies[/b] without changing the items: weapons, goods, armour, talismans, Ashes of War. Armour sets can move as a set
+[*] [b]Armour & talismans[/b] | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally [b]keeping each set coherent[/b]), or move armour to different enemies; talismans shuffle whole rows and can move between enemies
+[*] [b]Enemies[/b] | rune drops (NpcParam.getSoul) and hit points (NpcParam.hp) shuffled, redrawn in a range, or scaled per band; bosses can be scaled back up and their runes coupled to their hit points
+[*] [b]World[/b] | the Flask of Crimson Tears and the Flask of Cerulean Tears move to a random pickup / boss reward / gift / merchant, and what was there goes to the first Site of Grace; start with the Spirit Calling Bell and/or the Lantern
+[*] [b]Checking a seed[/b] | a [b]loot simulator[/b] builds the tables in memory and shows what N random kills dropped, without writing or compressing anything
+[*] [b]Safety[/b] | [b]backup and replace[/b] copies your input files aside before overwriting them, and [b]Revert[/b] puts them back
+[*] [b]Output[/b] | kraken (the game's own Oodle format, needs the game's oo2core_6_win64.dll), leviathan, zstd (no DLL, larger), or auto; fast or maximum effort; --repack repairs a regulation.bin another tool wrote in a form the game rejects
+[/list]
+
+[b]Not included[/b]: a character-creation / starting-class randomizer, a regulation.bin [b]enemies-and-bosses[/b] randomizer (that is the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url]'s job), connectivity / seamless co-op, an Elden Ring installation, an unpacked game, the game's DLL.
+
+[b]Static file vs. runtime mod — what "random" can mean here[/b]
+
+regulation.bin is one table shared by the whole game. Every copy of a Longsword reads the same rows, so [b]two copies of the same weapon can never have different stats in a static file[/b] — that needs a runtime mod. What this tool does instead:
+
+[list]
+[*] every [b]affinity row[/b] of a weapon gets its own stats, so "Longsword (Heavy)" and "Longsword (Keen)" are different weapons (13 rows per weapon);
+[*] the [b]affinity[/b] of a dropped weapon is rerolled, so two Longsword drops usually are not the same weapon at all;
+[*] the [b]upgrade level[/b] of a dropped weapon is rerolled, so a drop can be +2 or +18;
+[*] with several rolls per enemy, every kill rolls the drop table again, so the same enemy can hand you a different weapon each time.
+[/list]
+
+That is as close to Borderlands-style loot as a static rewrite gets.
+
+[line]
+
+[heading]The window[/heading]
+
+Eleven collapsible sections: [b]Files and output · Consumables and buffs · Spells · Prices and shops · Weapons · Ashes of War · Armour and talismans · Enemies, drops and loot · Where loot drops · Flasks and starting items · Advanced.[/b]
+
+[list]
+[*] [b]Presets[/b] — a dropdown in the title bar loads a whole coherent set of options in one click; any manual change turns the box into [b]Custom[/b]. Save your own with [i]Save preset[/i], move them between installs with [i]Export / Import[/i] in the Advanced section, delete them with [i]Delete[/i] (built-ins cannot be deleted).
+[*] [b]Backup and replace[/b] (Files and output, on by default) — before the generated file replaces your input, the tool copies every file it is about to overwrite into a timestamped backups\<date-time>\ folder next to the program, with a manifest.json recording where each file came from. [b]Revert[/b] restores the most recent one; the twenty newest are kept. Turn the option off to write only to the output folder and leave your files alone. Details below.
+[*] [b]Open output folder[/b] — opens the output folder in Explorer.
+[*] [b]Loot simulator[/b] — pick how many kills (1–200) and a seed; it builds the tables with the settings currently ticked and lists what those kills dropped, weapon affinity and upgrade level included. Nothing is written, nothing is compressed, so it costs seconds. The safe way to judge a seed.
+[*] [b]Find[/b] next to the input field, the Oodle DLL and the text-archive folder searches this machine (Steam library, the usual Games folders, mod folders) and fills the field with the first hit; the others land in the dropdown.
+[*] [b]Language[/b] — the [b]Aa[/b] dropdown, top right. It changes the window only: reports, console output and the game text stay in English. English plus thirteen complete packs: German, Spanish, French, Italian, Dutch, Polish, Portuguese (Brazil), Swedish, Finnish, Russian, Japanese, Korean, Simplified Chinese. Adding one more is a single file, tools/lang_<code>.py — anything missing falls back to English per string, so a half-finished pack still runs. Start in a given language with python tools/gui.py --lang pt.
+[*] [b]Log[/b] — a toggle in the title bar; the log costs no height until you ask for it. [i]Copy log[/i] copies everything the run printed.
+[*] [b]Hover help[/b] on every control: what it does in plain language, an example, then what it does under the hood (tables, fields, limits). It appears instantly and stays while the pointer is on it.
+[*] [b]While a run is going[/b]: a progress bar through every pass, the current pass, an elapsed clock. A two-minute maximum-effort compression looks like work, not a freeze.
+[*] [b]The command line[/b] the window will run is shown at the bottom — click it to copy. What you see is exactly what runs.
+[*] [b]Preview[/b] runs everything and shows the reports without writing a file; [b]Repack only[/b] rewrites the input unchanged. Pressing [i]Randomize[/i] with nothing ticked asks first, because the result would be a recompressed copy of the input.
+[*] Size, position, open sections, the last paths and every option value are saved in settings.json next to the program. The window opens [b]centred[/b] on the screen; the output folder you last used for an input file is offered again when you pick that input.
+[*] The page scrolls, but the progress bar, command line, status line and buttons are packed [b]below[/b] the scrolling area, not inside it, so nothing can end up behind the taskbar however the window is resized or maximized.
+[/list]
+
+[line]
+
+[heading]Presets[/heading]
+
+[list]
+[*] [b]Preset | What it is for[/b]
+[*] [b]Gentle start[/b] | consumables, spells, prices and buffs only. The safest first run.
+[*] [b]Classic randomizer[/b] | the traditional set: effects and prices. Weapons stay as they are.
+[*] [b]Borderlands loot[/b] | any enemy drops any weapon at a random affinity, upgrade level and stat roll, 3 rolls per kill.
+[*] [b]Loot and stats[/b] | weapons get new movesets, skills and stats, and every weapon can drop anywhere.
+[*] [b]Armor and talismans[/b] | armour numbers shaken and rolled, sets coherent, armour and talismans lootable anywhere.
+[*] [b]Ashes of War[/b] | every ash gets another ash's skill and effects, and ashes drop from any enemy.
+[*] [b]Prices only[/b] | what shops charge and pay. Nothing else.
+[*] [b]Boss rush[/b] | runes and hit points redrawn, bosses roll the best upgrade curve, every enemy always drops.
+[*] [b]Boss hunt[/b] | enemy HP redrawn but bosses scaled back up (1.5–2× HP and runes), runes coupled to HP.
+[*] [b]Level 1 run[/b] | level 1 beginnings: every weapon and where it drops is random, but nothing is cruel.
+[*] [b]Balanced[/b] | weapons and enemies tuned for an even, playable run.
+[*] [b]Glass cannon[/b] | enemies hit much harder but die much faster.
+[*] [b]Full chaos[/b] | every pass on. Expect a very different game and a slow compression.
+[/list]
+
+The bundles live in presets.py.
+
+[line]
+
+[heading]How a run works[/heading]
+
+[list=1]
+[*] Decrypt regulation.bin (AES-256-CBC; the key is published by the modding community and a new key per version is added in tools/erreg.py), decompress the DCX (KRAK/zstd/DFLT) and read the BND4 of param files.
+[*] Parse only the tables it needs, from the paramdef XMLs in tools/paramdef/.
+[*] Run the passes in a fixed order — the random generator is shared, and some passes read what another is about to change: buff durations → consumable effects → stack sizes → prices → enemy runes → enemy hit points → enemy drops → shop stock → weapons → ashes of war → armour and talismans → loot shuffle → loot levels → weapon names → spells → flasks → starting items → boss scaling. The full table, with the tables and flags each pass touches, is below.
+[*] Rebuild the BND4, recompress (kraken via the game's own oo2core_6_win64.dll, or zstd) and re-encrypt with the same AES IV the file had.
+[/list]
+
+The reports are generated from the same data structures, so mapping.txt is the exact list of what was changed. [b]One seed, reproducible[/b]: the seed is printed at the top of every report, and the same seed with the same options produces a byte-identical file.
+
+[b]The passes in detail[/b]
+
+The order below is tools/phases.py; tools/test_phases.py fails if the engine or the window ever drifts from it. Keep this table in step with that file.
+
+[list]
+[*] [b]# | Pass | Table(s) | Option[/b]
+[*] 1 | buff durations | SpEffectParam | --random-durations, --duration-mode, --duration-min/max
+[*] 2 | consumable effects | EquipParamGoods | --goods / --no-goods, --mode, --split-anim, --include-flasks, --include-remembrances
+[*] 3 | stack sizes | EquipParamGoods | --goods-quantity
+[*] 4 | prices | ShopLineupParam, EquipParamGoods | --random-prices, --price-mode, --price-min/max, --sell-prices, --sell-min/max, --sell-equipment
+[*] 5 | enemy runes | NpcParam.getSoul | --random-runes, --rune-mode, --rune-min/max
+[*] 6 | enemy hit points | NpcParam.hp | --random-enemy-hp, --hp-mode, --hp-min/max
+[*] 7 | enemy drops | ItemLotParam_enemy (+ map, shops, goods, equipment for the pool) | --random-enemy-drops, --enemy-drop-rolls, --enemy-drop-chance, --enemy-drop-kinds
+[*] 8 | shop stock | ShopLineupParam | --random-shop-stock, --shop-stock-kinds
+[*] 9 | weapons | EquipParamWeapon (+ Gem, SwordArts, Reinforce, AttackElementCorrect) | --somber-infusable, --random-movesets, --random-default-ash, --random-stats, --random-weapon-effects, --random-weapon-holder-fx
+[*] 10 | ashes of war | EquipParamGem | --random-gem-skills, --random-gem-effects
+[*] 11 | armour, talismans | EquipParamProtector, EquipParamAccessory | --random-armor, --random-armor-fresh, --armor-keep-sets, --random-talismans
+[*] 12 | loot shuffle | ItemLotParam_enemy + map, ShopLineupParam | --random-weapon-drops, --random-goods-drops, --random-armor-drops, --random-talisman-drops, --random-ashes-drops, --armor-drop-sets
+[*] 13 | loot levels | ItemLotParam_enemy, ItemLotParam_map, ShopLineupParam | --random-loot-levels, --loot-rarity, --loot-boss-bonus, --loot-max-level, --zone-loot-levels
+[*] 14 | weapon names | item_dlc02.msgbnd.dcx | --weapon-names, --no-weapon-names
+[*] 15 | spells | Magic | --spells / --no-spells, --mode, --split-anim; --spell-stats runs inside this pass
+[*] 16 | flask locations | ItemLotParam_map, ItemLotParam_enemy, ShopLineupParam | --random-flask-locations, --flask-where
+[*] 17 | starting items | item lot 2000 (ItemLotParam_map) | --start-with-bell, --start-with-lantern
+[*] 18 | boss scaling | NpcParam | --boss-hp-scale, --boss-rune-scale, --couple-runes-to-hp, --boss-min-runes
+[*] — | loot simulation | reads the tables, writes nothing | --simulate N
+[/list]
+
+--repack runs none of them: it rewrites the input unchanged, which repairs a file another tool wrote in a form the game rejects. [b]Everything is off by default[/b] — every pass has to be asked for — and the only defaults are the paths and kraken + max compression.
+
+[line]
+
+[heading]Reference[/heading]
+
+[b]Consumables and spells[/b]
+
+EquipParamGoods rows are eligible when they are usable from the inventory:
+
+[list]
+[*] goodsType 0 (consumable) or 1 (key item), and 3 (remembrance) only with --include-remembrances;
+[*] refCategory 1 (bullet) or 2 (SpEffect) and a real refId_default;
+[*] opmeMenuType 0 or 1 (using it does not open a menu — this removes fingers, effigies, whistles);
+[*] disable_offline clear (multiplayer-only items are skipped);
+[*] isSummonHorse clear (the Spectral Steed Whistle keeps its lit / unlit pair);
+[*] an icon and a sort id (removes unused and placeholder rows);
+[*] suppleType 0 (flasks) only with --include-flasks.
+[/list]
+
+Excluded by id: 2070 (Lantern — its two states are two SpEffects, not one effect).
+
+[b]What moves.[/b] The "effect" of an item is a bundle of 56 fields: the reference (refCategory, refId_default, refId_1, spEffectCategory, refVirtualWepId), the behaviour and effects (behaviorId, sfxVariationId), the item's own animation and sounds, and every consumption / restriction / multiplayer flag. The bundle moves as a whole, so a pot that receives "spit out a crystal tear" also receives the animations and restrictions that belong to that effect.
+
+--split-anim splits the animation out of the bundle (goodsUseAnim, castSfxId, fireSfxId, sfxVariationId, isEnableFastUseItem come from a second donor):
+
+[list]
+[*] none — no split, the animation travels with the effect.
+[*] same — the donor's refCategory equals the effect donor's. Thrown items release a bullet, applied / eaten items apply a SpEffect; the two have different TAE events, so the animation has to come from the same class. If a category has fewer donors than receivers, the donors are reused — a graceful degradation, not an error.
+[*] any — any pool item can donate the animation. A pot may then be eaten, a fist thrown, a grease swallowed. [b]Untested in game[/b]: the item may play no animation, or refuse to be used.
+[/list]
+
+[b]Assignment: shuffle vs random.[/b]
+
+[list]
+[*] shuffle builds a permutation of the pool with no fixed point: every effect is used exactly once and no item keeps its own. The [i]multiset[/i] of effects is preserved, so the game remains winnable and no effect is duplicated.
+[*] random lets every item draw a donor independently, so effects repeat and some items keep what they had.
+[/list]
+
+Spells share the pool: sorceries and incantations are one list (Magic rows with charaInit 1 or 4, effects excluded by quality = 255 / isForceMagic = 2), so a glintstone spell can end up as an incantation and vice versa. They are a section of their own: --spells moves what a spell [i]does[/i], --spell-stats re-rolls what it [i]costs[/i] (FP, stamina, requirements). The two are independent, so a spell whose effect was shuffled can keep its vanilla cost. --stat-groups spells is still accepted for old command lines.
+
+[b]Stack sizes (--goods-quantity).[/b] EquipParamGoods.maxNum is how many of an item a pickup or a purchase gives, maxRepositoryNum how many you can carry. Both move together from one stackable item to another, so the pair stays consistent and no item asks for more than it can hold. Only rows that already stack take part.
+
+[b]Buff durations.[/b] SpEffectParam.effectEndurance (seconds) of every effect that is a timed buff: greases, meats, blessings, buff spells. An effect below 5 seconds is treated as a mechanic (holy water pots, the frenzy seal, cures) and never touched, whatever its id.
+
+[b]Prices[/b]
+
+[list]
+[*] [b]Buy prices[/b] — ShopLineupParam.value of every goods slot priced in runes (equipType 3, costType 0), whatever the slot sells. Because the [i]slot[/i] is priced, not the item, shops another randomizer filled are included.
+[*] [b]Sell prices[/b] — EquipParamGoods.sellValue of every named row that can be sold (sellValue > 0; -1 is unsellable and stays). Buy and sell prices are drawn independently, so an item may sell for more than a shop asks. --no-sell-prices keeps sell prices vanilla.
+[*] [b]--sell-equipment[/b] — one pool each for weapons (EquipParamWeapon, base rows only, every affinity row of a weapon gets the same new price), armour (EquipParamProtector) and Ashes of War (EquipParamGem). Rows with sellValue <= 0 stay.
+[/list]
+
+shuffle permutes the prices that exist; range draws log-uniform values between the limits, rounded to two significant digits so they still look like shop prices.
+
+[b]Weapons[/b]
+
+[b]Somber weapons become infusable (--somber-infusable).[/b] A somber or unique weapon has one row; a normal weapon has 13 (no affinity + 12 affinities). The pass adds the missing 12 rows with fresh ids (base + 100 … base + 1200, or +10000 … when that range is taken), copies the base row's model, icon, behaviour, materials, price and skill mount, and sets the affinity fields (gemMountType 0, materialSetId -1, disableMultiUse 0). The new ids are named in the game's text (--weapon-names) and appear at smithing tables (gem effect 600 = "affinity unchanged"). Masterwork armour goes through ReinforceParamProtector. Rows that already have 13 variants are left alone (DLC somber weapons such as the Milady's Sword), so running the tool twice on the same file is safe.
+
+[b]Movesets (--random-movesets).[/b] Every randomized melee row takes another row's wepType, atkParamId and behaviorVariationId — the moveset and the attack behaviour. Shields only swap with shields and never take a weapon moveset, because a left-hand shield must keep isShield / the guard behaviour or it attacks instead of blocking. Bows swap among bows / crossbows / ballistas, with the ammo fields (atkParamId + 10000 / 20000) and the arrow rows left alone.
+
+[list]
+[*] affinity — every affinity row draws its own moveset; Standard can keep the weapon's own (--keep-standard-moveset).
+[*] bound — movesets are grouped by attack category into per-affinity clusters (sword / thrust / axe / hammer / spear / fist); each cluster owns --moveset-variety categories and rows of that affinity draw from them. Every Ash of War lists 12 affinities it can animate, so a row only gets a moveset the Ash can animate.
+[*] weapon — one moveset per weapon, chosen from the pool that suits its attack category.
+[/list]
+
+wepType follows also works in the other modes: the row takes the donor's wepType, which is what the smithing table reads. It is untested against the game's save checks.
+
+[b]Default skill (--random-default-ash).[/b] Every weapon row gets a random default skill (gemMountType 3, gem effect 500) chosen from the Ashes of War that animate with the row's moveset — 115 ashes across 22 weapon types. It also rerolls the [b]affinity[/b] of the weapons handed out by item lots, map lots, shops and starting classes, which is what makes two copies of the same weapon play differently.
+
+[b]Stats (--random-stats).[/b] Every weapon and affinity row (bows and catalysts included) is randomized per group:
+
+[list]
+[*] [b]attack[/b] — physical plus the four elemental attacks, each a roll around the original share of the row (Element Correct rows are added when a row starts using an element, ids from 90000000);
+[*] [b]guard[/b] — the guard damage the weapon takes when it blocks;
+[*] [b]requirements[/b] — STR/Dex/Int/Fai/Arc, including the negative requirements DLC weapons use;
+[*] [b]scaling[/b] — the five saturations, with weapon types restricted to the stats they can use (an int weapon never gets STR/DEX scaling);
+[*] [b]effects[/b] — critical, stance, stamina and guard damage, status build-up;
+[*] [b]stamina[/b] — the stamina multiplier, normalized so the first light attack costs the weapon's base cost times the multiplier whatever moveset the row carries;
+[*] [b]spells[/b] — FP and stamina cost and the requirements of sorceries and incantations.
+[/list]
+
+Only the groups you list (--stat-groups, empty = all) are rolled. --req-mode bounds how far requirements may drift from vanilla: tight (default), normal, wild. --stamina-rate lo,hi sets the multiplier range.
+
+[b]Ashes of War (EquipParamGem).[/b] Two fields matter in play: swordArtsParamId — the [b]skill[/b] itself (Lion's Claw, Sky Shot, …) — and spEffectId0..2 — the [b]on-hit effects[/b] (bleed, frostbite, a buff). Both are permuted [i]inside groups of gems that accept the same weapon types[/i]: the group key is the configurableWepAttr bitfield (24 bits), so a skill never lands on a weapon that could not use it. The effect triple moves as a unit (slot 0 is the primary effect) and the skill moves on its own, so the two switches are independent.
+
+[b]Armour and talismans[/b]
+
+[list]
+[*] [b]--random-armor (Shuffle armor stats)[/b] permutes 18 columns of EquipParamProtector [i]inside each slot[/i] (head / body / arms / legs never mix): the eight damage-negation rates the equipment screen shows, the seven status resistances, saDurability, toughnessCorrectRate and weight. Only values the game already uses are dealt out, so nothing becomes absurd. Elden Ring armour has no flat defence (defensePhysics is zero in 1.17.1), so those fields are not touched.
+[*] [b]--random-armor-fresh (Randomize armor stats)[/b] rolls each piece's numbers again instead of swapping them: every column is drawn uniformly between the lowest and highest value that column has inside the piece's own slot.
+[*] [b]--armor-keep-sets (Keep armor sets together)[/b] makes that roll coherent: the four pieces of a set (found from the name without its trailing piece word — Knight Helm, Knight Armor, Knight Gauntlets, Knight Greaves) are scaled by one factor per column instead of being rolled separately.
+[*] [b]--random-armor-drops (Move armor to random enemies)[/b] changes only [i]where[/i] armour drops. One-time flag drops are never moved. [b]--armor-drop-sets[/b] moves the pieces of a set as a unit.
+[*] [b]--random-talismans (Shuffle talismans)[/b] permutes whole EquipParamAccessory rows: every talisman keeps its name and icon and receives another one's effect and numbers. There is no paramdef for that table here, so whole rows move rather than single fields — which is why the icon can belong to a different talisman than the name.
+[*] [b]--random-talisman-drops[/b] is the talisman version of the drop shuffle.
+[/list]
+
+[b]Loot upgrade levels (--random-loot-levels)[/b]
+
+A weapon id is base + affinity * 100 + upgrade. In vanilla every weapon in a drop table, chest or shop is +0. This pass rewrites only the upgrade digits, in enemy drop tables (the lots an NpcParam.itemLotId_enemy points at, plus their consecutive rows), map lots (the rows in names/item_locations.txt), and weapon shops.
+
+The level is drawn between 0 and the ceiling read from the [b]pristine[/b] weapon table: 25 for a weapon with affinity rows, 10 for a somber weapon (one row and materialSetId != -1), 0 for a unique weapon that cannot be reinforced. Because the ceiling is read before the weapon pass adds its rows, --random-loot-levels must be combined with a pristine input to be exact.
+
+[b]Rarity (--loot-rarity).[/b] Drawing every level with the same probability makes +25 a one-in-26 event. A tier is picked first, then the level is drawn uniformly inside that tier, as a fraction of the weapon's own ceiling:
+
+[list]
+[*] [b]Curve | +0..+3 | +4..+9 | +10..+15 | +16..+20 | +21..+25[/b]
+[*] even | 100% spread evenly |  |  |  | 
+[*] common (default) | 55% | 28% | 12% | 4% | 1%
+[*] legendary | 70% (+0..+2) | 20% (+3..+8) | 7% (+9..+14) | 2.5% (+15..+20) | 0.5% (+21..+25)
+[/list]
+
+A drop at 80% or more of its weapon's ceiling is marked with a star in loot.txt, a drop at 90% or more is announced as LEGENDARY at the top of the report, and the best twelve of the seed are listed at the end. Because the tiers are fractions, the same curve works for a +25 weapon and a +10 somber one.
+
+[b]Bosses (--loot-boss-bonus).[/b] Bosses roll from a better curve. An enemy counts as a boss when its NpcParam.isSoulGetByBoss flag is set; --boss-min-runes N additionally treats every enemy worth N runes or more in the unmodified game as one.
+
+[list]
+[*] [b]Setting | Ordinary enemies | Bosses[/b]
+[*] same | chosen curve | chosen curve
+[*] better (default) | chosen curve | the next curve up (even → common → legendary)
+[*] best | chosen curve | always legendary
+[/list]
+
+Map lots and shops always use the chosen curve. --zone-loot-levels scales the ceiling by area, so an early chest is not a +25 weapon: Limgrave / Weeping Peninsula stay low, Liurnia / Caelid / Altus mid, Mountaintops / Haligtree / Farum Azula high, the Land of Shadow at the full ceiling. --loot-max-level N caps every drop at +N (0 = no cap).
+
+[b]Enemies and drops[/b]
+
+[list]
+[*] [b]--random-enemy-drops[/b] — the first drop row of every enemy becomes a guaranteed drop of a random item; later rows keep their chance but drop random items too. The pool is every named goods row (no key items), every weapon / armour / talisman / Ash of War row with a real name and a price, with weapons normalized to +0 and flasks excluded. Rows that already hold a key item (goodsType 1) and one-time flag awards are left alone. --enemy-drop-kinds restricts the categories.
+[*] [b]--enemy-drop-rolls N / --enemy-drop-chance P[/b] — give every enemy N rows instead of one, each dropping at P%, so a kill drops 0…N items (N·P/100 on average). The added rows take ids above every existing one; the game caps a lot at 64 rows, and the tool refuses to add a row that would cross that cap.
+[*] [b]--random-enemy-hp[/b] — NpcParam.hp of every enemy with hit points: shuffle, range, bands (weak / normal / strong tiers), or balanced (every enemy stays within 0.75–1.5× vanilla).
+[*] [b]--random-runes[/b] — NpcParam.getSoul: shuffle, range, or bands.
+[*] [b]--boss-hp-scale lo,hi / --boss-rune-scale lo,hi[/b] — multiply boss HP / rune bounties by a factor drawn from the range (1.0,1.0 = off), so bosses stay worth the fight after a shuffle.
+[*] [b]--couple-runes-to-hp[/b] — recompute rune bounties from the (randomized) HP, keeping each enemy's original rune-per-HP ratio. Runs after the rune pass, so it overrides it.
+[/list]
+
+[b]Flasks and starting items[/b]
+
+[list]
+[*] [b]--random-flask-locations[/b] — the Flask of Crimson Tears (lot 2000) and the Flask of Cerulean Tears (lot 2001) move to a random real location: a boss / field boss / evergaol reward, an NPC gift or corpse, a legacy dungeon or overworld pickup, or a merchant slot. What was there goes into the flask's own lot, which is what the first Site of Grace hands out. Chance drops, map fragments, one-time-flag rows and DLC map areas are never used. --flask-where restricts them to overworld or early.
+[*] [b]--start-with-bell / --start-with-lantern[/b] — add the Spirit Calling Bell / the Lantern to lot 2000, which the game hands out at the start.
+[/list]
+
+[b]Weapon names[/b]
+
+--somber-infusable adds 12 rows per somber weapon. Without names the game shows "?" for them, so the pass writes a name and a description into msg/<language>/item_dlc02.msgbnd.dcx for every row that has none: the name is the base weapon's name with the language's own affinity affix (learned from the archive itself, "Heavy " in English), and the description is the base row's. Ids already in the archive are never overwritten. With Mod Engine 2 the msg folder goes next to regulation.bin; the file is written next to the output, never over its source. If the text archive is missing the rows are named "?" and the tool says so — a missing vendor degrades, it never crashes.
+
+[line]
+
+[heading]Backups and revert[/heading]
+
+When [b]Backup and replace[/b] is on (the default), a run that would overwrite your files first copies them aside:
+
+[quote]
+<program>\backups\20261119-204453\
+  00_regulation.bin
+  01_item_dlc02.msgbnd.dcx
+  manifest.json          <- which file goes back where
+[/quote]
+
+The originals keep their bytes and timestamps. [b]Revert[/b] (next to the [i]Backup[/i] button) restores the most recent backup: every file in it goes back to where it came from. The 20 newest backups are kept, older ones are pruned automatically. A revert with a missing or corrupt manifest fails softly and says so rather than guessing. [b]Backup[/b] makes a backup on demand, without running anything.
+
+Turn the option off ([b]--no-backup-replace[/b]) to write only to the output folder and leave your input files untouched. The tool never writes into the input's own folder unless you asked it to replace it.
+
+[line]
+
+[heading]Compression and the size limit[/heading]
+
+[list]
+[*] [b]kraken / leviathan[/b] — the game's own Oodle format, written through oo2core_6_win64.dll (RAD Game Tools', shipped with the game, never with this tool). leviathan writes an Oodle Leviathan stream under the same KRAK tag; OodleLZ_Decompress detects the codec from the stream.
+[*] [b]zstd[/b] — no DLL needed, but the game only accepts a 64 KB window (--zstd-window 16; other values are kept for experiments and can crash it), which makes the file about 35% larger.
+[*] [b]effort[/b] — max (Oodle level 9) is the default and the only safe one for a file that starts big. fast (level 3) costs seconds and gives a noticeably larger file.
+[*] [b]auto[/b] — kraken when the DLL is found, zstd otherwise. If the DLL is missing and stdin is a terminal, the tool asks for the path instead of silently falling back.
+[/list]
+
+The game refuses a regulation.bin above [b]2,359,296 bytes[/b] (0x240000) and reports corrupted save data. The tool refuses to write one and tells you how far over it is.
+
+Measured on this machine (2026-11-19, kraken, --oodle-dll set, limit 2,359,296 B):
+
+[list]
+[*] [b]Input | Passes | Effort | Output | Time[/b]
+[*] vanilla (2,045,728 B) | none (--repack) | max | [b]1,365,104 B[/b] | 159.1 s
+[*] vanilla | none (--repack) | fast | 1,631,424 B | 0.7 s
+[*] vanilla | all, seed 999 | max | [b]1,629,936 B[/b] | 159.3 s
+[*] vanilla | all, seed 999 | fast | 1,968,528 B | 6.8 s
+[*] ERR (3,031,632 B) | none (--repack) | max | [b]2,011,824 B[/b] | 220.8 s
+[*] ERR | none (--repack) | fast | 2,408,048 B — [b]refused[/b], 48,752 B over | 0.8 s
+[*] ERR | all, seed 999 | max | [b]2,327,328 B[/b] | 227.7 s
+[/list]
+
+Two things follow. A maximum-effort run costs [b]two to four minutes[/b], and the progress bar, current pass and elapsed clock show that it is working. And on a file that starts big, fast can produce something the game will not load — which is why the window ships with [b]kraken + maximum effort[/b].
+
+[b]Elden Ring Reforged (ERR)[/b]
+
+[url=https://www.nexusmods.com/eldenring/mods/11542]ERR[/url] is a total conversion mod: new enemies, weapons, items and bosses. It ships as a Mod Engine 2 mod folder, and like every mod of that kind it carries its own regulation.bin — [b]3,031,632 B[/b], which is 963 KB bigger than vanilla and already [b]672 KB over the game's 2,359,296-byte limit[/b] before this tool touches it. That is why the size of the file matters so much here.
+
+Stacking it on ERR:
+
+[list=1]
+[*] Point [b]Input[/b] at C:\Games\ERR\mod\regulation.bin (keep a copy of that folder first, or leave [i]Backup and replace[/i] on).
+[*] Leave [b]Output[/b] in its own new folder.
+[*] Either replace mod\regulation.bin with the new file, or add the new folder as a second mod in Mod Engine 2 with a [b]higher priority[/b] than ERR's entry — the last one loaded wins per row.
+[*] If you ticked [i]Make somber weapons infusable[/i], copy the generated msg\engus folder next to the regulation.bin you load, or the added affinity rows show a placeholder name.
+[/list]
+
+[line]
+
+[heading]Command line[/heading]
+
+Every option is documented by randomize.bat --help / randomize.sh --help. The flags, the window's labels, its defaults and its dependencies all come from one table (tools/options.py), so the window cannot offer a switch the CLI does not have. The shape:
+
+[quote]
+randomize.py --input <regulation.bin> --output <regulation.bin>
+             [--seed N] [--compression {auto,kraken,zstd,leviathan}]
+             [--compression-level {fast,max}] [--oodle-dll PATH]
+             [--repack] [--dry-run] [--no-reports] [--brief-reports]
+             [--backup-replace | --no-backup-replace]
+             [--max-size BYTES] [--simulate N] [--zstd-window 16..22]
+             <pass switches>
+[/quote]
+
+Useful combinations:
+
+[quote]
+randomize.bat --repack --input <broken.bin> --output <fixed.bin>     # repair a file the game rejects
+randomize.bat --seed 12345 --weapons --dry-run                       # try a seed, write nothing
+randomize.bat --goods --spells --random-prices --sell-prices         # the classic set
+randomize.bat --simulate 200 --random-loot-levels --seed 999         # what would 200 kills drop?
+[/quote]
+
+--dry-run runs every pass and prints the reports but writes no file; --simulate N builds the tables and prints N random kills.
+
+[line]
+
+[heading]Building the executable[/heading]
+
+[quote]
+build_exe.bat
+[/quote]
+
+Needs PyInstaller (installed automatically into the same venv). The result is dist\EldenRingSuperRandomizer.exe (Linux/macOS: dist/EldenRingSuperRandomizer) plus dist\msg\ next to it — ship both, and the user adds the game's oo2core_6_win64.dll.
+
+The build embeds PE version metadata from tools/version_info.txt (company, product name, file/product version). Keep its version tuple in step with tools/version.py: tools/test_logic.py fails if the two drift.
+
+[line]
+
+[heading]Antivirus notes[/heading]
+
+Antivirus engines and Microsoft SmartScreen flag unsigned PyInstaller executables more than almost any other kind of file, because the packer's runtime behaviour (a one-file binary unpacking itself into a temporary folder and running from there) looks like a dropper. The result is a false positive, not a real detection — but it still stops users from running the tool. What lowers the risk, cheapest first:
+
+[list=1]
+[*] [b]Code signing (the real fix).[/b] Sign EldenRingSuperRandomizer.exe with an Authenticode certificate (signtool sign /fd sha256 /a EldenRingSuperRandomizer.exe). A valid signature, especially with a reputation-building EV certificate, clears SmartScreen and most AV heuristics.
+[*] [b]The build already embeds PE version metadata.[/b] A generic binary with no version resource looks machine-generated and is flagged hardest; a file that declares who built it and what it is gives reputation systems something to key on.
+[*] [b]--noupx is already set.[/b] UPX-packed executables are a classic AV trigger; leaving it off is correct. Do not add it back.
+[*] [b]Consider --onedir for distribution.[/b] A one-[i]folder[/i] build does not unpack itself into %TEMP% at run time, so it avoids the dropper heuristic entirely and is markedly friendlier to AV than the current --onefile. The trade-off is that you ship a folder instead of a single file.
+[*] [b]If a specific engine still flags it[/b], submit the file as a false positive to that vendor (Microsoft: the Security Intelligence / Defender submission portal). Do not disable AV or add exclusions to work around a detection — sign the binary instead.
+[/list]
+
+The tool is fully offline: it makes no network requests, downloads nothing, and runs nothing but the game's own oo2core_6_win64.dll that the user already has.
+
+[line]
+
+[heading]Compatibility and limits[/heading]
+
+[list]
+[*] Param layout of game [b]1.17.1[/b] (format2D 0x85). Another version fails loudly with row size … != paramdef row size … instead of writing garbage.
+[*] oo2core_6_win64.dll (kraken) is RAD Game Tools' and is never shipped.
+[*] The output must stay under 0x240000 bytes (2,359,296); the tool reports the remaining bytes and refuses to write more.
+[*] Adding param rows (--somber-infusable) keeps ids and names consistent; the rows it adds are named in the game's own text archives (--weapon-names, on by default with that option).
+[*] --split-anim any, wepType follows and the per-affinity movesets are [b]untested against the game's own save checks[/b] — they are the parts most likely to need a save-file test before a long playthrough.
+[*] Only as lawful as your use of the game: randomizing single-player content you own is fine; do not redistribute the game's files or DLL.
+[/list]
+
+[heading]Development[/heading]
+
+Source layout, the option table, the gate and the checks that keep it honest: see [url=DEVELOPMENT.md]DEVELOPMENT.md[/url].
+
+The short version:
+
+[quote]
+python tools\gate.py        rem byte-compile + packs + phases + nexus description + logic tests
+python tools\test_logic.py --fuzz <regulation.bin>   rem the same tests against a real file
+[/quote]
+
+gate.py runs, in order: byte-compile every tools/*.py, check_packs.py --min-tip 120 --strict-structure, test_phases.py, test_packs.py, md2nexus.py --check, and test_logic.py. Exit code 0 means all green.
+
+[b]Nexus Mods takes BBCode, not Markdown[/b] — it has no Markdown support and none is planned — so the mod page is generated from this file:
+
+[quote]
+python tools\md2nexus.py    rem rewrite NEXUS_DESCRIPTION.txt + NEXUS_DESCRIPTION.strict.txt
+[/quote]
+
+Never edit either file by hand. Two artifacts come out of the same README: NEXUS_DESCRIPTION.txt wraps fenced blocks in the code tag (what Nexus's own converters emit), and NEXUS_DESCRIPTION.strict.txt wraps them in a quote block instead, because code is the one tag this renderer emits that the Nexus wiki does not document. The two are byte-identical apart from those 11 wrappers. The gate re-renders both and fails if either drifts, so the description on the mod page cannot silently go stale.

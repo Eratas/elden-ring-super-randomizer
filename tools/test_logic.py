@@ -22,6 +22,10 @@ wrong output in the field* rather than a crash:
  * the backup-and-replace round trip in a temp dir: make_backup is byte-exact and non-destructive,
      restore undoes a replacement, prune keeps the newest N - the only pass that overwrites the user's
      own files;
+ * the Nexus description (tools/md2nexus.py): the Markdown -> BBCode mapping case by case, the three
+     invariants a generated page must satisfy (only known tags, no leftover Markdown, balanced BBCode),
+     that the README holds no literal BBCode, that both checked-in artifacts are current - and a fuzz of
+     300 random Markdown documents through both the normal and the strict renderer;
  * empty pools: new_prices, the price passes and talkmsg.read_fmg must report "nothing to do", not
      crash on a regulation.bin that does not fill them;
  * version.py vs version_info.txt: the window footer and the exe's PE resource must not drift.
@@ -1258,18 +1262,151 @@ def test_nexus_doc() -> None:
     check(any("allowed" in p for p in md2nexus.problems("[table]x[/table]")),
           "problems() did not flag a tag outside the allowed set")
 
+    # a literal BBCode tag in the source is markup nobody wrote, and inline code does NOT hide it:
+    # Nexus has no inline code tag, so the backticks are stripped and the brackets reach the page
+    check(md2nexus.stray_source_tags("a [b]bold[/b] word") == ["b"],
+          "stray_source_tags did not flag a literal [b] in prose")
+    check(md2nexus.stray_source_tags("[b](https://example.com)") == [],
+          "stray_source_tags mistook a Markdown link for BBCode")
+    check(md2nexus.stray_source_tags("```\n[b]x[/b]\n```") == [],
+          "stray_source_tags flagged markup inside a fenced block")
+    check(md2nexus.stray_source_tags("the [Preview] button") == [],
+          "stray_source_tags flagged a bracket that is not a BBCode tag")
+
     if md2nexus.SOURCE.is_file() and md2nexus.TARGET.is_file():
-        rendered = md2nexus.render(md2nexus.SOURCE.read_text(encoding="utf-8"))
-        check(md2nexus.TARGET.read_text(encoding="utf-8") == rendered,
-              f"{md2nexus.TARGET.name} is stale - run: python tools/md2nexus.py")
-        check(md2nexus.problems(rendered) == [],
-              f"the rendered Nexus description has problems: {md2nexus.problems(rendered)}")
+        source = md2nexus.SOURCE.read_text(encoding="utf-8")
+        check(md2nexus.stray_source_tags(source) == [],
+              f"README.md contains literal BBCode outside a fenced block: "
+              f"{md2nexus.stray_source_tags(source)}")
+        for target, strict in ((md2nexus.TARGET, False), (md2nexus.STRICT_TARGET, True)):
+            if not target.is_file():
+                check(False, f"{target.name} is missing - run: python tools/md2nexus.py")
+                continue
+            rendered = md2nexus.render(source, strict=strict)
+            check(target.read_text(encoding="utf-8") == rendered,
+                  f"{target.name} is stale - run: python tools/md2nexus.py")
+            check(md2nexus.problems(rendered, strict=strict) == [],
+                  f"{target.name} has problems: {md2nexus.problems(rendered, strict=strict)}")
     else:
-        print("  (NEXUS_DESCRIPTION check skipped: README.md or the generated file is missing)")
+        print("  (NEXUS_DESCRIPTION check skipped: README.md or the generated files are missing)")
+
+
+# --------------------------------------------------------------------------- md2nexus fuzz
+_MD_WORDS = ("alpha", "Beta", "gamma-2", "file.bin", "x=1", "--flag", "v1.2.3", "Regulation",
+             "oo2core_6_win64.dll", "a_b", "ZSTD", "longer-word", "42")
+_MD_FENCES = ("```", "~~~")
+
+
+def _md_inline(rng: random.Random) -> str:
+    parts: list[str] = []
+    for _ in range(rng.randint(1, 4)):
+        word = rng.choice(_MD_WORDS)
+        roll = rng.random()
+        if roll < 0.15:
+            parts.append(f"**{word}**")
+        elif roll < 0.25:
+            parts.append(f"*{word}*")
+        elif roll < 0.36:
+            parts.append(f"`{word}`")
+        elif roll < 0.43:
+            parts.append(f"`a|b`")                 # a pipe inside a code span must not split a table
+        elif roll < 0.50:
+            parts.append(f"[{word}](https://example.com/{word})")
+        else:
+            parts.append(word)
+    return " ".join(parts)
+
+
+def _md_block(rng: random.Random) -> str:
+    roll = rng.random()
+    if roll < 0.10:
+        return "#" * rng.randint(1, 4) + " " + _md_inline(rng)
+    if roll < 0.16:
+        return rng.choice(["---", "***", "___"])
+    if roll < 0.32:                                      # fenced block, sometimes with a language hint
+        body = [_md_inline(rng) for _ in range(rng.randint(0, 4))]
+        if rng.random() < 0.5:
+            # markup that must stay literal inside the block
+            body.append(rng.choice(["[b]not bold[/b]", "[Preview] [Repack only]", "[list] fake",
+                                    "[extension.regulation]", "`tick`"]))
+        fence = rng.choice(_MD_FENCES)
+        info = rng.choice(["", "", "", "bash", "toml"])
+        return f"{fence}{info}\n" + "\n".join(body) + f"\n{fence}"
+    if roll < 0.50:                                      # table
+        cols = rng.randint(1, 4)
+        rows = ["| " + " | ".join(_md_inline(rng) for _ in range(cols)) + " |",
+                "|" + "|".join(["---"] * cols) + "|"]
+        rows += ["| " + " | ".join(_md_inline(rng) for _ in range(cols)) + " |"
+                 for _ in range(rng.randint(0, 3))]
+        return "\n".join(rows)
+    if roll < 0.68:                                      # bullet list, some items wrapped
+        items = []
+        for _ in range(rng.randint(1, 4)):
+            text = _md_inline(rng)
+            if rng.random() < 0.3:
+                text += "\n  " + _md_inline(rng)
+            items.append("- " + text)
+        return "\n".join(items)
+    if roll < 0.80:                                      # numbered list
+        return "\n".join(f"{i}. {_md_inline(rng)}" for i in range(1, rng.randint(1, 4) + 1))
+    return _md_inline(rng)                               # paragraph
+
+
+def _md_fences(doc: str) -> list[tuple[str, str]]:
+    """(info string, body) for every fenced block in a Markdown document."""
+    return [(m.group(1).strip(), m.group(2))
+            for m in re.finditer(r"^[`~]{3,}([^\n]*)\n(.*?)^[`~]{3,}\s*$", doc, flags=re.S | re.M)]
+
+
+def _md_without_fences(doc: str) -> str:
+    return re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", doc, flags=re.S | re.M)
+
+
+def test_md2nexus_fuzz() -> None:
+    """Random Markdown through the Nexus renderer: the output must always satisfy the invariants.
+
+    A renderer has more ways to be wrong than a function has branches, and every one of them shows up on
+    the mod page rather than in a traceback.  Over 300 random documents (headings, nested-looking lists,
+    wrapped items, tables with pipes inside code spans, fenced blocks that contain markup which must stay
+    literal, rules, links, bold/italic) assert, for both the normal and the strict render:
+
+      * problems() is empty - only allowed tags, no leftover Markdown, balanced BBCode;
+      * the render is deterministic - same input, same bytes;
+      * no fenced content is dropped (a block's language hint is dropped by design: Nexus code blocks
+        have no language, and a caption would be markup the tag cannot carry);
+      * no word outside a fenced block is lost.
+    """
+    try:
+        import md2nexus
+    except ImportError:                                  # source-only: not bundled in the frozen exe
+        return
+
+    rng = random.Random(90210)
+    for case in range(300):
+        doc = "\n\n".join(_md_block(rng) for _ in range(rng.randint(1, 6))) + "\n"
+        # rules (--- / *** / ___) are markup, not words: drop those lines before harvesting vocabulary
+        outside = re.sub(r"^\s*([-*_])\1{2,}\s*$", "", _md_without_fences(doc), flags=re.M)
+        words = {w for w in re.findall(r"[A-Za-z0-9_][A-Za-z0-9_.\-/]*", outside) if len(w) >= 3}
+        fenced = _md_fences(doc)
+        for strict in (False, True):
+            out = md2nexus.render(doc, strict=strict)
+            bad = md2nexus.problems(out, strict=strict)
+            check(not bad, f"md2nexus fuzz #{case} (strict={strict}) broke an invariant: {bad}\n"
+                           f"--- markdown ---\n{doc}\n--- bbcode ---\n{out}")
+            check(md2nexus.render(doc, strict=strict) == out,
+                  f"md2nexus fuzz #{case} (strict={strict}): render is not deterministic")
+            missing = sorted(w for w in words if w not in out)
+            check(not missing, f"md2nexus fuzz #{case} (strict={strict}): words lost: {missing[:8]}\n"
+                               f"--- markdown ---\n{doc}")
+            for info, body in fenced:
+                for line in body.splitlines():
+                    if line.strip():
+                        check(line in out,
+                              f"md2nexus fuzz #{case} (strict={strict}): fenced line dropped: {line!r}")
 
 
 # --------------------------------------------------------------------------- main
-# Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.  gui.py
+# Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
                  test_dropshuffle_sets, test_dropshuffle_plan_fuzz, test_erreg_roundtrip,
@@ -1296,7 +1433,7 @@ def main() -> int:
         if i + 1 < len(args):
             fuzz_path = args[i + 1]
 
-    for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc):
+    for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")
@@ -1312,7 +1449,8 @@ def main() -> int:
     extra = " + writer + corrupt-input" + (" + real-file" if fuzz_path else "")
     print(f"LOGIC PASS - {_CHECKS} checks green "
           f"(derangement, round_price, cap_total, new_prices, dropshuffle sets + plan fuzz, "
-          f"erreg round-trips + malformed, argv round trip + fuzz + pairs, backup, empty pools{extra})")
+          f"erreg round-trips + malformed, argv round trip + fuzz + pairs, backup, empty pools, "
+          f"nexus description + fuzz{extra})")
     return 0
 
 

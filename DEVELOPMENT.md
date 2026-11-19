@@ -59,15 +59,24 @@ Nexus Mods' description editor takes **BBCode, not Markdown** (there is no Markd
 planned), so the mod page cannot be a copy of README.md. It is generated instead:
 
 ```bat
-python tools\md2nexus.py            rem rewrite NEXUS_DESCRIPTION.txt from README.md
-python tools\md2nexus.py --check    rem what the gate runs: fail if the file is stale
-python tools\md2nexus.py --stdout   rem print instead of writing
+python tools\md2nexus.py            rem rewrite NEXUS_DESCRIPTION.txt + NEXUS_DESCRIPTION.strict.txt
+python tools\md2nexus.py --check    rem what the gate runs: fail if either file is stale
+python tools\md2nexus.py --stdout   rem print the normal render
+python tools\md2nexus.py --stdout --strict-tags   rem ... the wiki-tags-only render
 ```
 
-Never hand-edit `NEXUS_DESCRIPTION.txt`; edit `README.md` and re-run the generator. The renderer only
-emits tags from the Nexus wiki's list (plus `[code]` for fenced blocks), refuses any other tag, refuses
-leftover Markdown outside a code block, and refuses unbalanced BBCode — `test_logic.test_nexus_doc`
-checks the mapping, those invariants, and the staleness of the checked-in file.
+Two artifacts, byte-identical except for the fenced-block wrapper:
+
+| File | Fenced blocks | Use it when |
+|---|---|---|
+| `NEXUS_DESCRIPTION.txt` | `[code]` | normal case — it is what Nexus's own Markdown→BBCode converters emit |
+| `NEXUS_DESCRIPTION.strict.txt` | `[quote]` | you want zero risk on a first upload: `[code]` is the one emitted tag the Nexus wiki does not document |
+
+Never hand-edit either file; edit `README.md` and re-run the generator. The renderer only
+emits tags from the Nexus wiki's list (plus `[code]`), refuses any other tag, refuses leftover Markdown
+outside a fenced block, and refuses unbalanced BBCode — `test_logic.test_nexus_doc` checks the mapping,
+those invariants, the strict variant, and the staleness of both checked-in files. A fuzz test
+(`test_md2nexus_fuzz`) generates random Markdown and asserts the render always satisfies the invariants.
 
 ## What the tests pin
 
