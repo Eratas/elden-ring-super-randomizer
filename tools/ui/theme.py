@@ -21,7 +21,7 @@ ACCENT_HOVER = "#e2c268"  # bright gold - hover / pressed
 BORDER = "#3a3222"      # dark bronze border
 OK = "#8fa06a"          # muted moss green
 WARN = "#d8a542"        # amber gold
-ERR = "#b9564c"         # muted blood red
+ERR = "#ca6a5c"         # muted blood red (lightened from #b9564c to clear WCAG AA on the dark log panel)
 
 FONT = "Segoe UI"
 MONO = "Consolas"

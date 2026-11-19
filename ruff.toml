@@ -1,0 +1,9 @@
+# Lint standard for the randomizer.
+#
+# pyflakes (F) catches undefined / unused names (e.g. an annotation that references a module that
+# was never imported, a local assigned but never read); E9 catches syntax and runtime errors.  This
+# is exactly what tools/lint.py and tools/gate.py enforce - keeping it here means a bare
+# `ruff check tools/` matches `python tools/lint.py` instead of also reporting broad style opinions
+# (import order, naming, etc.) that this project has never enforced.
+[lint]
+select = ["F", "E9"]
