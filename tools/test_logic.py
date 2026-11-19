@@ -1211,6 +1211,63 @@ def test_version_resource() -> None:
               f"version_info.txt {field} {got} != version.py {want}")
 
 
+# --------------------------------------------------------------------------- Nexus description
+def test_nexus_doc() -> None:
+    """README.md -> Nexus BBCode (tools/md2nexus.py).
+
+    Nexus Mods' description editor takes BBCode, not Markdown, so the mod page is generated from the
+    README.  These checks are about the *renderer*: the mapping itself, the invariants that catch the two
+    ways a generated description silently breaks (an unknown tag the site may not render, and a leftover
+    Markdown marker - an orphaned ** is bold that never opened), and the staleness of the checked-in file.
+    """
+    try:
+        import md2nexus
+    except ImportError:                              # source-only: not bundled in the frozen exe
+        return
+
+    cases = [
+        ("# Title", "[heading]Title[/heading]"),
+        ("## Section", "[heading]Section[/heading]"),
+        ("### Sub", "[b]Sub[/b]"),
+        ("**bold**", "[b]bold[/b]"),
+        ("*it*", "[i]it[/i]"),
+        ("a `code` b", "a code b"),                   # Nexus has no inline code tag
+        ("**b `c` b**", "[b]b c b[/b]"),              # a code span inside bold must not orphan the **
+        ("[text](https://x/y)", "[url=https://x/y]text[/url]"),
+        ("---", "[line]"),
+        ("- one\n- two", "[list]\n[*] one\n[*] two\n[/list]"),
+        ("1. one\n2. two", "[list=1]\n[*] one\n[*] two\n[/list]"),
+        ("| a | b |\n|---|---|\n| 1 | 2 |", "[list]\n[*] [b]a | b[/b]\n[*] 1 | 2\n[/list]"),
+        ("```\nx = 1\n```", "[code]\nx = 1\n[/code]"),
+        ("para one\nstill one\n\npara two", "para one still one\n\npara two"),
+    ]
+    for source, want in cases:
+        got = md2nexus.render(source).strip()
+        check(got == want, f"md2nexus.render({source!r}) = {got!r}, want {want!r}")
+
+    got = md2nexus.render("- first line\n  continued here\n- second").strip()
+    check(got == "[list]\n[*] first line continued here\n[*] second\n[/list]",
+          f"a wrapped list item split into two: {got!r}")
+
+    check(md2nexus.problems(md2nexus.render("# T\n\nplain text")) == [],
+          f"a clean document reported problems: {md2nexus.problems(md2nexus.render('# T'))}")
+    check(any("bold" in p for p in md2nexus.problems("plain ** text")),
+          "problems() did not flag a stray ** outside a code block")
+    check(any("unbalanced" in p for p in md2nexus.problems("[list]\n[*] x")),
+          "problems() did not flag an unclosed [list]")
+    check(any("allowed" in p for p in md2nexus.problems("[table]x[/table]")),
+          "problems() did not flag a tag outside the allowed set")
+
+    if md2nexus.SOURCE.is_file() and md2nexus.TARGET.is_file():
+        rendered = md2nexus.render(md2nexus.SOURCE.read_text(encoding="utf-8"))
+        check(md2nexus.TARGET.read_text(encoding="utf-8") == rendered,
+              f"{md2nexus.TARGET.name} is stale - run: python tools/md2nexus.py")
+        check(md2nexus.problems(rendered) == [],
+              f"the rendered Nexus description has problems: {md2nexus.problems(rendered)}")
+    else:
+        print("  (NEXUS_DESCRIPTION check skipped: README.md or the generated file is missing)")
+
+
 # --------------------------------------------------------------------------- main
 # Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.  gui.py
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
@@ -1239,7 +1296,7 @@ def main() -> int:
         if i + 1 < len(args):
             fuzz_path = args[i + 1]
 
-    for fn in SELF_TEST_FNS + (test_corrupt_input,):
+    for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

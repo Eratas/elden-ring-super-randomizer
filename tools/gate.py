@@ -9,7 +9,8 @@ Runs, in order, and stops at the first failure:
   2. check_packs.py --min-tip 120 --strict-structure   (the language-pack gate),
   3. test_phases.py                                    (the progress bar cannot drift),
   4. test_packs.py                                     (the pack contract: keys, placeholders, tips),
-  5. test_logic.py                                     (pure helpers + binary round-trips: no game file needed).
+  5. md2nexus.py --check                               (NEXUS_DESCRIPTION.txt matches README.md),
+  6. test_logic.py                                     (pure helpers + binary round-trips: no game file needed).
 
 Exit code 0 when all pass, 1 otherwise.  This is the local gate; CI runs the same steps.
 """
@@ -42,6 +43,7 @@ def main() -> int:
         ("pack gate", [py, str(HERE / "check_packs.py"), "--min-tip", MIN_TIP, "--strict-structure"]),
         ("phase order", [py, str(HERE / "test_phases.py")]),
         ("pack contract", [py, str(HERE / "test_packs.py")]),
+        ("nexus description", [py, str(HERE / "md2nexus.py"), "--check"]),
         ("logic tests", [py, str(HERE / "test_logic.py")]),
     ]
     for label, argv in steps:

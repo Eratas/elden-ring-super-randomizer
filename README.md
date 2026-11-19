@@ -664,9 +664,20 @@ Source layout, the option table, the gate and the checks that keep it honest: se
 The short version:
 
 ```bat
-python tools\gate.py        rem byte-compile + language packs + phase order + pack contract + logic tests
+python tools\gate.py        rem byte-compile + packs + phases + nexus description + logic tests
 python tools\test_logic.py --fuzz <regulation.bin>   rem the same tests against a real file
 ```
 
 `gate.py` runs, in order: byte-compile every `tools/*.py`, `check_packs.py --min-tip 120
---strict-structure`, `test_phases.py`, `test_packs.py`, and `test_logic.py`. Exit code 0 means all green.
+--strict-structure`, `test_phases.py`, `test_packs.py`, `md2nexus.py --check`, and `test_logic.py`. Exit
+code 0 means all green.
+
+**Nexus Mods takes BBCode, not Markdown** — it has no Markdown support and none is planned — so the mod
+page is generated from this file:
+
+```bat
+python tools\md2nexus.py    rem rewrite NEXUS_DESCRIPTION.txt from README.md
+```
+
+Never edit `NEXUS_DESCRIPTION.txt` by hand. The gate re-renders it and fails if the two drift, so the
+description on the mod page cannot silently go stale.

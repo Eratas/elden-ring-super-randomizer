@@ -39,19 +39,35 @@ randomize_gui.bat                  rem the window, using the venv above
 ## The gate
 
 ```bat
-python tools\gate.py               rem byte-compile + packs + phases + contract + logic tests
+python tools\gate.py               rem byte-compile + packs + phases + contract + nexus + logic tests
 ```
 
 `gate.py` runs, in order: byte-compile every `tools/*.py`, `check_packs.py --min-tip 120
 --strict-structure` (the language packs), `test_phases.py` (the progress bar cannot drift from the
-engine), `test_packs.py` (keys, placeholders, paragraphs, choices), and `test_logic.py`. Exit code 0 means
-all green.
+engine), `test_packs.py` (keys, placeholders, paragraphs, choices), `md2nexus.py --check` (the Nexus
+description matches the README), and `test_logic.py`. Exit code 0 means all green.
 
 Against a real `regulation.bin` (slow, needs the game's DLL for the kraken round-trip):
 
 ```bat
 python tools\test_logic.py --fuzz "C:\Games\ELDEN RING\Game\regulation.bin"
 ```
+
+## The Nexus description
+
+Nexus Mods' description editor takes **BBCode, not Markdown** (there is no Markdown support and none is
+planned), so the mod page cannot be a copy of README.md. It is generated instead:
+
+```bat
+python tools\md2nexus.py            rem rewrite NEXUS_DESCRIPTION.txt from README.md
+python tools\md2nexus.py --check    rem what the gate runs: fail if the file is stale
+python tools\md2nexus.py --stdout   rem print instead of writing
+```
+
+Never hand-edit `NEXUS_DESCRIPTION.txt`; edit `README.md` and re-run the generator. The renderer only
+emits tags from the Nexus wiki's list (plus `[code]` for fenced blocks), refuses any other tag, refuses
+leftover Markdown outside a code block, and refuses unbalanced BBCode — `test_logic.test_nexus_doc`
+checks the mapping, those invariants, and the staleness of the checked-in file.
 
 ## What the tests pin
 

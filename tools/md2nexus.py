@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""Render README.md as a Nexus Mods description (BBCode).
+
+Why this exists: Nexus Mods' description editor takes **BBCode, not Markdown**.  There is no Markdown
+support and none is planned (the site's own suggestion board has an open, unanswered request for it), so
+a README.md cannot simply be pasted into a mod page.  The usual answer is a converter, and a
+*generated* file rather than a second hand-written one: two documents describing the same tool drift the
+first time either is edited.
+
+    python tools/md2nexus.py            # rewrite NEXUS_DESCRIPTION.txt from README.md
+    python tools/md2nexus.py --check    # exit 1 if the checked-in file is stale (gate.py runs this)
+    python tools/md2nexus.py --stdout   # print instead of writing
+
+Mapping (only tags the Nexus wiki documents, plus [code]):
+
+    # / ##            [heading]           ### and deeper  [b]
+    **bold**          [b]                 *italic*        [i]
+    `code`            plain text          (Nexus has no inline code tag)
+    fenced block      [code]              ---             [line]
+    - item            [list] [*]          1. item         [list=1] [*]
+    [text](url)       [url=url]text[/url] (no quotes around the url - the wiki warns Nexus rejects them)
+    | a | b |         [list] of "a | b" rows, the header row in [b] (Nexus has no table tag)
+
+Nothing else is emitted: `--check` and the gate fail if the output ever contains a tag outside
+ALLOWED_TAGS, so the document cannot silently start depending on markup the site may not render.
+"""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+SOURCE = ROOT / "README.md"
+TARGET = ROOT / "NEXUS_DESCRIPTION.txt"
+
+# Every BBCode tag this renderer may emit.  All of them are in the Nexus wiki's tag list except [code]:
+# that one is what Nexus's own Markdown->BBCode converters emit for fenced blocks.  If a description ever
+# shows the raw tag, point CODE_OPEN/CODE_CLOSE at [quote]/[/quote] - the content survives either way.
+ALLOWED_TAGS = {"b", "i", "u", "s", "heading", "line", "list", "*", "url", "code", "quote",
+                "color", "center", "right", "font", "img", "youtube", "spoiler"}
+CODE_OPEN, CODE_CLOSE = "[code]", "[/code]"
+
+BULLET = re.compile(r"^(\s*)([-*])\s+(.*)$")
+NUMBERED = re.compile(r"^(\s*)(\d+)\.\s+(.*)$")
+HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+RULE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
+FENCE = re.compile(r"^\s*(```|~~~)")
+LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+BOLD = re.compile(r"\*\*(.+?)\*\*")
+ITALIC = re.compile(r"(?<![*\w])\*([^*\n]+)\*(?![*\w])")
+
+
+def inline(text: str) -> str:
+    """One line of Markdown text -> BBCode.
+
+    Inline code is stashed behind a placeholder before anything else runs.  Splitting on the backticks
+    instead would let a `**bold `code` bold**` pair leave its ** markers orphaned on either side of the
+    stash, which is exactly what the first version of this file did.
+    """
+    codes: list[str] = []
+
+    def stash(match: re.Match[str]) -> str:
+        codes.append(match.group(1))
+        return f"\x00{len(codes) - 1}\x00"
+
+    masked = re.sub(r"`([^`\n]+)`", stash, text)
+    masked = LINK.sub(r"[url=\2]\1[/url]", masked)
+    masked = BOLD.sub(r"[b]\1[/b]", masked)
+    masked = ITALIC.sub(r"[i]\1[/i]", masked)
+    return re.sub(r"\x00(\d+)\x00", lambda m: codes[int(m.group(1))], masked)
+
+
+def _cells(row: str) -> list[str]:
+    """Split a Markdown table row on pipes that are not inside `code`."""
+    row = row.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|") and not row.endswith("\\|"):
+        row = row[:-1]
+    cells, buf, in_code = [], [], False
+    for ch in row:
+        if ch == "`":
+            in_code = not in_code
+            buf.append(ch)
+        elif ch == "|" and not in_code:
+            cells.append("".join(buf).strip())
+            buf = []
+        else:
+            buf.append(ch)
+    cells.append("".join(buf).strip())
+    return cells
+
+
+def _is_separator(row: str) -> bool:
+    return bool(re.match(r"^\s*\|?[\s:|-]+\|[\s:|-]*$", row)) and "-" in row
+
+
+def table(rows: list[str]) -> list[str]:
+    """A Markdown table -> a BBCode list of "a | b | c" rows, the header in bold.
+
+    Nexus has no table tag.  A list keeps the data and reads fine; alignment is not preserved, which is
+    the honest trade-off for markup the site actually supports.
+    """
+    grid = [_cells(r) for r in rows if not _is_separator(r)]
+    if not grid:
+        return []
+    width = max(len(r) for r in grid)
+    out = ["[list]"]
+    for n, row in enumerate(grid):
+        cells = row + [""] * (width - len(row))
+        line = " | ".join(inline(c) for c in cells)
+        out.append(f"[*] [b]{line}[/b]" if n == 0 else f"[*] {line}")
+    out.append("[/list]")
+    return out
+
+
+def render(markdown: str) -> str:
+    """The whole document.  Deterministic: the same README always yields the same BBCode."""
+    lines = markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+
+    def para(start: int) -> int:
+        buf: list[str] = []
+        while start < n:
+            line = lines[start]
+            if not line.strip():
+                break
+            if buf and (HEADING.match(line) or RULE.match(line) or FENCE.match(line)
+                        or line.lstrip().startswith("|") or BULLET.match(line) or NUMBERED.match(line)):
+                break
+            buf.append(line.strip())
+            start += 1
+        if buf:
+            out.append(inline(" ".join(buf)))
+            out.append("")
+        return start
+
+    while i < n:
+        line = lines[i]
+
+        if FENCE.match(line):
+            i += 1
+            buf = []
+            while i < n and not FENCE.match(lines[i]):
+                buf.append(lines[i])
+                i += 1
+            i += 1                                 # the closing fence
+            out.append(CODE_OPEN)
+            out.extend(buf)
+            out.append(CODE_CLOSE)
+            out.append("")
+            continue
+
+        if not line.strip():
+            i += 1
+            continue
+
+        m = HEADING.match(line)
+        if m:
+            level, text = len(m.group(1)), m.group(2)
+            body = inline(text)
+            out.append(f"[heading]{body}[/heading]" if level <= 2 else f"[b]{body}[/b]")
+            out.append("")
+            i += 1
+            continue
+
+        if RULE.match(line):
+            out.append("[line]")
+            out.append("")
+            i += 1
+            continue
+
+        if line.lstrip().startswith("|"):
+            rows = []
+            while i < n and lines[i].lstrip().startswith("|"):
+                rows.append(lines[i])
+                i += 1
+            out.extend(table(rows))
+            out.append("")
+            continue
+
+        m = BULLET.match(line) or NUMBERED.match(line)
+        if m:
+            ordered = NUMBERED.match(line) is not None
+            items: list[str] = []
+            while i < n:
+                item = BULLET.match(lines[i]) or NUMBERED.match(lines[i])
+                if item:
+                    items.append(item.group(3))
+                    i += 1
+                    continue
+                # a wrapped list item continues on an indented line until a blank or a new block
+                if items and lines[i].startswith((" ", "\t")) and lines[i].strip() \
+                        and not (HEADING.match(lines[i]) or FENCE.match(lines[i])
+                                 or lines[i].lstrip().startswith("|")):
+                    items[-1] = items[-1] + " " + lines[i].strip()
+                    i += 1
+                    continue
+                break
+            out.append("[list=1]" if ordered else "[list]")
+            out.extend(f"[*] {inline(x)}" for x in items)
+            out.append("[/list]")
+            out.append("")
+            continue
+
+        i = para(i)
+
+    text = "\n".join(out)
+    text = re.sub(r"\n{3,}", "\n\n", text)          # collapse runs of blank lines
+    return text.strip() + "\n"
+
+
+def bracket_tokens(text: str) -> list[str]:
+    """Lowercased names of every ``[tag]`` / ``[tag=x]`` token outside a [code] block.
+
+    A fenced block is excluded because its content is literal by definition: the README's ASCII mock-up
+    contains ``[Preview] [Repack only] [Randomize]`` and its TOML contains ``[extension.regulation]``,
+    which are not markup.  Everywhere else a bracket token is markup, and must be one of ALLOWED_TAGS -
+    that is the whole check: it fails both if this renderer starts emitting a tag the site may not
+    support, and if prose ever starts containing a literal ``[b]`` Nexus would silently turn into bold.
+    """
+    outside = re.sub(r"\[code\].*?\[/code\]", "", text, flags=re.S)
+    return [m.group(1).lower() for m in re.finditer(r"\[/?([a-zA-Z*]+)(?:=[^\]]*)?\]", outside)]
+
+
+STRAY_MARKERS = (("**", "bold"), ("`", "backtick"), ("](", "link"), ("##", "heading"))
+
+
+def problems(text: str) -> list[str]:
+    """Everything wrong with a rendered document, as human-readable lines.
+
+    Three invariants, all of which have broken at least once:
+
+      * only ALLOWED_TAGS - the site may not render anything else;
+      * no leftover Markdown outside a code block - an orphaned `**` is bold that never opened;
+      * every BBCode tag balanced - an unclosed [list] swallows the rest of the page.
+    """
+    bad: list[str] = []
+    unknown = sorted({t for t in bracket_tokens(text) if t not in ALLOWED_TAGS})
+    if unknown:
+        bad.append(f"tags outside the allowed set: {unknown} "
+                   f"(a literal [b] in prose, or a new tag this renderer emits)")
+    outside = re.sub(r"\[code\].*?\[/code\]", "", text, flags=re.S)
+    for marker, what in STRAY_MARKERS:
+        if marker in outside:
+            bad.append(f"stray Markdown {what} marker {marker!r} outside a code block")
+    for name in ALLOWED_TAGS - {"line", "*"}:          # line and * are void tags
+        scope = text if name == "code" else outside
+        opens = len(re.findall(rf"\[{re.escape(name)}(?:=[^\]]*)?\]", scope))
+        closes = len(re.findall(rf"\[/{re.escape(name)}\]", scope))
+        if opens != closes:
+            bad.append(f"unbalanced [{name}]: {opens} opening, {closes} closing")
+    return bad
+
+
+def main(argv: list[str]) -> int:
+    check = "--check" in argv
+    stdout = "--stdout" in argv
+    if not SOURCE.is_file():
+        print(f"md2nexus: {SOURCE} is missing", file=sys.stderr)
+        return 2
+    rendered = render(SOURCE.read_text(encoding="utf-8"))
+    bad = problems(rendered)
+    if bad:
+        for line in bad:
+            print(f"md2nexus: {line}", file=sys.stderr)
+        return 3
+
+    if stdout:
+        sys.stdout.write(rendered)
+        return 0
+    if check:
+        if not TARGET.is_file():
+            print(f"md2nexus: {TARGET.name} is missing - run: python tools/md2nexus.py")
+            return 1
+        current = TARGET.read_text(encoding="utf-8")
+        if current != rendered:
+            print(f"md2nexus: {TARGET.name} is stale - run: python tools/md2nexus.py")
+            return 1
+        print(f"md2nexus: {TARGET.name} is current ({len(rendered)} bytes)")
+        return 0
+
+    TARGET.write_text(rendered, encoding="utf-8")
+    print(f"md2nexus: wrote {TARGET.name} ({len(rendered)} bytes, {len(rendered.splitlines())} lines)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
