@@ -97,6 +97,13 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Where the new regulation.bin is written. Give it a folder of its own: the reports (mapping.txt, "
            "weapons.txt, spells.txt ...) and, when weapon names are patched, a msg folder are written next "
            "to it, and an output named like the input would replace it."),
+    _o("backup_replace", "--backup-replace", neg=("--no-backup-replace",), group="files", default=True,
+       label="Backup and replace files",
+       tip="On by default. Before the run touches anything, your input regulation.bin and msg archives are "
+           "copied into a timestamped backup folder (backups/ next to the program), then the freshly "
+           "generated files replace them - so one click on Randomize both backs up and installs.\n\n"
+           "The randomized/ output folder is still written and keeps the reports. Turn it off to only "
+           "write the output folder and leave your files alone; revert any time with the Revert button."),
     _o("seed", "--seed", kind="int", default=None, group="files",
        label="Seed",
        tip="Fix the seed to reproduce a run exactly. Leave it empty for a fresh one; the seed that was used "

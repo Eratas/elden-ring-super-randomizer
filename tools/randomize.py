@@ -400,6 +400,11 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                         window_log=v["zstd_window"], codec=codec, level=oodle_level)
         print(f"# repacked {v['input']} -> {out} ({codec}, {size} bytes, "
               f"limit {v['max_size'] or erreg.REGULATION_MAX_SIZE}; content unchanged)")
+        if v["backup_replace"]:
+            import backup
+            bdir = backup.backup_and_replace(Path(v["input"]), out, list(v["archives"] or ()))
+            if bdir is not None:
+                print(f"# backup and replace: original files copied to {bdir} before replacing them")
         return 0
 
     real_stdout = sys.stdout if quiet else None
@@ -712,6 +717,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
              + (f", enemy drops: {out.with_name('drops.txt')}" if elines else "")
              + (f", enemy hp: {out.with_name('hp.txt')}" if hlines else "")
              + (f", runes: {out.with_name('runes.txt')}" if rlines else "")) + ")")
+    if v["backup_replace"] and not v["dry_run"]:
+        import backup
+        bdir = backup.backup_and_replace(Path(v["input"]), out, list(v["archives"] or ()))
+        if bdir is not None:
+            print(f"# backup and replace: original files copied to {bdir} before replacing them")
+        else:
+            print("# backup and replace: input file not found, nothing was backed up")
     say(phases.DONE)
     return 0
 

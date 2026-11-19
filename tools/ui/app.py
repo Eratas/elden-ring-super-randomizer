@@ -29,6 +29,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import backup  # noqa: E402
 import i18n  # noqa: E402
 import options  # noqa: E402
 import oodle  # noqa: E402
@@ -163,6 +164,11 @@ class App:
                 out[o.key] = self.vars[o.key].get()
             else:
                 out[o.key] = o.default
+        # a relative output lands in the program folder, so the randomized/ folder is always
+        # next to the program - clear and easy to find
+        out_path = (out.get("output") or "").strip()
+        if out_path and not Path(out_path).is_absolute():
+            out["output"] = str(backup.program_dir() / out_path)
         return out
 
     # ------------------------------------------------------------------ language
@@ -317,6 +323,17 @@ class App:
                                    style="TButton", command=self._open_output)
         self.open_btn.pack(side="left", padx=(0, 8), pady=5)
         Tooltip(self.open_btn, self.t("ui:tip_open_output", "Open the folder the output regulation.bin is written to."))
+        self.backup_btn = ttk.Button(actions, text=self.t("ui:backup", "Backup"), style="TButton",
+                                     command=self._backup_now)
+        self.backup_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.backup_btn, self.t("ui:tip_backup", "Copy your input regulation.bin and msg archives into a "
+                                                         "timestamped backup folder (backups/ next to the program). "
+                                                         "Does not run anything."))
+        self.revert_btn = ttk.Button(actions, text=self.t("ui:revert", "Revert"), style="TButton",
+                                     command=self._revert)
+        self.revert_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.revert_btn, self.t("ui:tip_revert", "Restore the most recent backup: put your original "
+                                                         "regulation.bin and msg archives back where they were."))
 
         self.run_btn = ttk.Button(actions, text=self.t("ui:randomize", "Randomize"), style="Run.TButton",
                                   command=lambda: self._run("run"))
@@ -1218,6 +1235,47 @@ class App:
                 subprocess.Popen(["xdg-open", folder])
         except Exception:
             pass
+
+    def _backup_now(self) -> None:
+        """Copy the input files into a timestamped backup, without running anything."""
+        import backup
+        v = self.values()
+        files = backup.collect_files(Path(v["input"]), list(v["archives"] or ()))
+        bdir = backup.make_backup(files)
+        if bdir is None:
+            messagebox.showwarning(self.t("ui:backup_none", "Nothing to back up"),
+                                   self.t("ui:backup_none_body", "The input file was not found, so there is "
+                                                                  "nothing to back up."),
+                                   parent=self.root)
+            return
+        self._log(f"# backup: {len(files)} file(s) copied to {bdir}", True)
+        messagebox.showinfo(self.t("ui:backup_done", "Backup complete"),
+                            self.t("ui:backup_done_body", "Original files copied to:\n{0}").format(bdir),
+                            parent=self.root)
+
+    def _revert(self) -> None:
+        """Restore the most recent backup, after a confirmation."""
+        import backup
+        backups = backup.list_backups()
+        if not backups:
+            messagebox.showinfo(self.t("ui:revert_none", "No backup yet"),
+                                self.t("ui:revert_none_body", "There is no backup to restore. Use Backup first, "
+                                                               "or run with Backup and replace files on."),
+                                parent=self.root)
+            return
+        latest = backups[0]
+        if not messagebox.askyesno(
+                self.t("ui:revert_title", "Revert to the last backup?"),
+                self.t("ui:revert_body", "This puts the files from\n{0}\nback where they were, overwriting "
+                                         "whatever is there now.").format(latest),
+                parent=self.root):
+            return
+        restored = backup.restore(latest)
+        self._log(f"# revert: {len(restored)} file(s) restored from {latest}", True)
+        messagebox.showinfo(self.t("ui:revert_done", "Reverted"),
+                            self.t("ui:revert_done_body", "{0} file(s) restored from:\n{1}").format(
+                                len(restored), latest),
+                            parent=self.root)
 
     def _finish(self) -> None:
         self.running = False

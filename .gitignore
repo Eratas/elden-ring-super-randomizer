@@ -3,6 +3,7 @@
 *.dll
 # outputs
 randomized/
+backups/
 /mapping.txt
 /weapons.txt
 /spells.txt
