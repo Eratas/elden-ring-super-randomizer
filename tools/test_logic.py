@@ -598,7 +598,8 @@ def test_real_file(path: str) -> None:
     d_after = sorted(int(round(D.duration(u.effects[0]))) for u in D.units if D.duration(u.effects[0]) is not None)
     check(d_before == d_after, "durations.randomize shuffle did not conserve the duration multiset")
 
-    # flasks (item 9): the swap moves the two flasks but never loses or duplicates one (count conserved)
+    # flasks (item 4): the swap moves the two flasks into valid candidate slots, and the
+    # first-grace lots hand out the swapped item instead (the flask is gone from its own lot).
     F = flasks.Flasks(reg)
     franges = [(lo, hi) for lo, hi in flasks.FLASK_LOTS.values()]
     L = reg.param("ItemLotParam_map", erreg.load_paramdef(HERE / "paramdef" / "ItemLotParam.xml"))
@@ -610,8 +611,29 @@ def test_real_file(path: str) -> None:
         return c
 
     fc_before = _flask_count()
+    flask_ids = {L.get(L.by_id[lot], "lotItemId01") for lot in flasks.FLASK_LOTS if L.by_id.get(lot) is not None}
+
+    def _flask_spots() -> set:
+        s = set()
+        for r in L.rows:
+            if any(L.get(r, f"lotItemId0{i}") in flask_ids for i in range(1, 9)):
+                s.add(("lot", r.id))
+        for r in F.S.rows:
+            if F.S.get(r, "equipId") in flask_ids:
+                s.add(("shop", r.id))
+        return s
+
+    pool = F.lot_spots() + F.merchants()
+    valid = ({("lot", s.row.id) for s in pool if isinstance(s, flasks.Spot)}
+             | {("lot", x.id) for s in pool if isinstance(s, flasks.Spot) for x in s.alternatives}
+             | {("shop", slot.row.id) for m in pool if isinstance(m, flasks.Merchant) for slot in m.slots})
+    before = _flask_spots()
     F.randomize(random.Random(17), "anywhere")
     check(_flask_count() == fc_before, "flasks.randomize changed the number of flasks (lost or duplicated)")
+    after = _flask_spots()
+    check({("lot", lot) for lot in flasks.FLASK_LOTS} <= (before - after),
+          "a flask stayed in its own first-grace lot (swap did not move it)")
+    check((after - before) <= valid, f"flask landed outside a candidate slot: {after - before - valid}")
 
     # start_items (item 9): the bell/lantern are appended with a flag, and re-running adds no duplicate
     start_items.give(reg, ["bell", "lantern"])
