@@ -11,9 +11,8 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-import erreg
-
 import bosses
+import erreg
 
 HERE = Path(__file__).resolve().parent
 
@@ -26,7 +25,7 @@ def boss_ids(N, min_runes: int = 0) -> set[int]:
 def apply(reg: erreg.Regulation, rng: random.Random, boss: set[int], orig: dict,
           hp_scale, rune_scale, couple: bool) -> list[str]:
     """Scale boss HP/runes and/or couple runes to HP.  `orig` maps row id -> (vanilla hp, vanilla soul)."""
-    from randomize import round_price                     # local: randomize imports this module
+    from randomize import round_price  # local: randomize imports this module
 
     N = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
     lines: list[str] = []

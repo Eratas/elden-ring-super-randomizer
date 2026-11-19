@@ -9,14 +9,15 @@ from __future__ import annotations
 import queue
 import sys
 import threading
-import traceback
 import tkinter as tk
+import traceback
 from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import options  # noqa: E402
+
 from ui import theme  # noqa: E402
 from ui.widgets import Tooltip  # noqa: E402
 
@@ -27,7 +28,7 @@ if TYPE_CHECKING:                       # type hint only: no runtime import, so 
 class QueueWriter:
     """sys.stdout stand-in for the worker thread: every line goes to the GUI queue, headers too."""
 
-    def __init__(self, q: "queue.Queue") -> None:
+    def __init__(self, q: queue.Queue) -> None:
         self.q = q
 
     def write(self, text: str) -> int:
@@ -76,9 +77,9 @@ class LootDialog:
     save, so nothing is written and nothing is compressed.  Output goes to its own queue, so it never
     mixes with the main window's log."""
 
-    def __init__(self, app: "App") -> None:
+    def __init__(self, app: App) -> None:
         self.app = app
-        self.q: "queue.Queue" = queue.Queue()
+        self.q: queue.Queue = queue.Queue()
         self.busy = False
         self.top = tk.Toplevel(app.root)
         self.top.withdraw()                          # built off-screen: no white flash before the theme applies

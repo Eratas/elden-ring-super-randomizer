@@ -20,7 +20,10 @@ BRACKET = re.compile(r"^\[(.+?)\]")
 
 
 def randomize(reg: erreg.Regulation, rng: random.Random, mode: str, lo: int | None, hi: int | None) -> list[str]:
-    from randomize import new_prices, round_price     # the shuffle / log-uniform range draw of --random-prices
+    from randomize import (  # the shuffle / log-uniform range draw of --random-prices
+        new_prices,
+        round_price,
+    )
     N = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
     enemy = erreg.load_names(HERE / "names" / "ItemLotParam_enemy.txt")
     boss = erreg.load_names(HERE / "names" / "ItemLotParam_map.txt")

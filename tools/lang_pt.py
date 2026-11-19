@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Pacote português (Brasil) - 288 chaves（rótulos 88 / dicas 88 / janela 52 / fases 21 / diálogos 31 / busca 8）。
 
 Chaves: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

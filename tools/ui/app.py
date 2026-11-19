@@ -31,15 +31,26 @@ from tkinter import filedialog, messagebox, ttk
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import backup  # noqa: E402
 import i18n  # noqa: E402
-import options  # noqa: E402
 import oodle  # noqa: E402
+import options  # noqa: E402
 import phases  # noqa: E402
 import presets  # noqa: E402
 import version  # noqa: E402
+
 from ui import theme  # noqa: E402
-from ui.widgets import (INDENT, PAD, ScrollFrame, Section, Tooltip,  # noqa: E402
-                        check_row, groups_row, label_at, path_row, value_row)
 from ui.lootdialog import LootDialog, QueueWriter  # noqa: E402
+from ui.widgets import (  # noqa: E402
+    INDENT,
+    PAD,
+    ScrollFrame,
+    Section,
+    Tooltip,
+    check_row,
+    groups_row,
+    label_at,
+    path_row,
+    value_row,
+)
 
 HERE = Path(__file__).resolve().parent.parent
 CONFIG = ((Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else HERE) / "settings.json")
@@ -86,7 +97,7 @@ class App:
         self.root = root
         self.cfg = load_config()
         self.fonts = theme.init(root)
-        self.queue: "queue.Queue" = queue.Queue()
+        self.queue: queue.Queue = queue.Queue()
         self.running = False
         self.syncing = False
         self._choice_guard = False

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Polski pakiet językowy — 288 kluczy (etykiety 88 / podpowiedzi 88 / okno 52 / fazy 21 / okna 31 / szukaj 8).
 
 Klucze: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

@@ -688,7 +688,7 @@ def validate(values: dict) -> dict:
 
     Raises ValueError with a message fit for a message box.  Returns a new dict; keys that are not
     options are ignored, keys missing from `values` are filled from their default."""
-    import weapons                                       # local: avoids an import cycle at start-up
+    import weapons  # local: avoids an import cycle at start-up
 
     out: dict[str, Any] = {}
     for o in OPTIONS:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Svenskt språkpaket — 288 nycklar (etiketter 88 / tips 88 / fönster 52 / faser 21 / dialoger 31 / sök 8).
 
 Nycklar: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

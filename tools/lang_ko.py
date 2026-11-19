@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Korean (ko) translations for the Elden Ring Super Randomizer GUI.
 
 All 297 keys are translated.  Tips keep the English shape: a one-line summary, a blank line, then the

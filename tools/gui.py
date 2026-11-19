@@ -24,6 +24,7 @@ if __name__ == "__main__":
         # headless verification, and shows it in a message box (the exe is windowed, no console).
         import tkinter as tk
         from tkinter import messagebox
+
         import test_logic
         root = tk.Tk()
         root.withdraw()

@@ -267,7 +267,7 @@ class EnemyDrops:
             clear(r)
             set_slot(r, 1, 0, 0, CERTAIN, 0)
 
-        def append_row(run: list) -> "erreg.ParamRow | None":
+        def append_row(run: list) -> erreg.ParamRow | None:
             """A new row after the lot's last one (None when the next id is taken or the lot would run on into the
                next lot), copied from the last row and emptied."""
             if self.room_after(run) < 1:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """日本語パック — 280 キー（ラベル 88 / ツールチップ 88 / UI 52 / フェーズ 21 / ダイアログ 31）。
 
 キー: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

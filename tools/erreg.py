@@ -12,10 +12,9 @@ import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import oodle
 import zstandard
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-import oodle
 
 ER_REGULATION_KEY = bytes.fromhex(
     "99BFFC366A6BC8C6F5827D093602D676C42892A01C207FB024D3AF4E493FEF99"
@@ -382,7 +381,7 @@ class Param:
         self.dirty = False      # set by set()/add_row(); untouched params are written back verbatim
 
     @staticmethod
-    def loose(reg: "Regulation", name: str) -> "Param":
+    def loose(reg: Regulation, name: str) -> Param:
         """A param without a paramdef: row ids and raw bytes only.
 
         Used for whole-row operations on tables this tool has no paramdef for (EquipParamAccessory:

@@ -1,9 +1,12 @@
 # Lint standard for the randomizer.
 #
 # pyflakes (F) catches undefined / unused names (e.g. an annotation that references a module that
-# was never imported, a local assigned but never read); E9 catches syntax and runtime errors.  This
-# is exactly what tools/lint.py and tools/gate.py enforce - keeping it here means a bare
-# `ruff check tools/` matches `python tools/lint.py` instead of also reporting broad style opinions
-# (import order, naming, etc.) that this project has never enforced.
+# was never imported, a local assigned but never read); E9 catches syntax and runtime errors; I
+# (isort) keeps import blocks sorted; UP (pyupgrade) flags pre-3.10 idioms; E402 keeps module
+# imports at the top of the file.  This matches tools/lint.py and tools/gate.py, so a bare
+# `ruff check tools/` agrees with them.
+#
+# The CLI and test modules put sys.path.insert ahead of their imports so they run from a source
+# checkout - each of those late imports carries an explicit `# noqa: E402` saying why.
 [lint]
-select = ["F", "E9"]
+select = ["F", "E9", "I", "UP", "E402"]

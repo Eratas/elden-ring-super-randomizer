@@ -34,12 +34,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import balance  # noqa: E402
 import boss_scale  # noqa: E402
+import dropshuffle  # noqa: E402
 import enemy_drops  # noqa: E402
 import erreg  # noqa: E402
 import flasks  # noqa: E402
 import gear  # noqa: E402
 import gems  # noqa: E402
-import dropshuffle  # noqa: E402
 import goods  # noqa: E402
 import loot  # noqa: E402
 import oodle  # noqa: E402

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Suomenkielinen kielipaketti — 288 avainta (otsikot 88 / vihjeet 88 / ikkuna 52 / vaiheet 21 / dialogit 31 / haku 8).
 
 Avaimet: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

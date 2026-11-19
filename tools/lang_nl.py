@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Nederlands taalpakket — 288 sleutels (labels 88 / toelichting 88 / venster 52 / fasen 21 / vensters 31 / zoeken 8).
 
 Sleutels: opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

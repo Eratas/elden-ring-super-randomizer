@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """简体中文语言包 — 288 个键（标签 88 / 说明 88 / 界面 52 / 阶段 21 / 对话框 31 / 搜索 8）。
 
 键名：opt:<key>:label / opt:<key>:tip / ui:<name> / phase:<name> / dlg:<name>

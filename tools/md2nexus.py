@@ -243,7 +243,7 @@ def bracket_tokens(text: str, strict: bool = False) -> list[str]:
     containing a literal ``[b]`` Nexus would silently turn into bold.
     """
     code_open, code_close = (STRICT_CODE_OPEN, STRICT_CODE_CLOSE) if strict else (CODE_OPEN, CODE_CLOSE)
-    outside = re.sub(rf"{re.escape(code_open)}.*?{re.escape(code_close)}", "", text, flags=re.S)
+    outside = re.sub(rf"{re.escape(code_open)}.*?{re.escape(code_close)}", "", text, flags=re.DOTALL)
     return [m.group(1).lower() for m in re.finditer(r"\[/?([a-zA-Z*]+)(?:=[^\]]*)?\]", outside)]
 
 
@@ -267,7 +267,7 @@ def problems(text: str, strict: bool = False) -> list[str]:
         bad.append(f"tags outside the allowed set: {unknown} "
                    f"(a literal [b] in prose, or a new tag this renderer emits)")
     code_open, code_close = (STRICT_CODE_OPEN, STRICT_CODE_CLOSE) if strict else (CODE_OPEN, CODE_CLOSE)
-    outside = re.sub(rf"{re.escape(code_open)}.*?{re.escape(code_close)}", "", text, flags=re.S)
+    outside = re.sub(rf"{re.escape(code_open)}.*?{re.escape(code_close)}", "", text, flags=re.DOTALL)
     for marker, what in STRAY_MARKERS:
         if marker in outside:
             bad.append(f"stray Markdown {what} marker {marker!r} outside a fenced block")
@@ -290,7 +290,7 @@ def stray_source_tags(markdown: str) -> list[str]:
     page as a formatting toggle nobody wrote, so the source is checked rather than the output: the output
     cannot tell an intentional [b] from an accidental one.
     """
-    outside = re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", markdown, flags=re.S | re.M)
+    outside = re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", markdown, flags=re.DOTALL | re.MULTILINE)
     outside = re.sub(r"\[[^\]]*\]\([^)]*\)", "", outside)
     return sorted({m.group(1).lower()
                    for m in re.finditer(r"\[/?([a-zA-Z*]+)(?:=[^\]]*)?\]", outside)

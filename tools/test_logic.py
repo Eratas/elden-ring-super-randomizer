@@ -47,30 +47,32 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import boss_scale
-import dropshuffle
-import durations
-import enemy_drops
-import erreg
-import flasks
-import gear
-import gems
-import goods
-import loot
-import oodle
-import options
-import randomize
-import runes
-import shops
-import spells
-import start_items
-import talkmsg
-import textarchives
-import version
-import weapon_names
-import weapons
-import zones
-from dropshuffle import _set_key
+# Late imports: the sys.path.insert above puts tools/ on the path so this file runs from a source
+# checkout (python tools/test_logic.py); each line is noqa: E402 for that reason.
+import boss_scale  # noqa: E402
+import dropshuffle  # noqa: E402
+import durations  # noqa: E402
+import enemy_drops  # noqa: E402
+import erreg  # noqa: E402
+import flasks  # noqa: E402
+import gear  # noqa: E402
+import gems  # noqa: E402
+import goods  # noqa: E402
+import loot  # noqa: E402
+import oodle  # noqa: E402
+import options  # noqa: E402
+import randomize  # noqa: E402
+import runes  # noqa: E402
+import shops  # noqa: E402
+import spells  # noqa: E402
+import start_items  # noqa: E402
+import talkmsg  # noqa: E402
+import textarchives  # noqa: E402
+import version  # noqa: E402
+import weapon_names  # noqa: E402
+import weapons  # noqa: E402
+import zones  # noqa: E402
+from dropshuffle import _set_key  # noqa: E402
 
 _CHECKS = 0
 _FAILS: list[str] = []
@@ -386,7 +388,7 @@ def test_corrupt_input() -> None:
 
 
 # --------------------------------------------------------------------------- real-file fuzz (items 4 + 9)
-def _all_lot_ids(reg: "erreg.Regulation") -> list[int]:
+def _all_lot_ids(reg: erreg.Regulation) -> list[int]:
     """Every item id referenced by an enemy lot, map lot or shop - dropshuffle permutes these, so the
     sorted multiset must be identical before and after a shuffle."""
     ids: list[int] = []
@@ -1356,11 +1358,11 @@ def _md_block(rng: random.Random) -> str:
 def _md_fences(doc: str) -> list[tuple[str, str]]:
     """(info string, body) for every fenced block in a Markdown document."""
     return [(m.group(1).strip(), m.group(2))
-            for m in re.finditer(r"^[`~]{3,}([^\n]*)\n(.*?)^[`~]{3,}\s*$", doc, flags=re.S | re.M)]
+            for m in re.finditer(r"^[`~]{3,}([^\n]*)\n(.*?)^[`~]{3,}\s*$", doc, flags=re.DOTALL | re.MULTILINE)]
 
 
 def _md_without_fences(doc: str) -> str:
-    return re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", doc, flags=re.S | re.M)
+    return re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", doc, flags=re.DOTALL | re.MULTILINE)
 
 
 _MD_DOCS = 5000          # random documents per run; ~2 s, and the whole generator is deterministic
@@ -1392,7 +1394,7 @@ def test_md2nexus_fuzz() -> None:
     for case in range(_MD_DOCS):
         doc = "\n\n".join(_md_block(rng) for _ in range(rng.randint(1, 8))) + "\n"
         # rules (--- / *** / ___) are markup, not words: drop those lines before harvesting vocabulary
-        outside = re.sub(r"^\s*([-*_])\1{2,}\s*$", "", _md_without_fences(doc), flags=re.M)
+        outside = re.sub(r"^\s*([-*_])\1{2,}\s*$", "", _md_without_fences(doc), flags=re.MULTILINE)
         words = {w for w in re.findall(r"[A-Za-z0-9_][A-Za-z0-9_.\-/]*", outside) if len(w) >= 3}
         fenced = _md_fences(doc)
         head = f"md2nexus fuzz #{case}"

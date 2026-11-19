@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import erreg
-from talkmsg import fmg_name, patch_fmgs, read_fmg      # noqa: F401  (re-exported for callers)
+from talkmsg import fmg_name, patch_fmgs, read_fmg  # noqa: F401  (re-exported for callers)
 
 HERE = Path(__file__).resolve().parent
 
