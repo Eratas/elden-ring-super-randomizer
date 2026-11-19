@@ -3,10 +3,14 @@
 # pyflakes (F) catches undefined / unused names (e.g. an annotation that references a module that
 # was never imported, a local assigned but never read); E9 catches syntax and runtime errors; I
 # (isort) keeps import blocks sorted; UP (pyupgrade) flags pre-3.10 idioms; E402 keeps module
-# imports at the top of the file.  This matches tools/lint.py and tools/gate.py, so a bare
-# `ruff check tools/` agrees with them.
+# imports at the top of the file; W (pycodestyle warnings) catches trailing whitespace and missing
+# newlines; B (bugbear) catches likely bugs (raise-without-from, unused loop vars, ...).  This
+# matches tools/lint.py and tools/gate.py, so a bare `ruff check tools/` agrees with them.
 #
 # The CLI and test modules put sys.path.insert ahead of their imports so they run from a source
 # checkout - each of those late imports carries an explicit `# noqa: E402` saying why.
 [lint]
-select = ["F", "E9", "I", "UP", "E402"]
+select = ["F", "E9", "I", "UP", "E402", "W", "B"]
+# B905 (zip without strict=): several zips intentionally truncate (e.g. the BND4 rebuild zips the
+# file list against the data list), so strict=True would turn a length mismatch into a hard error.
+ignore = ["B905"]

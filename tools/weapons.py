@@ -584,7 +584,7 @@ class Weapons:
         # reached on nearly every weapon -> an affinity survives only if every weapon's row at that
         # affinity animates the ash (the cluster rule), whatever the weapon's original type.
         cats_all: dict[int, set[int]] = {}
-        for (t, a), cs in cats_used.items():
+        for (_t, a), cs in cats_used.items():
             cats_all.setdefault(a, set()).update(cs)
 
         def kept_for(r, sa, types) -> list[int]:

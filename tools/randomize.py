@@ -380,7 +380,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
     try:
         v = options.validate(options.values_from_args(args))
     except ValueError as e:
-        raise SystemExit(str(e))
+        raise SystemExit(str(e)) from None      # user-facing validation error, not a crash
 
     dll = getattr(args, "oodle_dll", None)
     if dll is not None and not oodle.use_dll(dll):
