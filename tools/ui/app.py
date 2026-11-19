@@ -268,6 +268,10 @@ class App:
         reset_btn.pack(side="right", padx=(4, PAD))
         Tooltip(reset_btn, self.t("ui:tip_reset", "Put every option back to its default. The lists of paths "
                                                        "you used are kept."))
+        about_btn = ttk.Button(top, text=self.t("ui:about", "About"), style="Small.TButton",
+                               command=self._show_about)
+        about_btn.pack(side="right", padx=4)
+        Tooltip(about_btn, self.t("ui:tip_about", "Version, credits, and the GitHub links."))
 
         # Find bar: a thin row under the top bar.  Typing hides every option whose name or text does not
         # match; clearing it shows everything again.  It never scrolls away because it is packed at the top.
@@ -1224,6 +1228,49 @@ class App:
             self.status.set(self.t("ui:done", "done"))
         self.progress["value"] = 100
         self._refresh()
+
+    def _show_about(self) -> None:
+        """The About window: version, credits, and the two GitHub links."""
+        win = tk.Toplevel(self.root)
+        win.title(self.t("ui:about_title", "About"))
+        win.resizable(False, False)
+        win.transient(self.root)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=self.t("ui:title", "Elden Ring Randomizer"),
+                  style="Title.TLabel").pack(anchor="w")
+        ttk.Label(frame, text=f"v{version.__version__}", style="Muted.TLabel").pack(anchor="w")
+        ttk.Separator(frame).pack(fill="x", pady=8)
+        body = (
+            f"{self.t('ui:about_original', 'Original creator')}: WenchengDShao\n"
+            "  https://github.com/WenchengDShao/elden_ring_further_random\n"
+            "\n"
+            f"{self.t('ui:about_fork', 'Fork')}: Eratas\n"
+            "  https://github.com/Eratas/elden-ring-super-randomizer\n"
+            "\n"
+            f"{self.t('ui:about_credits', 'Credits')}:\n"
+            "  WenchengDShao \u2014 the original elden_ring_further_random\n"
+            "  Eratas \u2014 the Super Randomizer fork (this build)\n"
+            "  The tools/ modules and the 13 language translations\n"
+        )
+        txt = tk.Text(frame, width=72, height=13, wrap="word", relief="flat",
+                      background=theme.PANEL, foreground=theme.FG, highlightthickness=0)
+        txt.insert("1.0", body)
+        txt.configure(state="disabled")
+        txt.pack(fill="both", expand=True)
+        btns = ttk.Frame(frame)
+        btns.pack(fill="x", pady=(8, 0))
+
+        def _copy() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(body)
+
+        ttk.Button(btns, text=self.t("ui:about_copy", "Copy"),
+                   command=_copy).pack(side="left")
+        ttk.Button(btns, text=self.t("ui:close", "Close"),
+                   command=win.destroy).pack(side="right")
+        win.grab_set()
+        win.focus_set()
 
     def _close(self) -> None:
         self._save(now=True)
