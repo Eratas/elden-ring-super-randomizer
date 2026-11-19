@@ -21,6 +21,7 @@ from pathlib import Path
 BACKUP_DIR_NAME = "backups"
 MANIFEST = "manifest.json"
 ARCHIVE_NAME = "item_dlc02.msgbnd.dcx"
+KEEP_BACKUPS = 20
 
 
 def _archive_files(archives: list[Path]) -> list[Path]:
@@ -79,6 +80,7 @@ def make_backup(files: list[Path]) -> Path | None:
         shutil.copy2(src, target)
         manifest.append({"name": target.name, "original": str(src.resolve())})
     (dest / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    prune_backups()
     return dest
 
 
@@ -88,6 +90,16 @@ def list_backups() -> list[Path]:
     if not root.is_dir():
         return []
     return sorted((p for p in root.iterdir() if p.is_dir() and (p / MANIFEST).is_file()), reverse=True)
+
+
+def prune_backups(keep: int = KEEP_BACKUPS) -> int:
+    """Delete all but the newest ``keep`` backup folders.  Returns how many were removed."""
+    backups = list_backups()          # newest first
+    removed = 0
+    for old in backups[keep:]:
+        shutil.rmtree(old, ignore_errors=True)
+        removed += 1
+    return removed
 
 
 def restore(backup: Path) -> list[Path]:
