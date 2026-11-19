@@ -1362,19 +1362,25 @@ def _md_without_fences(doc: str) -> str:
     return re.sub(r"^[`~]{3,}[^\n]*\n.*?^[`~]{3,}\s*$", "", doc, flags=re.S | re.M)
 
 
+_MD_DOCS = 5000          # random documents per run; ~2 s, and the whole generator is deterministic
+
+
 def test_md2nexus_fuzz() -> None:
     """Random Markdown through the Nexus renderer: the output must always satisfy the invariants.
 
     A renderer has more ways to be wrong than a function has branches, and every one of them shows up on
-    the mod page rather than in a traceback.  Over 300 random documents (headings, nested-looking lists,
-    wrapped items, tables with pipes inside code spans, fenced blocks that contain markup which must stay
-    literal, rules, links, bold/italic) assert, for both the normal and the strict render:
+    the mod page rather than in a traceback.  Over `_MD_DOCS` random documents (headings, wrapped list
+    items, tables with pipes inside code spans, fenced blocks that contain markup which must stay literal,
+    rules, links, bold/italic) assert, for both the normal and the strict render:
 
       * problems() is empty - only allowed tags, no leftover Markdown, balanced BBCode;
       * the render is deterministic - same input, same bytes;
       * no fenced content is dropped (a block's language hint is dropped by design: Nexus code blocks
         have no language, and a caption would be markup the tag cannot carry);
       * no word outside a fenced block is lost.
+
+    One check per document, not per property: the corpus is a *property* sample, and counting every
+    assertion would let 5,000 documents outweigh every hand-written test in the file put together.
     """
     try:
         import md2nexus
@@ -1382,27 +1388,29 @@ def test_md2nexus_fuzz() -> None:
         return
 
     rng = random.Random(90210)
-    for case in range(300):
-        doc = "\n\n".join(_md_block(rng) for _ in range(rng.randint(1, 6))) + "\n"
+    for case in range(_MD_DOCS):
+        doc = "\n\n".join(_md_block(rng) for _ in range(rng.randint(1, 8))) + "\n"
         # rules (--- / *** / ___) are markup, not words: drop those lines before harvesting vocabulary
         outside = re.sub(r"^\s*([-*_])\1{2,}\s*$", "", _md_without_fences(doc), flags=re.M)
         words = {w for w in re.findall(r"[A-Za-z0-9_][A-Za-z0-9_.\-/]*", outside) if len(w) >= 3}
         fenced = _md_fences(doc)
+        head = f"md2nexus fuzz #{case}"
         for strict in (False, True):
+            label = f"{head} (strict={strict})"
             out = md2nexus.render(doc, strict=strict)
             bad = md2nexus.problems(out, strict=strict)
-            check(not bad, f"md2nexus fuzz #{case} (strict={strict}) broke an invariant: {bad}\n"
-                           f"--- markdown ---\n{doc}\n--- bbcode ---\n{out}")
-            check(md2nexus.render(doc, strict=strict) == out,
-                  f"md2nexus fuzz #{case} (strict={strict}): render is not deterministic")
+            bad += [f"render is not deterministic"] if md2nexus.render(doc, strict=strict) != out else []
             missing = sorted(w for w in words if w not in out)
-            check(not missing, f"md2nexus fuzz #{case} (strict={strict}): words lost: {missing[:8]}\n"
-                               f"--- markdown ---\n{doc}")
-            for info, body in fenced:
-                for line in body.splitlines():
-                    if line.strip():
-                        check(line in out,
-                              f"md2nexus fuzz #{case} (strict={strict}): fenced line dropped: {line!r}")
+            if missing:
+                bad.append(f"words lost: {missing[:8]}")
+            for _info, body in fenced:
+                bad += [f"fenced line dropped: {line!r}" for line in body.splitlines()
+                        if line.strip() and line not in out]
+            if bad:
+                shown = doc if len(doc) <= 1200 else doc[:1200] + "\n... (truncated)"
+                check(False, f"{label}: {bad[:4]}\n--- markdown ---\n{shown}")
+            else:
+                check(True, "")
 
 
 # --------------------------------------------------------------------------- main
