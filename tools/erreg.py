@@ -90,7 +90,15 @@ def read_dcx(buf: bytes) -> Dcx:
             raise ValueError(f"DCX: ZSTD decompression failed ({e})") from e
         codec = CODEC_ZSTD
     elif fmt == b"KRAK":
-        out = oodle.decompress(payload, uncomp)
+        try:
+            out = oodle.decompress(payload, uncomp)
+        except RuntimeError as e:
+            # OodleLZ_Decompress returns 0 on a truncated / corrupt stream, and oodle.decompress raises
+            # RuntimeError when the DLL is missing.  Neither is a *parse* error, but both arrive here as
+            # "this DCX cannot be decoded" - and the ZSTD and DFLT branches below already answer that with
+            # a ValueError.  Letting a RuntimeError through is what made a truncated game file raise a
+            # different type from a truncated text archive.
+            raise ValueError(f"DCX: KRAK decompression failed ({e})") from e
         codec = CODEC_KRAKEN
     elif fmt == b"DFLT":                      # zlib: msgbnd / msb / emevd written by the randomizers; read only
         try:

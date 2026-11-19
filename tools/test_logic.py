@@ -15,10 +15,16 @@ wrong output in the field* rather than a crash:
      decoded and rebuilt byte-for-byte from the shipped msg archive (no DLL needed - it is zstd);
  * erreg robustness: truncated / corrupt input to read_bnd4, Param and read_dcx fails as a clean
      ValueError (no raw struct.error / IndexError, and never the read_bnd4 name-scan hang);
- * the options dict -> argv -> dict round trip for EVERY option, and again over hundreds of random
-     *combinations* of options: the GUI builds the command line with options.argv_from_values() and
-     runs it verbatim, so an option it forgets to emit is silently ignored by the engine (--goods,
-     --spells, --loot-rarity and --no-backup-replace all were).
+ * the options dict -> argv -> dict round trip for EVERY option, again over hundreds of random
+     *combinations* of options, and once for every *pair* of options: the GUI builds the command line
+     with options.argv_from_values() and runs it verbatim, so an option it forgets to emit is silently
+     ignored by the engine (--goods, --spells, --loot-rarity and --no-backup-replace all were);
+ * the backup-and-replace round trip in a temp dir: make_backup is byte-exact and non-destructive,
+     restore undoes a replacement, prune keeps the newest N - the only pass that overwrites the user's
+     own files;
+ * empty pools: new_prices, the price passes and talkmsg.read_fmg must report "nothing to do", not
+     crash on a regulation.bin that does not fill them;
+ * version.py vs version_info.txt: the window footer and the exe's PE resource must not drift.
 
 Run directly with `python tools/test_logic.py` or through tools/gate.py.
 """
@@ -287,6 +293,15 @@ def test_erreg_malformed() -> None:
     expect(lambda: erreg.read_dcx(b""), "read_dcx empty")
     expect(lambda: erreg.read_dcx(b"XXXX" + dcx_bytes[4:]), "read_dcx bad magic")
     expect(lambda: erreg.read_dcx(dcx_bytes[:0x4C]), "read_dcx header-only")
+    # a KRAK header with no payload: the game's own regulation.bin is KRAK, so this is the truncation a
+    # user actually hits.  oodle.decompress raises RuntimeError (bad stream, or no DLL); it must surface
+    # as the same ValueError the zstd/DFLT branches raise, not a different exception type.
+    krak = bytearray(0x4C)
+    krak[0:4] = b"DCX\0"
+    struct.pack_into(">II", krak, 0x1C, 1 << 20, 64)          # uncompressed size, compressed size
+    krak[0x28:0x2C] = b"KRAK"
+    krak[0x30] = 6
+    expect(lambda: erreg.read_dcx(bytes(krak)), "read_dcx KRAK header-only")
     check(erreg.read_dcx(dcx_bytes).data == bnd, "read_dcx full should round-trip to the BND4")
 
 
@@ -619,8 +634,15 @@ def test_real_file(path: str) -> None:
     F.randomize(random.Random(17), "anywhere")
     check(_flask_count() == fc_before, "flasks.randomize changed the number of flasks (lost or duplicated)")
     after = _flask_spots()
-    check({("lot", lot) for lot in flasks.FLASK_LOTS} <= (before - after),
-          "a flask stayed in its own first-grace lot (swap did not move it)")
+    # Each flask must have left its own lot.  A swap between the two flask lots is a legitimate outcome -
+    # lot 2000 then holds the *other* flask - so this tests the item in the row, not the mere presence of
+    # a flask in the spot (the old spot-level form failed on exactly that swap).
+    for lot, (lo, hi) in flasks.FLASK_LOTS.items():
+        row = L.by_id.get(lot)
+        if row is None:
+            continue
+        check(not lo <= L.get(row, "lotItemId01") <= hi,
+              f"flask lot {lot} still holds a flask from its own range {lo}..{hi} (swap did not move it)")
     check((after - before) <= valid, f"flask landed outside a candidate slot: {after - before - valid}")
 
     # start_items (item 9): the bell/lantern are appended with a flag, and re-running adds no duplicate
@@ -720,6 +742,11 @@ _ARGV_NEEDS = {"random_prices": {"price_mode": "shuffle"}, "random_runes": {"run
 _ARGV_INT = {"zstd_window": 18, "max_size": 2_000_000}     # the defaults are not "a different value"
 
 
+# One parser for every argv test.  build_argparse() rebuilds ~100 arguments, which costs far more than the
+# parse itself - and the pair sweep parses thousands of command lines.
+_ARGV_PARSER = options.build_argparse(prog="t")
+
+
 def _argv_dict() -> dict:
     d = {o.key: o.default for o in options.OPTIONS}
     d.update({"input": "in.bin", "output": "out/regulation.bin", "repack": False,
@@ -771,7 +798,7 @@ def test_argv_roundtrip() -> None:
         d[o.key] = _argv_value(o, d)
         v = options.validate(d)
         argv = options.argv_from_values(v)
-        back = options.validate(options.values_from_args(options.build_argparse(prog="t").parse_args(argv)))
+        back = options.validate(options.values_from_args(_ARGV_PARSER.parse_args(argv)))
         check(_argv_normalize(o, v.get(o.key)) == _argv_normalize(o, back.get(o.key)),
               f"argv round trip lost {o.key}: {v.get(o.key)!r} -> {back.get(o.key)!r} (argv: {argv})")
 
@@ -794,7 +821,7 @@ def test_argv_roundtrip() -> None:
     for level in ("fast", "max"):
         for codec in ("auto", "kraken", "zstd"):
             argv = options.argv_from_values(dict(_argv_dict(), compression_level=level, compression=codec))
-            back = options.values_from_args(options.build_argparse(prog="t").parse_args(argv))
+            back = options.values_from_args(_ARGV_PARSER.parse_args(argv))
             check((back["compression_level"], back["compression"]) == (level, codec),
                   f"compression {level}/{codec} became {back['compression_level']}/{back['compression']}")
 
@@ -895,7 +922,7 @@ def test_argv_fuzz() -> None:
         argv = options.argv_from_values(gui)
         try:
             back = options.validate(options.values_from_args(
-                options.build_argparse(prog="t").parse_args(argv)))
+                _ARGV_PARSER.parse_args(argv)))
         except SystemExit as e:
             check(False, f"argv fuzz #{i} (seed {_ARGV_FUZZ_SEED}) produced an unparsable argv "
                          f"({e}): {argv}")
@@ -910,6 +937,211 @@ def test_argv_fuzz() -> None:
     check(valid >= _ARGV_FUZZ_SAMPLES // 3,
           f"only {valid} of {_ARGV_FUZZ_SAMPLES} random option sets were valid - the generator or "
           f"validate() changed shape and the fuzz is no longer covering the space")
+
+
+# --------------------------------------------------------------------------- argv pairs
+def test_argv_pairs() -> None:
+    """Every *pair* of options, set together.
+
+    The random fuzz samples sets; this one guarantees coverage.  For each unordered pair both options are
+    set to a non-default value and the round trip is checked.  Gates that only collide in combination -
+    a group list next to the master it belongs to, two modes that share one limit, a shorthand next to
+    the switches it expands to - are exactly what a sampled fuzz can miss.
+    """
+    visible = [o for o in options.OPTIONS if o.key not in _ARGV_SKIP and o.kind != "paths"]
+    total = len(visible) * (len(visible) - 1) // 2
+    checked = 0
+    for i, first in enumerate(visible):
+        for second in visible[i + 1:]:
+            d = _argv_dict()
+            for o in (first, second):
+                d.update(_ARGV_NEEDS.get(o.key, {}))
+                for k in o.needs:
+                    d[k] = True
+                d[o.key] = _argv_value(o, d)
+            try:
+                gui = options.validate(d)
+            except (ValueError, SystemExit):
+                continue                            # a pair the rules reject is not a round trip
+            checked += 1
+            argv = options.argv_from_values(gui)
+            try:
+                back = options.validate(options.values_from_args(
+                    _ARGV_PARSER.parse_args(argv)))
+            except SystemExit as e:
+                check(False, f"argv pair {first.key}+{second.key} produced an unparsable argv "
+                             f"({e}): {argv}")
+                continue
+            for o in (first, second):
+                if _argv_normalize(o, gui.get(o.key)) != _argv_normalize(o, back.get(o.key)) \
+                        and not _argv_gated(o, gui):
+                    check(False, f"argv pair {first.key}+{second.key} lost {o.key}: "
+                                 f"{gui.get(o.key)!r} -> {back.get(o.key)!r} in {argv}")
+    check(checked >= total // 4,
+          f"only {checked} of {total} option pairs were valid - the generator or validate() changed "
+          f"shape and the pair sweep is no longer covering the space")
+
+
+# --------------------------------------------------------------------------- dropshuffle set_plan
+def _plan_groups(iids: list[int], names: dict[int, str]) -> dict[str, list[int]]:
+    """The slot groups dropshuffle.set_plan builds: set key -> the slots that hold its pieces."""
+    groups: dict[str, list[int]] = {}
+    for n, iid in enumerate(iids):
+        key = dropshuffle._set_key(names.get(iid, ""))
+        if key:
+            groups.setdefault(key, []).append(n)
+    return groups
+
+
+def test_dropshuffle_plan_fuzz() -> None:
+    """Property fuzz for dropshuffle.set_plan - the keep_sets branch.
+
+    The invariant that already broke once (run 20261118): a set that maps to itself must stay a coherent
+    set, and no set may ever be split.  Checked over 300 random synthetic wardrobes:
+
+      * the plan is a permutation - no item lost, none duplicated;
+      * every slot of a set receives items from exactly ONE set, of the SAME size (so a helm, chest,
+        gauntlets and greaves all become one other set, never a mixture);
+      * a loose slot only ever receives a loose item;
+      * one seed always gives one plan (reproducibility).
+
+    Names deliberately include words `_set_key` does not know ("Odd 3 Sword"), because those must count as
+    loose - the piece-word list is the only thing that defines a set.
+    """
+    check(dropshuffle.set_plan([], {}, random.Random(1)) == [], "set_plan([]) should return []")
+
+    rng = random.Random(4242)
+    words = list(dropshuffle.SLOT_WORDS)
+    for case in range(300):
+        names: dict[int, str] = {}
+        ids: list[int] = []
+        next_id = 100000
+
+        def take() -> int:
+            nonlocal next_id
+            iid = next_id
+            next_id += rng.randint(1, 7)
+            return iid
+
+        for s in range(rng.randint(0, 6)):                 # 0..5 real sets, each 2..5 pieces
+            key = f"Set{case}-{s}"
+            for _ in range(rng.randint(2, 5)):
+                iid = take()
+                names[iid] = f"{key} {rng.choice(words)}"
+                ids.append(iid)
+        for j in range(rng.randint(0, 10)):                # loose items
+            iid = take()
+            names[iid] = rng.choice([f"Loose {j}", f"Odd {j} Sword", f"Thing {j}"])
+            ids.append(iid)
+        if not ids:
+            continue
+
+        plan = dropshuffle.set_plan(ids, names, random.Random(case))
+        check(sorted(plan) == sorted(ids),
+              f"plan fuzz case {case}: not a permutation ({len(plan)} slots, {len(ids)} items)")
+
+        groups = _plan_groups(ids, names)
+        size_of = {k: len(v) for k, v in groups.items()}
+        grouped_slots = {n for v in groups.values() for n in v}
+        for key, slots in groups.items():
+            got = {dropshuffle._set_key(names.get(plan[n], "")) for n in slots}
+            check(len(got) == 1, f"plan fuzz case {case}: set {key!r} was split across {got}")
+            donor = next(iter(got), None)
+            check(donor is not None and size_of.get(donor) == len(slots),
+                  f"plan fuzz case {case}: set {key!r} ({len(slots)} pieces) received items from "
+                  f"{donor!r} of size {size_of.get(donor)}")
+        for n in range(len(ids)):
+            if n in grouped_slots:
+                continue
+            check(dropshuffle._set_key(names.get(plan[n], "")) is None,
+                  f"plan fuzz case {case}: loose slot {n} received the set item "
+                  f"{names.get(plan[n])!r}")
+
+        check(dropshuffle.set_plan(ids, names, random.Random(case)) == plan,
+              f"plan fuzz case {case}: set_plan is not reproducible for one seed")
+
+
+# --------------------------------------------------------------------------- backup
+def test_backup() -> None:
+    """Backup-and-replace is the only pass that overwrites the user's own files, so it gets a round trip.
+
+    Everything happens in a temp dir (backup.program_dir is redirected, so nothing touches the repo):
+
+      * make_backup copies byte-for-byte, leaves the originals untouched, and names each file's origin;
+      * make_backup returns None when there is nothing to back up;
+      * restore puts every file back byte-for-byte after they were clobbered;
+      * prune_backups keeps only the newest N and reports how many it removed;
+      * backup_and_replace really replaces the input with the generated output (and the msg archive with
+        the patched copy), and restore really undoes both.
+    """
+    import json
+
+    import backup
+
+    root = Path(tempfile.mkdtemp(prefix="backup-test-"))
+    saved = backup.program_dir
+    backup.program_dir = lambda: root            # keep the sandbox out of the repo
+    try:
+        src = root / "regulation.bin"
+        archive = root / "msg" / "engus" / backup.ARCHIVE_NAME
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(b"ORIGINAL-BYTES" * 100)
+        archive.write_bytes(b"ARCHIVE-BYTES" * 50)
+        original = {src.resolve(): src.read_bytes(), archive.resolve(): archive.read_bytes()}
+
+        made = backup.make_backup([src, archive])
+        check(made is not None and made.is_dir(), "make_backup did not create a folder")
+        check(src.read_bytes() == original[src.resolve()]
+              and archive.read_bytes() == original[archive.resolve()],
+              "make_backup modified the files it was asked to back up")
+        entries = json.loads((made / backup.MANIFEST).read_text(encoding="utf-8"))
+        check(len(entries) == 2, f"the manifest lists {len(entries)} files, expected 2")
+        for entry in entries:
+            key = Path(entry["original"])
+            check(key in original, f"the manifest names an unknown original: {key}")
+            copied = made / entry["name"]
+            check(copied.is_file() and copied.read_bytes() == original.get(key),
+                  f"{entry['name']} is not a byte-for-byte copy of its original")
+
+        check(backup.make_backup([root / "does-not-exist.bin"]) is None,
+              "make_backup should return None when no file exists")
+
+        src.write_bytes(b"CLOBBERED")
+        archive.write_bytes(b"CLOBBERED")
+        restored = backup.restore(made)
+        check(len(restored) == 2, f"restore reported {len(restored)} files, expected 2")
+        check(src.read_bytes() == original[src.resolve()],
+              "restore did not put regulation.bin back byte-for-byte")
+        check(archive.read_bytes() == original[archive.resolve()],
+              "restore did not put the msg archive back byte-for-byte")
+
+        for _ in range(5):
+            backup.make_backup([src])
+        check(len(backup.list_backups()) == 6, "expected 6 backups before pruning")
+        removed = backup.prune_backups(keep=2)
+        check(removed == 4, f"prune removed {removed} backups, expected 4")
+        check(len(backup.list_backups()) == 2, "prune did not leave exactly 2 backups")
+
+        out = root / "out" / "regulation.bin"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"GENERATED" * 200)
+        patched = root / "out" / "msg" / "engus" / backup.ARCHIVE_NAME
+        patched.parent.mkdir(parents=True, exist_ok=True)
+        patched.write_bytes(b"PATCHED-ARCHIVE" * 20)
+        made = backup.backup_and_replace(src, out, [root / "msg"])
+        check(made is not None, "backup_and_replace returned None")
+        check(src.read_bytes() == out.read_bytes(),
+              "backup_and_replace did not copy the generated file over the input")
+        check(archive.read_bytes() == patched.read_bytes(),
+              "backup_and_replace did not copy the patched archive over the source")
+        backup.restore(made)
+        check(src.read_bytes() == original[src.resolve()],
+              "restore after backup_and_replace did not undo the regulation.bin replacement")
+        check(archive.read_bytes() == original[archive.resolve()],
+              "restore after backup_and_replace did not undo the archive replacement")
+    finally:
+        backup.program_dir = saved
+        shutil.rmtree(root, ignore_errors=True)
 
 
 # --------------------------------------------------------------------------- empty pools
@@ -983,8 +1215,9 @@ def test_version_resource() -> None:
 # Tests that run inside a frozen PyInstaller bundle: no subprocess, no game file, no DLL.  gui.py
 # --self-test uses this to prove the bundle (modules + shipped data) is intact before shipping.
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
-                 test_dropshuffle_sets, test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer,
-                 test_erreg_cap, test_zones, test_argv_roundtrip, test_argv_fuzz, test_empty_pools,
+                 test_dropshuffle_sets, test_dropshuffle_plan_fuzz, test_erreg_roundtrip,
+                 test_erreg_malformed, test_erreg_writer, test_erreg_cap, test_zones,
+                 test_argv_roundtrip, test_argv_fuzz, test_argv_pairs, test_backup, test_empty_pools,
                  test_version_resource)
 
 
@@ -1021,8 +1254,8 @@ def main() -> int:
         return 1
     extra = " + writer + corrupt-input" + (" + real-file" if fuzz_path else "")
     print(f"LOGIC PASS - {_CHECKS} checks green "
-          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets, erreg round-trips + malformed,"
-          f" argv round trip + fuzz, empty pools{extra})")
+          f"(derangement, round_price, cap_total, new_prices, dropshuffle sets + plan fuzz, "
+          f"erreg round-trips + malformed, argv round trip + fuzz + pairs, backup, empty pools{extra})")
     return 0
 
 

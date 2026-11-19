@@ -476,11 +476,11 @@ caps every drop at +N (0 = no cap).
 
 ### Flasks and starting items
 
-* **`--random-flask-locations`** — the Flask of Crimson Tears (lot 20000) and the Flask of Cerulean Tears
-  (lot 20001) move to a random real location: a boss / field boss / evergaol reward, an NPC gift or
-  corpse, a legacy dungeon or overworld pickup, or a merchant slot. What was there goes to the first Site
-  of Grace (lot 10000, "First Step"). Chance drops, map fragments, one-time-flag rows and DLC map areas
-  are never used. `--flask-where` restricts them to `overworld` or `early`.
+* **`--random-flask-locations`** — the Flask of Crimson Tears (lot 2000) and the Flask of Cerulean Tears
+  (lot 2001) move to a random real location: a boss / field boss / evergaol reward, an NPC gift or
+  corpse, a legacy dungeon or overworld pickup, or a merchant slot. What was there goes into the flask's
+  own lot, which is what the first Site of Grace hands out. Chance drops, map fragments, one-time-flag
+  rows and DLC map areas are never used. `--flask-where` restricts them to `overworld` or `early`.
 * **`--start-with-bell` / `--start-with-lantern`** — add the Spirit Calling Bell / the Lantern to lot
   2000, which the game hands out at the start.
 
