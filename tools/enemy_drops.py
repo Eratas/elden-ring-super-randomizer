@@ -238,11 +238,11 @@ class EnemyDrops:
                 set_slot(r, i, 0, 0, 0, 0)
 
         def randomize_items(r) -> None:
-            for i, (iid, cat, w, _) in enumerate(self.slots(r), 1):
+            for i, (iid, _cat, w, _) in enumerate(self.slots(r), 1):
                 if w > 0 and iid > 0:
-                    iid, cat, num = draw()
-                    L.set(r, f"lotItemId{i:02d}", iid)
-                    L.set(r, f"lotItemCategory{i:02d}", cat)
+                    new_iid, new_cat, num = draw()
+                    L.set(r, f"lotItemId{i:02d}", new_iid)
+                    L.set(r, f"lotItemCategory{i:02d}", new_cat)
                     L.set(r, f"lotItemNum{i:02d}", num)
 
         def make_certain(r) -> None:

@@ -559,8 +559,8 @@ class Regulation:
 
 def load_names(path: str | Path) -> dict[int, str]:
     names = {}
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
-        line = line.strip()
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
         if not line:
             continue
         rid, _, nm = line.partition(" ")

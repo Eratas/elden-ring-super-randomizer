@@ -72,9 +72,10 @@ def give(reg: erreg.Regulation, keys: list[str]) -> list[str]:
         L.set(row, "lotItemCategory01", GOODS)
         L.set(row, "lotItemNum01", 1)
         L.set(row, "lotItemBasePoint01", 1000)
-        if flag is None:
-            flag = PICKUP_FLAG_BASE + (new_id - GROUP)
-        L.set(row, "getItemFlagId", flag)
+        item_flag = flag
+        if item_flag is None:
+            item_flag = PICKUP_FLAG_BASE + (new_id - GROUP)
+        L.set(row, "getItemFlagId", item_flag)
         L.set(row, "cumulateNumFlagId", 0)
         L.set(row, "cumulateNumMax", 0)
         group.append(new_id)

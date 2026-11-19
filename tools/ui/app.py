@@ -218,13 +218,14 @@ class App:
         self._choice_guard = False
         self.lang = code
         self._make_vars()
-        for key, value in values.items():
+        for key, raw_value in values.items():
             var = self.vars.get(key)
+            value = raw_value
             if var is None and key == "no_weapon_names":
                 # values() emits the inverse flag name (no_weapon_names); the rebuilt window tracks it
                 # as weapon_names_on, so map it back or the toggle silently resets on a language change
                 var = self.vars.get("weapon_names_on")
-                value = not bool(value)
+                value = not bool(raw_value)
             if var is None:
                 continue
             if isinstance(var, tk.BooleanVar):
@@ -839,8 +840,8 @@ class App:
             var = self.vars.get(key)
             if var is None:
                 continue
-            for part in str(var.get()).split(";"):
-                part = part.strip()
+            for raw_part in str(var.get()).split(";"):
+                part = raw_part.strip()
                 if not part or (not force and not Path(part).exists()):
                     continue
                 lst = self.recent.setdefault(key, [])

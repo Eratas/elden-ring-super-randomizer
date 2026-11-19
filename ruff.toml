@@ -11,7 +11,7 @@
 # The CLI and test modules put sys.path.insert ahead of their imports so they run from a source
 # checkout - each of those late imports carries an explicit `# noqa: E402` saying why.
 [lint]
-select = ["F", "E9", "I", "UP", "E402", "W", "B", "C4", "SIM"]
+select = ["F", "E9", "I", "UP", "E402", "W", "B", "C4", "SIM", "PLW2901"]
 # B905 (zip without strict=): several zips intentionally truncate (the BND4 rebuild zips the file
 #   list against the data list), so strict would turn a length mismatch into a hard error.
 # SIM105 (try/except/pass -> contextlib.suppress): the bare except/pass is the project's deliberate

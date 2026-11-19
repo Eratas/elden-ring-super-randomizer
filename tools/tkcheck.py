@@ -64,9 +64,8 @@ def main() -> int:
     tcl_dir, tk_dir = paths
     print(f"tkinter {tk.TkVersion} from {sys.base_prefix}: tcl={tcl_dir} tk={tk_dir}", file=sys.stderr)
     for var, value in (("TCL_LIBRARY", tcl_dir), ("TK_LIBRARY", tk_dir)):
-        if not value.startswith("//zipfs:/"):
-            value = str(Path(value))
-        print(f"{var}={value}")
+        shown = value if value.startswith("//zipfs:/") else str(Path(value))
+        print(f"{var}={shown}")
     return 0
 
 
