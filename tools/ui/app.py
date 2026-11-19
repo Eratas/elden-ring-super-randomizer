@@ -1270,7 +1270,15 @@ class App:
                                          "whatever is there now.").format(latest),
                 parent=self.root):
             return
-        restored = backup.restore(latest)
+        try:
+            restored = backup.restore(latest) if (latest / backup.MANIFEST).is_file() else []
+        except (OSError, ValueError):
+            restored = []
+        if not restored:
+            messagebox.showerror(self.t("ui:revert_failed", "Revert failed"),
+                                 self.t("ui:revert_failed_body", "Could not read the backup manifest in:\n{0}")
+                                 .format(latest), parent=self.root)
+            return
         self._log(f"# revert: {len(restored)} file(s) restored from {latest}", True)
         messagebox.showinfo(self.t("ui:revert_done", "Reverted"),
                             self.t("ui:revert_done_body", "{0} file(s) restored from:\n{1}").format(
