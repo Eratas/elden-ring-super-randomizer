@@ -10,6 +10,12 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
+> **What's new in v1.0.4** — weapon drops now scale upgrade level by area (an early chest is no
+> longer a +25) and bosses roll better; enemy/map loot can no longer be forced onto protected
+> unique items (the cause of "damaged save" from an oversized `regulation.bin`); backups are atomic
+> (a crash can't truncate them); and the window wears a dark + gold theme. Full notes in the
+> [Changelog](#changelog).
+
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
 every setting. Current version: **1.0.4**, last updated **2026-11-20**.
