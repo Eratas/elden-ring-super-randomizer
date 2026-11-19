@@ -12,7 +12,7 @@ can stack this on top of them.
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.3**.
+every setting. Current version: **1.0.3**, last updated **2026-11-20**.
 
 ```
 Files and output
@@ -655,6 +655,18 @@ game's own `oo2core_6_win64.dll` that the user already has.
   own save checks** — they are the parts most likely to need a save-file test before a long playthrough.
 * Only as lawful as your use of the game: randomizing single-player content you own is fine; do not
   redistribute the game's files or DLL.
+
+## Changelog
+
+**1.0.3** — 2026-11-19 — the thirteen boss tips, the KRAK decode fix, and three new test groups.
+
+**1.0.2** — 2026-11-19 — rebuild with the corrected boss tooltip.
+
+**Since 1.0.3** — 2026-11-20 — loot upgrade caps no longer overshoot when `--loot-max-level` meets
+`--zone-loot-levels`; one-time and key-item drops are protected in the loot shuffle; backups are
+written atomically (a crash can no longer leave a half-written file over your original); the window
+wears a dark, gold-trimmed Elden Ring palette; and a synthetic pass test suite plus a stricter ruff
+gate guard all of it.
 
 ## Development
 

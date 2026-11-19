@@ -5,6 +5,8 @@ permanently gated behind the Cerulean Tears flask or the next Site of Grace.
 
 **Target:** Elden Ring **1.17.3** (regulation.bin 1.17.2), Mod Engine 3.
 
+*Last updated 2026-11-20.*
+
 ## What the install actually is (checked `C:\Games\ERR`)
 
 `C:\Games\ERR` runs **Mod Engine 3** (`internals\modengine\bin\win64\me3.exe`), driven by the profile
