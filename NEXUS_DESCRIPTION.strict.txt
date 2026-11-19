@@ -4,7 +4,7 @@ A window and a command line tool for [b]regulation.bin[/b] — the single parame
 
 Written for game version [b]1.17.1[/b] (Shadow of the Erdtree included) and the [url=https://www.nexusmods.com/site/mods/617]Mod Engine 2[/url] [b]1.4[/b] / [b]ERR[/b] mod loaders. Vanilla, the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url] and [url=https://www.nexusmods.com/eldenring/mods/11542]Elden Ring Reforged[/url] output all work as input, so you can stack this on top of them.
 
-[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.3[/b], last updated [b]2026-11-20[/b].
+[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.4[/b], last updated [b]2026-11-20[/b].
 
 [quote]
 Files and output
@@ -483,11 +483,11 @@ The tool is fully offline: it makes no network requests, downloads nothing, and 
 
 [heading]Changelog[/heading]
 
+[b]1.0.4[/b] — 2026-11-20 — loot upgrade caps no longer overshoot when --loot-max-level meets --zone-loot-levels; one-time and key-item drops are protected in the loot shuffle; backups are written atomically (a crash can no longer leave a half-written file over your original); the window wears a dark, gold-trimmed Elden Ring palette; and a synthetic pass test suite plus a stricter ruff gate guard all of it.
+
 [b]1.0.3[/b] — 2026-11-19 — the thirteen boss tips, the KRAK decode fix, and three new test groups.
 
 [b]1.0.2[/b] — 2026-11-19 — rebuild with the corrected boss tooltip.
-
-[b]Since 1.0.3[/b] — 2026-11-20 — loot upgrade caps no longer overshoot when --loot-max-level meets --zone-loot-levels; one-time and key-item drops are protected in the loot shuffle; backups are written atomically (a crash can no longer leave a half-written file over your original); the window wears a dark, gold-trimmed Elden Ring palette; and a synthetic pass test suite plus a stricter ruff gate guard all of it.
 
 [heading]Development[/heading]
 
