@@ -524,8 +524,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         # adds the somber affinity rows.
         loot_levels = loot.Loot(reg, v.get("boss_min_runes") or 0) if v["random_loot_levels"] else None
         if (v["somber_infusable"] or v["random_movesets"] or v["random_default_ash"] or v["random_stats"]
-                or v["random_weapon_effects"] or v["random_weapon_holder_fx"]
-                or v["random_weapon_status_effects"]):
+                or v["random_weapon_onhit_shuffle"] or v["random_weapon_holder_shuffle"]
+                or v["random_weapon_status_roll"] or v["random_loot_effects"]):
             say(phases.WEAPONS)
             wp = weapons.Weapons(reg)
             wlines.append(f"# seed={seed}")
@@ -539,12 +539,15 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 wlines += [""] + wp.random_default_ash(rng)
             if v["random_stats"]:
                 wlines += [""] + wp.random_stats(rng, stat_groups, stamina_rate, v["req_mode"])
-            if v["random_weapon_effects"]:
+            if v["random_weapon_onhit_shuffle"]:
                 wlines += [""] + wp.random_effects(rng, weapons.ONHIT_FIELDS)
-            if v["random_weapon_holder_fx"]:
+            if v["random_weapon_holder_shuffle"]:
                 wlines += [""] + wp.random_effects(rng, weapons.HOLDER_FIELDS)
-            if v["random_weapon_status_effects"]:
+            if v["random_weapon_status_roll"]:
                 wlines += [""] + wp.random_status_effects(rng)
+            if v["random_loot_effects"]:
+                # after the shuffles: loot weapons keep the random draws where a shuffle also ran
+                wlines += [""] + wp.random_loot_effects(rng)
             print("\n".join(l for l in wlines if l.startswith("#")))
 
         glines: list[str] = []

@@ -279,7 +279,7 @@ PRESETS: tuple[dict, ...] = (
             "random_weapon_drops": True, "random_goods_drops": True, "random_armor_drops": True,
             "random_talisman_drops": True, "random_ashes_drops": True,
             "random_shop_stock": True, "shop_stock_kinds": "",
-            "random_weapon_effects": True, "req_mode": "tight",
+            "random_weapon_onhit_shuffle": True, "req_mode": "tight",
         },
     },
     {

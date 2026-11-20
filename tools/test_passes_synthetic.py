@@ -271,11 +271,28 @@ def run() -> None:
     check(len(weapons.Weapons(build()).random_default_ash(random.Random(1))) > 1,
           "--random-default-ash: empty report")
     check(len(weapons.Weapons(build()).random_effects(random.Random(1))) > 1,
-          "--random-weapon-effects: empty report")
+          "--random-weapon-onhit-shuffle: empty report")
     check(len(weapons.Weapons(build()).random_status_effects(random.Random(1))) > 1,
-          "--random-weapon-status-effects: empty report")
+          "--random-weapon-status-roll: empty report")
     check(len(weapons.Weapons(build()).random_stats(random.Random(1))) > 1,
           "--random-stats: empty report")
+
+    # --- loot weapons get true-random on-hit effects ---
+    reg = build()
+    wp = weapons.Weapons(reg)
+    W = reg._params["EquipParamWeapon"]
+    check(2000000 in wp.loot_bases(), "--random-loot-effects: no loot weapon in the synthetic lots")
+    out = wp.random_loot_effects(random.Random(1))
+    check(len(out) > 1, "--random-loot-effects: empty report")
+    for b in wp.loot_bases():
+        for off in wp.variants(b):
+            row = W.by_id[b + off * 100]
+            for f in weapons.ONHIT_FIELDS:
+                check(W.get(row, f) in weapons.RANDOM_EFFECT_POOL,
+                      f"--random-loot-effects: {b}+{off * 100} slot {f} not a drawn status id")
+    # the draw uses only flat status ids of the game (no series tied to reinforcement slots)
+    check(set(weapons.RANDOM_EFFECT_POOL) == set().union(*weapons.STATUS_FLAT.values()),
+          "--random-loot-effects: pool differs from the flat status pools")
 
     # --- enemy drops change the lot rows; HP pass changes NpcParam.hp ---
     reg = build()

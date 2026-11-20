@@ -28,6 +28,7 @@ GROUPS = (
     ("spells", "Spells"),
     ("prices", "Prices and shops"),
     ("weapons", "Weapons"),
+    ("weapon_effects", "Weapon effects"),
     ("gems", "Ashes of War"),
     ("gear", "Armour and talismans"),
     ("drops", "Enemies, drops and loot"),
@@ -257,19 +258,14 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Give every somber and unique weapon the twelve affinities (Heavy through Occult) and let it "
            "mount Ashes of War. The rows this adds are named in the game's own text (Heavy Longsword and "
            "so on); without that patch the game shows ?WeaponName?."),
-    _o("random_weapon_effects", "--random-weapon-effects", group="weapons",
-       label="Shuffle weapon properties",
-       tip="Shuffles the properties a weapon carries: the status effects it inflicts on hit (blood loss, "
-           "frostbite, rot) and the effects it grants while you hold it (for example a shield that costs "
-           "less stamina to block with). The properties move as one bundle inside each weapon class, so a "
-           "Longsword can take a Dagger's on-hit bundle. It works with every other option."),
-    _o("random_weapon_holder_fx", "--random-weapon-holder-fx", group="weapons",
-       label="Shuffle holder effects",
-       tip="Shuffles the effects a weapon grants while you hold it - for example a shield that costs less "
-           "stamina to block with. The on-hit properties (blood loss, frostbite, rot) are a separate "
-           "switch, so you can shuffle one without the other. It works with every other option."),
-    _o("random_weapon_status_effects", "--random-weapon-status-effects", group="weapons",
-       label="Roll weapon statuses on hit"),
+    _o("random_weapon_onhit_shuffle", "--random-weapon-onhit-shuffle", group="weapon_effects",
+       label="Shuffle on-hit effects"),
+    _o("random_weapon_holder_shuffle", "--random-weapon-holder-shuffle", group="weapon_effects",
+       label="Shuffle holder effects"),
+    _o("random_weapon_status_roll", "--random-weapon-status-roll", group="weapon_effects",
+       label="Roll statuses on hit"),
+    _o("random_loot_effects", "--random-loot-effects", group="weapon_effects",
+       label="Random effects on loot weapons"),
     _o("random_default_ash", "--random-default-ash", group="weapons",
        label="Random default skill and affinity",
        tip="Roll a random default skill for every weapon and affinity row, chosen so that it animates with "
@@ -928,9 +924,10 @@ def argv_from_values(values: dict) -> list[str]:
                       ("armour_drop_sets", "--armor-drop-sets"),
                       ("random_gem_skills", "--random-gem-skills"),
                       ("random_gem_effects", "--random-gem-effects"),
-                      ("random_weapon_effects", "--random-weapon-effects"),
-                      ("random_weapon_holder_fx", "--random-weapon-holder-fx"),
-                      ("random_weapon_status_effects", "--random-weapon-status-effects"),
+                      ("random_weapon_onhit_shuffle", "--random-weapon-onhit-shuffle"),
+                      ("random_weapon_holder_shuffle", "--random-weapon-holder-shuffle"),
+                      ("random_weapon_status_roll", "--random-weapon-status-roll"),
+                      ("random_loot_effects", "--random-loot-effects"),
                       ("brief_reports", "--brief-reports"),
                       ("random_runes", "--random-runes"),
                       ("random_enemy_hp", "--random-enemy-hp"),

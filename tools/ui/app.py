@@ -57,7 +57,8 @@ CONFIG = ((Path(sys.executable).resolve().parent if getattr(sys, "frozen", False
 RECENT_MAX = 8
 MIN_SIZE = (860, 540)
 DEFAULT_OPEN = {"files": True, "goods": True, "spells": False, "prices": False, "weapons": False,
-                "gems": False, "gear": False, "drops": False, "world": False, "advanced": False}
+                "weapon_effects": False, "gems": False, "gear": False, "drops": False, "world": False,
+                "advanced": False}
 PATH_KEYS = ("input", "output", "oodle_dll", "archives")
 
 # The passes in the order randomize.py runs them.  phases.py is the single source both the engine and
@@ -69,6 +70,9 @@ SECTION_TIPS = {
     "spells": "What a sorcery or incantation does, and what it costs.",
     "prices": "What shops charge and what they pay you.",
     "weapons": "Affinities, movesets, default skills and stat rolls, for every weapon row.",
+    "weapon_effects": "The four switches on weapons' effects: what they do when they hit, what they "
+                      "grant while held, the statuses they inflict on hit, and random effects on "
+                      "loot weapons.",
     "gems": "What an Ash of War does when it is mounted: its skill and its on-hit effects.",
     "gear": "Armour pieces and talismans. Whole columns / rows are shuffled, never invented.",
     "drops": "What enemies drop, what they are worth, and how much health they have.",

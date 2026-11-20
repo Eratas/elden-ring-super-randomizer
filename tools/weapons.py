@@ -15,6 +15,10 @@ ReinforceParamWeapon, so only affinity rows exist.
 4. random_stats():      every (weapon, affinity) row (melee, shields, bows, crossbows, staves,
    seals) gets random attack power per element, critical, poise and stamina damage, guard
    negation, attribute requirements, scaling and status build-ups.
+5. random_loot_effects(): every loot weapon (a weapon that appears in ItemLotParam_enemy or
+   ItemLotParam_map as a lot item) draws true-random on-hit statuses from the flat pools
+   (RANDOM_EFFECT_POOL); random_effects()/random_status_effects() are the granularities for
+   the on-hit slots and the statuses of every weapon.
 """
 from __future__ import annotations
 
@@ -153,6 +157,10 @@ STATUS_MSG = {"blood": 6501, "poizon": 6401, "disease": 6451, "freeze": 6601, "s
 STATUS_MSG_IDS = frozenset(range(6400, 6900))       # effect-text ids of status build-ups (6401, 6500, 6501, ...)
 STATUS_LABEL = {"blood": "bleed", "poizon": "poison", "disease": "rot", "freeze": "frost",
                 "sleep": "sleep", "madness": "madness"}
+# Flat statuses random_loot_effects draws into the on-hit slots of loot weapons: the statuses
+# every vanilla weapon carries, valid in any slot.  The level-growing series of STATUS_SERIES
+# sit in their reinforce-type slots and are deliberately not drawn.
+RANDOM_EFFECT_POOL = tuple(sorted({v for ids in STATUS_FLAT.values() for v in ids}))
 # crossbows / ballistas use reinforce types whose scaling rates are 0; to give them scaling they take
 # the regular (25 levels) or somber (10 levels) type with the same materials and level count
 CROSSBOW_REINFORCE = {3100: 0, 3500: 0, 3200: 2200, 3300: 2200, 3400: 2200}
@@ -833,6 +841,42 @@ class Weapons:
                         s(row, f, rng.choice(pool))
                         n += 1
         lines.append(f"# {n} on-hit status slots rerolled")
+        return lines
+
+    def loot_bases(self) -> list[int]:
+        """Weapon bases that appear in the game's drop lots: a lotItemId slot of an ItemLotParam_enemy
+        or ItemLotParam_map row with category 2 holds the weapon, so every enemy or map loot this
+        randomizer can move is a loot weapon (matches how _random_affinity_sources reads the lots)."""
+        have: set[int] = set()
+        pdl = erreg.load_paramdef(D / "ItemLotParam.xml")
+        for pn in ("ItemLotParam_map", "ItemLotParam_enemy"):
+            L = self.reg.param(pn, pdl)
+            for r in L.rows:
+                for i in range(1, 9):
+                    if L.get(r, f"lotItemCategory0{i}") == 2:
+                        wid = L.get(r, f"lotItemId0{i}")
+                        if wid > 0:
+                            have.add(base_id(wid))
+        return sorted(b for b in self.bases() if b in have and self.named(b))
+
+    def random_loot_effects(self, rng: random.Random) -> list[str]:
+        """Give every loot weapon true-random on-hit passive effects: each of the three on-hit
+        slots of each loot weapon is redrawn from RANDOM_EFFECT_POOL, even when the slot held
+        nothing.  This is a fresh draw per slot, not the permutation of random_effects():
+        duplicates across loot weapons are expected, and the holder effects are untouched.
+        randomize.py runs this after the shuffles, so loot weapons keep the draws when Shuffle
+        on-hit effects is on as well."""
+        W, s = self.W, self.W.set
+        bases = self.loot_bases()
+        n = 0
+        lines = [f"# loot weapons: {len(bases)} bases appear in the drop lots, on-hit slots redrawn"]
+        for b in bases:
+            for offset in self.variants(b):
+                row = W.by_id[b + offset * 100]
+                for f in ONHIT_FIELDS:
+                    s(row, f, rng.choice(RANDOM_EFFECT_POOL))
+                    n += 1
+        lines.append(f"# {n} on-hit status slots redrawn on loot weapons")
         return lines
 
     def random_stats(self, rng: random.Random, groups=STAT_GROUPS,
