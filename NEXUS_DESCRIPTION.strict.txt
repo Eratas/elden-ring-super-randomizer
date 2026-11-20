@@ -4,6 +4,8 @@ A window and a command line tool for [b]regulation.bin[/b] — the single parame
 
 Written for game version [b]1.17.1[/b] (Shadow of the Erdtree included) and the [url=https://www.nexusmods.com/site/mods/617]Mod Engine 2[/url] [b]1.4[/b] / [b]ERR[/b] mod loaders. Vanilla, the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url] and [url=https://www.nexusmods.com/eldenring/mods/11542]Elden Ring Reforged[/url] output all work as input, so you can stack this on top of them.
 
+> [b]What's new in v1.0.4[/b] — weapon drops now scale upgrade level by area (an early chest is no > longer a +25) and bosses roll better; enemy/map loot can no longer be forced onto protected > unique items (the cause of "damaged save" from an oversized regulation.bin); backups are atomic > (a crash can't truncate them); and the window wears a dark + gold theme. Full notes in the > [url=#changelog]Changelog[/url].
+
 [b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.4[/b], last updated [b]2026-11-20[/b].
 
 [quote]
@@ -95,9 +97,9 @@ Stacking with the Item and Enemy Randomizer / Fog Gate Randomizer: run their con
 [*] [b]Spells[/b] | every sorcery and incantation receives another spell's effect (one pool for both); the cast animation can stay, come from a spell with the same signature, or from any spell; [b]spell stats[/b] (FP / stamina cost and requirements) randomized independently of the weapon stats
 [*] [b]Prices[/b] | shop prices (ShopLineupParam.value) and sell prices (EquipParamGoods.sellValue) shuffled, or redrawn inside a range; sell prices optional; weapons, armour and Ashes of War can join the sell pool
 [*] [b]Shops[/b] | every merchant slot can be filled with a random item of its own category, price untouched — every shop sells something else
-[*] [b]Weapons[/b] | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; [b]requirements stay in the weapon's own tier[/b] so looted weapons stay usable; on-hit and holder [b]properties[/b] shuffled
+[*] [b]Weapons[/b] | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; [b]requirements stay in the weapon's own tier[/b] so looted weapons stay usable; on-hit and holder [b]properties[/b] shuffled, and on-hit [b]statuses[/b] (from the game's own status pools) can be rolled true-random as well
 [*] [b]Ashes of War[/b] | every Ash of War can receive another ash's [b]skill[/b] (Lion's Claw becomes Sky Shot) and/or another ash's [b]on-hit effects[/b]; donors come only from ashes that fit the same weapon types, and the two switches are independent
-[*] [b]Loot[/b] | every enemy drops something random (choose the kinds); 1…N rolls per enemy at P% each; weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a [b]rarity curve[/b], and [b]bosses roll a better curve[/b]; [b]rare unique weapons[/b] and [b]upgrade materials[/b] can turn up
+[*] [b]Loot[/b] | enemy drop tables rerolled (choose the kinds); 1…N rolls per enemy at P% each (default 3 at 10%, so most kills drop nothing); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a [b]rarity curve[/b], and [b]bosses roll a better curve[/b]; [b]rare unique weapons[/b] and [b]upgrade materials[/b] can turn up
 [*] [b]Where loot drops[/b] | every category can be [b]moved between enemies[/b] without changing the items: weapons, goods, armour, talismans, Ashes of War. Armour sets can move as a set
 [*] [b]Armour & talismans[/b] | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally [b]keeping each set coherent[/b]), or move armour to different enemies; talismans shuffle whole rows and can move between enemies
 [*] [b]Enemies[/b] | rune drops (NpcParam.getSoul) and hit points (NpcParam.hp) shuffled, redrawn in a range, or scaled per band; bosses can be scaled back up and their runes coupled to their hit points
@@ -163,6 +165,9 @@ Eleven collapsible sections: [b]Files and output · Consumables and buffs · Spe
 [*] [b]Balanced[/b] | weapons and enemies tuned for an even, playable run.
 [*] [b]Glass cannon[/b] | enemies hit much harder but die much faster.
 [*] [b]Full chaos[/b] | every pass on. Expect a very different game and a slow compression.
+[*] [b]Vanilla-ish loot texture[/b] | the usual 3 rolls at 10% per enemy, and a rare unique occasionally comes along with the ordinary loot.
+[*] [b]Event loot texture[/b] | bigger drops: every enemy gets 5 rolls at 25%, and uniques are more common.
+[*] [b]Generous loot texture[/b] | very rich loot: every enemy gets 8 rolls at 30%, and uniques are common.
 [/list]
 
 The bundles live in presets.py.
@@ -194,7 +199,7 @@ The order below is tools/phases.py; tools/test_phases.py fails if the engine or 
 [*] 6 | enemy hit points | NpcParam.hp | --random-enemy-hp, --hp-mode, --hp-min/max
 [*] 7 | enemy drops | ItemLotParam_enemy (+ map, shops, goods, equipment for the pool) | --random-enemy-drops, --enemy-drop-rolls, --enemy-drop-chance, --enemy-drop-kinds
 [*] 8 | shop stock | ShopLineupParam | --random-shop-stock, --shop-stock-kinds
-[*] 9 | weapons | EquipParamWeapon (+ Gem, SwordArts, Reinforce, AttackElementCorrect) | --somber-infusable, --random-movesets, --random-default-ash, --random-stats, --random-weapon-effects, --random-weapon-holder-fx
+[*] 9 | weapons | EquipParamWeapon (+ Gem, SwordArts, Reinforce, AttackElementCorrect) | --somber-infusable, --random-movesets, --random-default-ash, --random-stats, --random-weapon-effects, --random-weapon-holder-fx, --random-weapon-status-effects
 [*] 10 | ashes of war | EquipParamGem | --random-gem-skills, --random-gem-effects
 [*] 11 | armour, talismans | EquipParamProtector, EquipParamAccessory | --random-armor, --random-armor-fresh, --armor-keep-sets, --random-talismans
 [*] 12 | loot shuffle | ItemLotParam_enemy + map, ShopLineupParam | --random-weapon-drops, --random-goods-drops, --random-armor-drops, --random-talisman-drops, --random-ashes-drops, --armor-drop-sets
@@ -336,8 +341,9 @@ Map lots and shops always use the chosen curve. --zone-loot-levels scales the ce
 [b]Enemies and drops[/b]
 
 [list]
-[*] [b]--random-enemy-drops[/b] — the first drop row of every enemy becomes a guaranteed drop of a random item; later rows keep their chance but drop random items too. The pool is every named goods row (no key items), every weapon / armour / talisman / Ash of War row with a real name and a price, with weapons normalized to +0 and flasks excluded. Rows that already hold a key item (goodsType 1) and one-time flag awards are left alone. --enemy-drop-kinds restricts the categories.
-[*] [b]--enemy-drop-rolls N / --enemy-drop-chance P[/b] — give every enemy N rows instead of one, each dropping at P%, so a kill drops 0…N items (N·P/100 on average). The added rows take ids above every existing one; the game caps a lot at 64 rows, and the tool refuses to add a row that would cross that cap.
+[*] [b]--random-enemy-drops[/b] — reroll every enemy's drop table. Each enemy gets --enemy-drop-rolls independent rolls (default 3), each dropping at --enemy-drop-chance percent (default 10), so the default is 0.3 items per kill and roughly seven kills in ten drop nothing. --enemy-drop-rolls 0 restores the old shape: the first row always drops and later rows keep their chance. The pool is every named goods row (no key items), every weapon / armour / talisman / Ash of War row with a real name and a price, with weapons normalized to +0 and flasks excluded. Rows that already hold a key item (goodsType 1) and one-time flag awards are left alone. --enemy-drop-kinds restricts the categories.
+[*] [b]--enemy-drop-rolls N / --enemy-drop-chance P[/b] — N independent rolls per enemy, each dropping at P%, so a kill drops 0…N items (N·P/100 on average). The added rows take ids above every existing one; the game caps a lot at 64 rows, and the tool refuses to add a row that would cross that cap.
+[*] [b]--unique-drops / --unique-rate[/b] — --unique-drops is the switch: off (the default), no random drop is ever a unique weapon. On, every item that actually drops rolls the rate: a whole percent from 1 to 20 (default 3). The rate is per dropped item, not per roll, so at the default 3 × 10% drop settings it yields about 0.9 uniques per 100 kills. Upgrade material drops roll first, so with both on the effective unique rate is slightly lower.
 [*] [b]--random-enemy-hp[/b] — NpcParam.hp of every enemy with hit points: shuffle, range, bands (weak / normal / strong tiers), or balanced (every enemy stays within 0.75–1.5× vanilla).
 [*] [b]--random-runes[/b] — NpcParam.getSoul: shuffle, range, or bands.
 [*] [b]--boss-hp-scale lo,hi / --boss-rune-scale lo,hi[/b] — multiply boss HP / rune bounties by a factor drawn from the range (1.0,1.0 = off), so bosses stay worth the fight after a shuffle.

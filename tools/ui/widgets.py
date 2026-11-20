@@ -74,7 +74,15 @@ class Tooltip:
 
 class ScrollFrame(ttk.Frame):
     """A vertical scrollbar next to a frame that can be taller than the window.  Add rows to
-       `self.body`, not to this widget.  The wheel scrolls only while the pointer is over the page."""
+       `self.body`, not to this widget.  The wheel scrolls the page whenever the pointer is over it.
+
+    The wheel is routed at the toplevel, not with `bind_all` on Enter: Tk fires Enter/Leave for the
+    canvas when the pointer crosses into a child, so the old Enter/Leave pair unbound the handler as
+    soon as the pointer reached a label.  A focused ttk.Combobox also has a class binding that changes
+    its value on the wheel; replacing that binding for this window is what keeps a selected dropdown
+    from stealing the scroll."""
+
+    WHEEL_EVENTS = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
     def __init__(self, master, **kw) -> None:
         super().__init__(master, **kw)
@@ -88,8 +96,18 @@ class ScrollFrame(ttk.Frame):
         self._win = self.canvas.create_window((0, 0), window=self.body, anchor="nw")
         self.body.bind("<Configure>", self._on_body)
         self.canvas.bind("<Configure>", self._on_canvas)
-        self.canvas.bind("<Enter>", self._wheel_on, add="+")
-        self.canvas.bind("<Leave>", self._wheel_off, add="+")
+        top = self.winfo_toplevel()
+        # a language switch rebuilds the page; drop the previous page's wheel bindings so they do not
+        # pile up on the toplevel (a stale handler would be harmless, but it would keep the old page alive)
+        for event, funcid in getattr(top, "_page_wheel_ids", ()):
+            top.unbind(event, funcid)
+        ids = []
+        for event in self.WHEEL_EVENTS:
+            ids.append((event, top.bind(event, self._on_wheel, add="+")))
+            # comboboxes are the one widget class that eats the wheel by default: replace the class
+            # binding so a dropdown scrolls the page instead of silently changing the chosen value
+            top.bind_class("TCombobox", event, self._on_combo_wheel)
+        top._page_wheel_ids = tuple(ids)
 
     def _on_body(self, _event=None) -> None:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -97,14 +115,49 @@ class ScrollFrame(ttk.Frame):
     def _on_canvas(self, event) -> None:
         self.canvas.itemconfigure(self._win, width=event.width)
 
-    def _wheel_on(self, _event=None) -> None:
-        self.canvas.bind_all("<MouseWheel>", self._on_wheel, add="+")
+    @staticmethod
+    def _steps(event) -> int:
+        """Wheel delta in scroll units: up is negative, down positive, on X11 and Windows alike."""
+        if getattr(event, "num", None) == 4:
+            return -1
+        if getattr(event, "num", None) == 5:
+            return 1
+        return -1 if event.delta > 0 else 1
 
-    def _wheel_off(self, _event=None) -> None:
-        self.canvas.unbind_all("<MouseWheel>")
+    def _inside(self, widget) -> bool:
+        """True when `widget` is this page or lives inside it."""
+        try:
+            while widget is not None:
+                if widget is self or widget is self.canvas:
+                    return True
+                widget = widget.master
+        except (AttributeError, tk.TclError):
+            pass
+        return False
 
-    def _on_wheel(self, event) -> None:
-        self.canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+    def _pointer_inside(self, event) -> bool:
+        """True when the event landed on this page or a widget inside it.
+
+        The event names the deepest widget it reached. `winfo_containing` is not used: it can
+        return None for a mapped canvas-embedded child, which would make the wheel dead."""
+        widget = getattr(event, "widget", None)
+        return widget is not None and self._inside(widget)
+
+    def _scroll(self, event) -> None:
+        self.canvas.yview_scroll(self._steps(event), "units")
+
+    def _on_wheel(self, event):
+        if self._pointer_inside(event):
+            self._scroll(event)
+            return "break"
+        return None
+
+    def _on_combo_wheel(self, event):
+        # the class binding runs wherever the combobox is, including the language box outside the page;
+        # scroll only when the pointer is over this page, but always stop the value from changing
+        if self._pointer_inside(event):
+            self._scroll(event)
+        return "break"
 
 
 class Section(ttk.Frame):

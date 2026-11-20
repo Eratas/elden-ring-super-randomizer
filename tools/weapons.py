@@ -806,6 +806,35 @@ class Weapons:
                 lines.append(f"{self.names.get(b, f'weapon {b}'):<44} <-  {self.names.get(donor, f'weapon {donor}')}")
         return lines
 
+    def random_status_effects(self, rng: random.Random) -> list[str]:
+        """True-random on-hit statuses: every weapon slot that already carries a status id is redrawn with
+        a status id from the game's own pools - the flat statuses of STATUS_FLAT or the level-growing
+        series of STATUS_SERIES.  This is a draw, not a donor swap, so what a weapon inflicts on hit can
+        change.  Slots that hold nothing stay empty, and the holder fields are not touched: they keep the
+        permutation from random_effects(), or stay vanilla when that switch is off."""
+        W, g, s = self.W, self.W.get, self.W.set
+        n = 0
+        lines = ["# weapon statuses on hit: every status slot rerolled with a true-random status id"]
+        for b in self.bases():
+            if not self.named(b):
+                continue
+            for offset in self.variants(b):
+                row = W.by_id[b + offset * 100]
+                for f in ONHIT_FIELDS:
+                    cur = g(row, f)
+                    if cur == -1:
+                        continue
+                    fam = self.status_family(cur)
+                    if not fam:
+                        continue                        # a non-status on-hit effect: the pass does not touch it
+                    series = STATUS_SERIES.get(fam, ())
+                    pool = tuple(series) if cur in series else tuple(STATUS_FLAT.get(fam, ()))
+                    if pool:
+                        s(row, f, rng.choice(pool))
+                        n += 1
+        lines.append(f"# {n} on-hit status slots rerolled")
+        return lines
+
     def random_stats(self, rng: random.Random, groups=STAT_GROUPS,
                      stamina_rate: tuple[float, float] = STAMINA_RATE_RANGE,
                      req_mode: str = "tight") -> list[str]:

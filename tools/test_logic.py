@@ -833,6 +833,20 @@ def test_argv_roundtrip() -> None:
             check((back["compression_level"], back["compression"]) == (level, codec),
                   f"compression {level}/{codec} became {back['compression_level']}/{back['compression']}")
 
+    # 5a. --unique-rate is a number 1-20; out-of-range or non-numbers are rejected by validate()
+    for bad in (0, 21, -1, 99):
+        try:
+            options.validate(dict(_argv_dict(), unique_drops=True, unique_rate=bad))
+            check(False, f"unique_rate={bad} accepted by validate()")
+        except ValueError:
+            check(True, "")
+    argv = options.argv_from_values(options.validate(
+        dict(_argv_dict(), random_enemy_drops=True, unique_drops=True, unique_rate=8)))
+    check("--unique-rate" in argv and "8" in argv, f"--unique-rate 8 missing from the argv: {argv}")
+    argv = options.argv_from_values(options.validate(
+        dict(_argv_dict(), random_enemy_drops=True, unique_drops=True, unique_rate=3)))
+    check("--unique-rate" not in argv, f"--unique-rate 3 (the default) should not be emitted: {argv}")
+
     # 5. loot: rarity / boss bonus / level cap hang off --random-loot-levels, not off --zone-loot-levels
     argv = options.argv_from_values(options.validate(
         dict(_argv_dict(), random_loot_levels=True, loot_rarity="even",
@@ -866,6 +880,7 @@ _ARGV_FUZZ_MODES = {"price_min": ("price_mode", "range"), "price_max": ("price_m
                     "duration_min": ("duration_mode", "range"), "duration_max": ("duration_mode", "range"),
                     "moveset_variety": ("moveset_mode", "bound")}
 _ARGV_FUZZ_INTS = {"zstd_window": [16, 18, 22], "max_size": [None, 2_000_000, 2_359_296],
+                   "unique_rate": [None, 1, 20],
                    "seed": [None, "", 0, 1, 12345], "boss_min_runes": [0, 3000, 9000],
                    "loot_max_level": [None, 0, 5, 12], "enemy_drop_rolls": [None, 1, 3, 8],
                    "enemy_drop_chance": [1, 25, 50, 90, 100],

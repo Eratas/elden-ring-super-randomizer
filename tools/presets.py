@@ -282,6 +282,44 @@ PRESETS: tuple[dict, ...] = (
             "random_weapon_effects": True, "req_mode": "tight",
         },
     },
+    {
+        "key": "texture-vanilla-ish",
+        "label": "Vanilla-ish loot texture",
+        "tip": "Enemies drop with a thin random texture on top of the normal luck: 3 rolls per enemy at 10%, "
+               "and a rare unique occasionally comes along with the ordinary loot. Safe and familiar.",
+        "values": {
+            "random_enemy_drops": True, "enemy_drop_rolls": 3, "enemy_drop_chance": 10,
+            "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 1, "material_drops": False,
+            "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,
+            "random_shop_stock": False, "random_weapon_drops": False, "random_goods_drops": False,
+            "random_armor_drops": False, "random_talisman_drops": False, "random_ashes_drops": False,
+        },
+    },
+    {
+        "key": "texture-event-loot",
+        "label": "Event loot texture",
+        "tip": "A bigger loot surface: every enemy gets 5 rolls at 25%, and uniques show up far more often "
+               "than usual.",
+        "values": {
+            "random_enemy_drops": True, "enemy_drop_rolls": 5, "enemy_drop_chance": 25,
+            "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 8, "material_drops": False,
+            "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,
+            "random_shop_stock": False, "random_weapon_drops": False, "random_goods_drops": False,
+            "random_armor_drops": False, "random_talisman_drops": False, "random_ashes_drops": False,
+        },
+    },
+    {
+        "key": "texture-generous",
+        "label": "Generous loot texture",
+        "tip": "Very rich loot: every enemy gets 8 rolls at 30%, and uniques are common.",
+        "values": {
+            "random_enemy_drops": True, "enemy_drop_rolls": 8, "enemy_drop_chance": 30,
+            "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 20, "material_drops": False,
+            "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,
+            "random_shop_stock": False, "random_weapon_drops": False, "random_goods_drops": False,
+            "random_armor_drops": False, "random_talisman_drops": False, "random_ashes_drops": False,
+        },
+    },
 )
 
 BY_KEY = {p["key"]: p for p in PRESETS}

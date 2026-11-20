@@ -200,6 +200,18 @@ OPTIONS: tuple[Opt, ...] = (
            "independently of the weapon stats. Spells keep their own effects and animations."),
 
     # --- prices ----------------------------------------------------------------------------
+    _o("random_shop_stock", "--random-shop-stock", group="prices",
+       label="Randomize what shops sell",
+       tip="Every merchant slot is filled with a random item of its own category instead of the item it "
+           "always sold. Prices, stock and cost type stay as they are, so the slot keeps selling at its "
+           "vanilla price. Each slot is drawn independently, nothing is swapped between merchants. A "
+           "static file cannot make stock change on a timer - that would need a runtime mod - so this is "
+           "the static half: every shop sells something else. It works with every other option."),
+    _o("shop_stock_kinds", "--shop-stock-kinds", kind="groups", default="", group="prices",
+       needs=("random_shop_stock",), items=("weapons", "armor", "talismans", "goods", "ashes"),
+       label="Shop stock categories",
+       tip="Which kinds of item merchants may sell. Empty means all of them. Untick weapons and no shop "
+           "will sell one. It needs Randomize what shops sell."),
     _o("random_prices", "--random-prices", group="prices",
        label="Shuffle shop prices",
        tip="Permute the rune price of every goods slot in every shop (ShopLineupParam.value) and the sell "
@@ -227,18 +239,6 @@ OPTIONS: tuple[Opt, ...] = (
     _o("sell_max", "--sell-max", kind="int", default=None, group="prices",
        needs=("random_prices", "sell_prices"), label="Maximum sell price",
        tip="range method: highest sell price to draw. Empty uses the highest that exists today."),
-    _o("random_shop_stock", "--random-shop-stock", group="prices",
-       label="Randomize what shops sell",
-       tip="Every merchant slot is filled with a random item of its own category instead of the item it "
-           "always sold. Prices, stock and cost type stay as they are, so the slot keeps selling at its "
-           "vanilla price. Each slot is drawn independently, nothing is swapped between merchants. A "
-           "static file cannot make stock change on a timer - that would need a runtime mod - so this is "
-           "the static half: every shop sells something else. It works with every other option."),
-    _o("shop_stock_kinds", "--shop-stock-kinds", kind="groups", default="", group="prices",
-       needs=("random_shop_stock",), items=("weapons", "armor", "talismans", "goods", "ashes"),
-       label="Shop stock categories",
-       tip="Which kinds of item merchants may sell. Empty means all of them. Untick weapons and no shop "
-           "will sell one. It needs Randomize what shops sell."),
     _o("sell_equipment", "--sell-equipment", group="prices", needs=("random_prices",),
        label="Include weapons, armor and Ashes of War",
        tip="Extend the sell-price shuffle to equipment: one pool each for weapons, armor pieces and Ashes "
@@ -254,50 +254,19 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Give every somber and unique weapon the twelve affinities (Heavy through Occult) and let it "
            "mount Ashes of War. The rows this adds are named in the game's own text (Heavy Longsword and "
            "so on); without that patch the game shows ?WeaponName?."),
-    _o("random_movesets", "--random-movesets", group="weapons",
-       label="Shuffle movesets",
-       tip="Give every melee weapon and shield the moveset of a random other weapon: the animation set and "
-           "the attack behaviour. Shields only swap with shields and bows only with bows, so a shield in "
-           "the left hand still blocks instead of swinging."),
-    _o("moveset_mode", "--moveset-mode", kind="enum", default="affinity", group="weapons",
-       choices=("affinity", "bound", "weapon"), needs=("random_movesets",), label="Moveset mode",
-       tip="affinity: every affinity row of a weapon gets its own moveset. bound: rows draw from per-affinity "
-           "clusters, and an Ash of War keeps only the affinities it can actually animate. weapon: one "
-           "moveset per weapon, and the weapon type follows it so the smithing table only offers "
-           "animations that exist."),
-    _o("moveset_variety", "--moveset-variety", kind="int", default=3, group="weapons",
-       needs=("random_movesets",), label="Bound variety",
-       tip="bound mode: how many animation categories each affinity owns. 1 gives every weapon of an "
-           "affinity the same moveset; higher numbers mix more, but leave fewer affinities per Ash of War."),
-    _o("keep_standard", "--keep-standard-moveset", group="weapons", needs=("random_movesets",),
-       label="Leave Standard rows alone",
-       tip="affinity mode: keep each weapon's own moveset on its Standard row and randomize the other "
-           "twelve. bound mode always does this."),
-    _o("shield", "--shield-movesets", kind="enum", default="shields", group="weapons",
-       choices=("shields", "none", "all"), needs=("random_movesets",), label="Shields",
-       tip="shields: shields swap only among the four shield animation sets and weapons never get one, so "
-           "a left-hand shield still guards. none: shields keep their moveset. all: shields and weapons "
-           "swap freely, and a left-hand shield then attacks instead of guarding."),
-    _o("bow", "--bow-movesets", kind="enum", default="bows", group="weapons",
-       choices=("bows", "none"), needs=("random_movesets",), label="Bows",
-       tip="bows: every bow, crossbow and ballista takes the moveset of a random other bow-class weapon, "
-           "with its ammunition unchanged. none: bows are left alone."),
-    _o("weptype", "--weptype-follows", group="weapons", needs=("random_movesets",),
-       label="Weapon type follows the moveset",
-       tip="affinity and bound modes: each randomized row also takes the donor's weapon type, so the "
-           "smithing table lists exactly the Ashes of War that animate with that row. Untested against "
-           "the game's save checks."),
     _o("random_weapon_effects", "--random-weapon-effects", group="weapons",
        label="Shuffle weapon properties",
        tip="Shuffles the properties a weapon carries: the status effects it inflicts on hit (blood loss, "
            "frostbite, rot) and the effects it grants while you hold it (for example a shield that costs "
-           "less stamina to block with). The properties move as one bundle inside each weapon class, so "
-           "two copies of the same weapon can behave differently. It works with every other option."),
+           "less stamina to block with). The properties move as one bundle inside each weapon class, so a "
+           "Longsword can take a Dagger's on-hit bundle. It works with every other option."),
     _o("random_weapon_holder_fx", "--random-weapon-holder-fx", group="weapons",
        label="Shuffle holder effects",
        tip="Shuffles the effects a weapon grants while you hold it - for example a shield that costs less "
            "stamina to block with. The on-hit properties (blood loss, frostbite, rot) are a separate "
            "switch, so you can shuffle one without the other. It works with every other option."),
+    _o("random_weapon_status_effects", "--random-weapon-status-effects", group="weapons",
+       label="Roll weapon statuses on hit"),
     _o("random_default_ash", "--random-default-ash", group="weapons",
        label="Random default skill and affinity",
        tip="Roll a random default skill for every weapon and affinity row, chosen so that it animates with "
@@ -337,12 +306,39 @@ OPTIONS: tuple[Opt, ...] = (
        needs=("somber_infusable",), label="Do not patch weapon names",
        tip="Make somber weapons infusable without touching any text archive. The added rows then appear as "
            "?WeaponName? in game."),
-    _o("random_armor", "--random-armor", group="gear",
-       label="Shuffle armor stats",
-       tip="Shakes every armor column (defenses, resistances, damage negation, weight) among the pieces of "
-           "the same slot, so a helm ends up with another helm's numbers. Only the values the game already "
-           "uses are dealt out, so nothing becomes absurd. Two copies of one piece are still identical: "
-           "that would need a runtime mod, not a rewritten regulation.bin."),
+    _o("random_movesets", "--random-movesets", group="weapons",
+       label="Shuffle movesets",
+       tip="Give every melee weapon and shield the moveset of a random other weapon: the animation set and "
+           "the attack behaviour. Shields only swap with shields and bows only with bows, so a shield in "
+           "the left hand still blocks instead of swinging."),
+    _o("moveset_mode", "--moveset-mode", kind="enum", default="affinity", group="weapons",
+       choices=("affinity", "bound", "weapon"), needs=("random_movesets",), label="Moveset mode",
+       tip="affinity: every affinity row of a weapon gets its own moveset. bound: rows draw from per-affinity "
+           "clusters, and an Ash of War keeps only the affinities it can actually animate. weapon: one "
+           "moveset per weapon, and the weapon type follows it so the smithing table only offers "
+           "animations that exist."),
+    _o("moveset_variety", "--moveset-variety", kind="int", default=3, group="weapons",
+       needs=("random_movesets",), label="Bound variety",
+       tip="bound mode: how many animation categories each affinity owns. 1 gives every weapon of an "
+           "affinity the same moveset; higher numbers mix more, but leave fewer affinities per Ash of War."),
+    _o("keep_standard", "--keep-standard-moveset", group="weapons", needs=("random_movesets",),
+       label="Leave Standard rows alone",
+       tip="affinity mode: keep each weapon's own moveset on its Standard row and randomize the other "
+           "twelve. bound mode always does this."),
+    _o("shield", "--shield-movesets", kind="enum", default="shields", group="weapons",
+       choices=("shields", "none", "all"), needs=("random_movesets",), label="Shields",
+       tip="shields: shields swap only among the four shield animation sets and weapons never get one, so "
+           "a left-hand shield still guards. none: shields keep their moveset. all: shields and weapons "
+           "swap freely, and a left-hand shield then attacks instead of guarding."),
+    _o("bow", "--bow-movesets", kind="enum", default="bows", group="weapons",
+       choices=("bows", "none"), needs=("random_movesets",), label="Bows",
+       tip="bows: every bow, crossbow and ballista takes the moveset of a random other bow-class weapon, "
+           "with its ammunition unchanged. none: bows are left alone."),
+    _o("weptype", "--weptype-follows", group="weapons", needs=("random_movesets",),
+       label="Weapon type follows the moveset",
+       tip="affinity and bound modes: each randomized row also takes the donor's weapon type, so the "
+           "smithing table lists exactly the Ashes of War that animate with that row. Untested against "
+           "the game's save checks."),
     _o("random_armor_fresh", "--random-armor-fresh", group="gear",
        label="Randomize armor stats",
        tip="Rolls every piece's numbers again instead of swapping them: a knight's armor keeps knightly "
@@ -356,6 +352,12 @@ OPTIONS: tuple[Opt, ...] = (
            "scaled by one factor instead of being rolled separately, so a set stays internally consistent "
            "while still being different from vanilla. Turn it off and every piece rolls on its own, which "
            "can make one piece of a set great and another useless."),
+    _o("random_armor", "--random-armor", group="gear",
+       label="Shuffle armor stats",
+       tip="Shakes every armor column (defenses, resistances, damage negation, weight) among the pieces of "
+           "the same slot, so a helm ends up with another helm's numbers. Only the values the game already "
+           "uses are dealt out, so nothing becomes absurd. Two copies of one piece are still identical: "
+           "that would need a runtime mod, not a rewritten regulation.bin."),
     _o("random_armor_drops", "--random-armor-drops", group="lootdrops",
        label="Move armor to random enemies",
        tip="Keeps every armor piece exactly as it is and only moves *where* it drops: the chest piece from "
@@ -431,24 +433,26 @@ OPTIONS: tuple[Opt, ...] = (
            "Liurnia and the Weeping Peninsula, which a fog gate run may not reach early."),
     _o("random_enemy_drops", "--random-enemy-drops", group="drops",
        label="Randomize enemy drops",
-       tip="Every enemy drops something, and what it drops is random: weapons, armor, talismans, Ashes of "
-           "War and goods (no key items). The first drop row of every enemy becomes guaranteed; later rows "
-           "keep their chance. One-time drops and rows holding a key item are left alone."),
-    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=None, group="drops",
+       tip="Reroll every enemy's drop table. With the default 3 rolls at 10%, a kill drops 0 to 3 random "
+           "items and averages 0.3, so most kills drop nothing; set Rolls per enemy to 0 for one guaranteed "
+           "drop. Key-item rows and one-time drops are left alone."),
+    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=3, group="drops",
        needs=("random_enemy_drops",), metavar="N",
        label="Rolls per enemy",
-       tip="Give every enemy exactly N drop rolls instead of one guaranteed drop. Each roll drops a random "
-           "item at the chance below, so a kill drops 0 to N items, N x chance / 100 on average."),
-    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=50, group="drops",
+       tip="How many independent drop rolls each enemy gets. 3 by default; 0 keeps the vanilla shape (the "
+           "first row always drops and later rows keep their own chance). Each roll drops at the chance "
+           "below, so a kill drops 0 to N items, N x chance / 100 on average."),
+    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=10, group="drops",
        needs=("random_enemy_drops",), metavar="P",
        label="Chance per roll (%)",
-       tip="How likely each of the rolls above is to drop something, in percent (1 to 100)."),
+       tip="How likely each drop roll is to drop something, in percent (1 to 100). 10 by default; with 3 "
+           "rolls that is 0.3 items per kill on average."),
     _o("enemy_drop_kinds", "--enemy-drop-kinds", kind="groups", default="", group="drops",
        needs=("random_enemy_drops",), items=("weapons", "armor", "talismans", "goods", "ashes"),
        label="What enemies can drop",
-       tip="Which kinds of item the random enemy drops can contain. Empty means all of them. Untick "
-           "weapons and no enemy will ever drop one, for example. Key items are never dropped whatever "
-           "this says. It needs Randomize enemy drops."),
+       tip="Which kinds of item a random enemy drop can be. Empty means all of them. Untick weapons and no "
+           "random drop will be a weapon. Key-item rows and one-time drops are left alone whatever this "
+           "says. It needs Randomize enemy drops."),
     _o("random_loot_levels", "--random-loot-levels", group="drops",
        label="Random upgrade levels on loot",
        tip="Gives the weapons in enemy drop tables, chests, boss rewards and shops a random upgrade level: "
@@ -482,21 +486,18 @@ OPTIONS: tuple[Opt, ...] = (
            "Random upgrade levels on loot."),
     _o("unique_drops", "--unique-drops", group="drops", needs=("random_enemy_drops",),
        label="Rare unique weapons",
-       tip="Now and then an enemy drops a unique weapon - one that cannot be infused or reinforced - "
-           "instead of the common draw. About one drop in thirty, so a kill is usually ordinary and a "
-           "unique feels like an event. It needs Randomize enemy drops."),
+       tip="Off by default: with this off, no random drop is ever a unique weapon. Turn it on and every "
+           "item that actually drops rolls the rate below; a hit replaces the common draw with a unique "
+           "weapon that cannot be infused or reinforced. At Normal (3%) about one dropped item in "
+           "thirty-three is a unique."),
+    _o("unique_rate", "--unique-rate", kind="int", default=3, metavar="PERCENT", group="drops",
+       needs=("random_enemy_drops", "unique_drops"),
+       label="Unique weapon rate"),
     _o("material_drops", "--material-drops", group="drops", needs=("random_enemy_drops",),
        label="Upgrade material drops",
        tip="Now and then an enemy drops smithing stones instead of the common draw: about one drop in "
-           "twelve, in a small stack. Sparse by design, so materials stay something you go looking for. "
+           "twelve, in a small stack. This roll happens before the unique roll, so a drop cannot be both. "
            "It needs Randomize enemy drops."),
-    _o("unique_rate", "--unique-rate", kind="enum", default="normal", group="drops",
-       choices=("rare", "normal", "generous"), needs=("random_enemy_drops",),
-       label="Unique weapon rate",
-       tip="How often a drop is a unique weapon instead of the common draw. rare is 1%, normal 3% and "
-           "generous 8%, rolled on every drop row - so an enemy with three rolls gets three chances. "
-           "Uniques cannot be infused or reinforced, so they stay special at the low rates. It needs "
-           "Randomize enemy drops."),
     _o("random_enemy_hp", "--random-enemy-hp", group="drops",
        label="Shuffle enemy HP",
        tip="Randomize the hit points of every enemy that has any (NpcParam.hp). shuffle permutes the "
@@ -724,13 +725,13 @@ def validate(values: dict) -> dict:
             out[key] = True
 
     if out["enemy_drop_rolls"] is not None:
-        if not out["random_enemy_drops"]:
-            raise ValueError("Rolls per enemy needs \"Randomize enemy drops\"")
-        if not 1 <= out["enemy_drop_rolls"] <= 32:
-            raise ValueError("Rolls per enemy must be between 1 and 32")
-        if out["enemy_drop_chance"] is None:
-            out["enemy_drop_chance"] = 50
-    if out["enemy_drop_chance"] is not None and not 1 <= out["enemy_drop_chance"] <= 100:
+        if not 0 <= out["enemy_drop_rolls"] <= 32:
+            raise ValueError("Rolls per enemy must be between 0 and 32 (0 = one guaranteed drop)")
+        if out["enemy_drop_rolls"] == 0:
+            out["enemy_drop_rolls"] = None       # 0 is the old "one guaranteed row" mode
+    if out["enemy_drop_chance"] is None:
+        out["enemy_drop_chance"] = BY_KEY["enemy_drop_chance"].default
+    if not 1 <= out["enemy_drop_chance"] <= 100:
         raise ValueError("Chance per roll must be between 1 and 100 (percent)")
 
     for key, label in (("price_min", "Minimum price"), ("price_max", "Maximum price"),
@@ -748,6 +749,10 @@ def validate(values: dict) -> dict:
         raise ValueError("Max upgrade level must be between 0 and 25")
     if out["boss_min_runes"] is not None and out["boss_min_runes"] < 0:
         raise ValueError("Boss rune threshold cannot be negative")
+    if out["unique_rate"] is None:
+        out["unique_rate"] = BY_KEY["unique_rate"].default
+    if not 1 <= out["unique_rate"] <= 20:
+        raise ValueError("Unique weapon rate must be between 1 and 20 (percent)")
 
     if out["random_prices"] and out["price_mode"] == "range":
         lo, hi = out["price_min"], out["price_max"]
@@ -789,8 +794,11 @@ def validate(values: dict) -> dict:
 
 def is_active(o: Opt, values: dict) -> bool:
     """False when an option's own switch is off: the GUI uses it to grey dependent widgets out."""
-    if o.key in ("enemy_drop_rolls", "enemy_drop_chance"):
+    if o.key == "enemy_drop_rolls":
         return bool(values.get("random_enemy_drops"))
+    if o.key == "enemy_drop_chance":
+        # chance only means something when there is at least one roll; 0 is the guaranteed-row mode
+        return bool(values.get("random_enemy_drops")) and values.get("enemy_drop_rolls") not in (None, "", 0, "0")
     if o.needs:
         return all(values.get(k) for k in o.needs)
     return True
@@ -919,6 +927,7 @@ def argv_from_values(values: dict) -> list[str]:
                       ("random_gem_effects", "--random-gem-effects"),
                       ("random_weapon_effects", "--random-weapon-effects"),
                       ("random_weapon_holder_fx", "--random-weapon-holder-fx"),
+                      ("random_weapon_status_effects", "--random-weapon-status-effects"),
                       ("brief_reports", "--brief-reports"),
                       ("random_runes", "--random-runes"),
                       ("random_enemy_hp", "--random-enemy-hp"),
@@ -985,9 +994,13 @@ def argv_from_values(values: dict) -> list[str]:
                 if values.get(key) not in (None, ""):
                     a += [f"--{key.replace('_', '-')}", str(values[key])]
 
-    if values.get("random_enemy_drops") and values.get("enemy_drop_rolls") not in (None, ""):
-        a += ["--enemy-drop-rolls", str(values["enemy_drop_rolls"]),
-              "--enemy-drop-chance", str(values.get("enemy_drop_chance") or 50)]
+    if values.get("random_enemy_drops"):
+        rolls = values.get("enemy_drop_rolls")
+        # 0 (or an empty field) is the old "one guaranteed row" mode: pass it explicitly so the round
+        # trip does not silently turn it back into the table default of 3 rolls.
+        a += ["--enemy-drop-rolls", "0" if rolls in (None, "") else str(rolls)]
+        if rolls not in (None, "", 0, "0"):
+            a += ["--enemy-drop-chance", str(values.get("enemy_drop_chance") or 10)]
     if values.get("random_enemy_drops"):
         o = BY_KEY["enemy_drop_kinds"]
         have = _groups_value(values, "enemy_drop_kinds")
@@ -1050,8 +1063,9 @@ def argv_from_values(values: dict) -> list[str]:
 
     if values.get("flask_where") and values["flask_where"] != "anywhere":
         a += ["--flask-where", values["flask_where"]]
-    if values.get("unique_rate") and values["unique_rate"] != "normal":
-        a += ["--unique-rate", values["unique_rate"]]
+    if values.get("unique_drops") and values.get("unique_rate") \
+            and str(values["unique_rate"]) != str(BY_KEY["unique_rate"].default):
+        a += ["--unique-rate", str(values["unique_rate"])]
     if values.get("no_reports"):
         a.append("--no-reports")
     if values.get("dry_run"):

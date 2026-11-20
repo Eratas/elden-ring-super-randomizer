@@ -272,6 +272,8 @@ def run() -> None:
           "--random-default-ash: empty report")
     check(len(weapons.Weapons(build()).random_effects(random.Random(1))) > 1,
           "--random-weapon-effects: empty report")
+    check(len(weapons.Weapons(build()).random_status_effects(random.Random(1))) > 1,
+          "--random-weapon-status-effects: empty report")
     check(len(weapons.Weapons(build()).random_stats(random.Random(1))) > 1,
           "--random-stats: empty report")
 

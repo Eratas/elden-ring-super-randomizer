@@ -549,6 +549,9 @@ class App:
         combo = ttk.Combobox(sec.body, textvariable=disp, values=labels, state="readonly")
         combo.grid(row=row, column=1, sticky="ew", padx=pad, pady=2)
         Tooltip(combo, o.tip)
+        # a readonly combobox keeps its text selected after a pick, which reads as "still active";
+        # clear the highlight, the value stays
+        combo.bind("<<ComboboxSelected>>", lambda _e: combo.selection_clear(), add="+")
 
         def _on_display(*_) -> None:
             if self._choice_guard:

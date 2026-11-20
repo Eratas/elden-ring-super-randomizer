@@ -185,7 +185,7 @@ class EnemyDrops:
             n, rid = n + 1, rid + 1
         return max(0, n - 1)
 
-    def randomize(self, rng: random.Random, rolls: int | None = None, chance: int = 50,
+    def randomize(self, rng: random.Random, rolls: int | None = None, chance: int = 10,
                   kinds: set[int] | None = None, unique_drops: bool = False,
                   material_drops: bool = False, unique_rate: float = UNIQUE_CHANCE) -> list[str]:
         """rolls=None: the first row of every lot drops for certain, the rows after it keep their chance, every row's
@@ -400,7 +400,7 @@ def randomize_hp(reg: erreg.Regulation, rng: random.Random, mode: str, lo: int |
 
 
 def sample(reg: erreg.Regulation, rng: random.Random, count: int, rolls: int | None = None,
-           chance: int = 50) -> list[str]:
+           chance: int = 10) -> list[str]:
     """The loot simulator: `count` random kills, each drop row rolled at its own chance.
 
     The roll mirrors what the game does with a lot - every row is independent and a row drops one of its

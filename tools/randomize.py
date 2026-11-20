@@ -355,7 +355,6 @@ def shipped_warning(flag: str, archives: list[Path]) -> list[str]:
 
 
 # ---------------------------------------------------------------- the run
-_UNIQUE_RATES = {"rare": 0.01, "normal": 0.03, "generous": 0.08}
 
 
 def _kinds(text) -> set[int] | None:
@@ -510,7 +509,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             elines.append(f"# seed={seed}")
             elines += enemy_drops.EnemyDrops(reg).randomize(
                 rng, v["enemy_drop_rolls"], v["enemy_drop_chance"], _kinds(v["enemy_drop_kinds"]),
-                v["unique_drops"], v["material_drops"], _UNIQUE_RATES[v["unique_rate"]])
+                v["unique_drops"], v["material_drops"], v["unique_rate"] / 100)
             print("\n".join(l for l in elines if l.startswith("#")))
 
         if v["random_shop_stock"]:
@@ -525,7 +524,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         # adds the somber affinity rows.
         loot_levels = loot.Loot(reg, v.get("boss_min_runes") or 0) if v["random_loot_levels"] else None
         if (v["somber_infusable"] or v["random_movesets"] or v["random_default_ash"] or v["random_stats"]
-                or v["random_weapon_effects"] or v["random_weapon_holder_fx"]):
+                or v["random_weapon_effects"] or v["random_weapon_holder_fx"]
+                or v["random_weapon_status_effects"]):
             say(phases.WEAPONS)
             wp = weapons.Weapons(reg)
             wlines.append(f"# seed={seed}")
@@ -543,6 +543,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 wlines += [""] + wp.random_effects(rng, weapons.ONHIT_FIELDS)
             if v["random_weapon_holder_fx"]:
                 wlines += [""] + wp.random_effects(rng, weapons.HOLDER_FIELDS)
+            if v["random_weapon_status_effects"]:
+                wlines += [""] + wp.random_status_effects(rng)
             print("\n".join(l for l in wlines if l.startswith("#")))
 
         glines: list[str] = []
@@ -655,7 +657,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["simulate"]:
             say(phases.LOOT_SIMULATION)
             print("\n".join(enemy_drops.sample(reg, rng, v["simulate"], v["enemy_drop_rolls"],
-                                                   v["enemy_drop_chance"] or 50)))
+                                                   v["enemy_drop_chance"] or 10)))
         say(phases.DONE)
         return 0
     out = Path(v["output"])
