@@ -48,9 +48,16 @@ rem on failure it is shown in full.
 if not exist build mkdir build
 set "LOG=%~dp0build\pyinstaller.log"
 echo Packing, this takes a minute or two; the full output is written to %LOG% ...
+rem --hidden-import lang_*: the window's 13 language packs (tools\lang_*.py) are imported lazily by
+rem i18n.pack() with importlib.import_module("lang_<code>"), which PyInstaller cannot see - without
+rem them the exe can only ever show English, however you switch the language box.
 "%VENV%\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name EldenRingSuperRandomizer ^
   --version-file "%~dp0tools\version_info.txt" ^
   --hidden-import test_logic ^
+  --hidden-import lang_de --hidden-import lang_es --hidden-import lang_fi --hidden-import lang_fr ^
+  --hidden-import lang_it --hidden-import lang_ja --hidden-import lang_ko --hidden-import lang_nl ^
+  --hidden-import lang_pl --hidden-import lang_pt --hidden-import lang_ru --hidden-import lang_sv ^
+  --hidden-import lang_zh ^
   --add-data "%~dp0tools\paramdef;paramdef" --add-data "%~dp0tools\names;names" ^
   --distpath dist --workpath build --specpath build tools\gui.py > "%LOG%" 2>&1 || (
   type "%LOG%"

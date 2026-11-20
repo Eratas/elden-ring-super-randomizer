@@ -36,6 +36,10 @@ EOF
 "$VENV/bin/python" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name EldenRingSuperRandomizer \
   --version-file "$PWD/tools/version_info.txt" \
   --hidden-import test_logic \
+  --hidden-import lang_de --hidden-import lang_es --hidden-import lang_fi --hidden-import lang_fr \
+  --hidden-import lang_it --hidden-import lang_ja --hidden-import lang_ko --hidden-import lang_nl \
+  --hidden-import lang_pl --hidden-import lang_pt --hidden-import lang_ru --hidden-import lang_sv \
+  --hidden-import lang_zh \
   --add-data "$PWD/tools/paramdef:paramdef" --add-data "$PWD/tools/names:names" \
   --add-data "$PWD/tools/linoodle/liblinoodle.so:linoodle" \
   --distpath dist --workpath build --specpath build tools/gui.py

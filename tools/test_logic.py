@@ -933,6 +933,22 @@ def _argv_gated(o, gui: dict) -> bool:
     return False
 
 
+def test_spell_stats_standalone() -> None:
+    """--spell-stats is its own granularity: it runs with the effect shuffle off.
+
+    It used to hang off --spells (the "randomize spell stats" switch was gated by the shuffle switch),
+    and the GUI warned when only stats were ticked."""
+    v = options.validate(dict(_argv_dict(), spell_stats=True))
+    check(v["spell_stats"] is True and v["spells"] is False,
+          f"--spell-stats alone should stay on with the shuffle off: spells={v['spells']!r}, "
+          f"spell_stats={v['spell_stats']!r}")
+    argv = options.argv_from_values(v)
+    check("--spell-stats" in argv and "--spells" not in argv,
+          f"a stats-only run should pass --spell-stats alone: {argv}")
+    v2 = options.validate(dict(_argv_dict(), spells=True, spell_stats=True))
+    check(v2["spells"] and v2["spell_stats"], "--spells and --spell-stats should both survive validate()")
+
+
 def test_argv_fuzz() -> None:
     rng = random.Random(_ARGV_FUZZ_SEED)
     valid = 0
@@ -1528,7 +1544,7 @@ def test_dropshuffle_protection() -> None:
 SELF_TEST_FNS = (test_derangement, test_round_price, test_cap_total, test_new_prices,
                  test_dropshuffle_sets, test_dropshuffle_plan_fuzz, test_loot_zone_cap, test_loot_tiers,
                  test_erreg_roundtrip, test_erreg_malformed, test_erreg_writer, test_erreg_cap, test_zones,
-                 test_argv_roundtrip, test_argv_fuzz, test_argv_pairs, test_backup, test_empty_pools,
+                 test_argv_roundtrip, test_spell_stats_standalone, test_argv_fuzz, test_argv_pairs, test_backup, test_empty_pools,
                  test_version_resource)
 
 
@@ -1568,7 +1584,7 @@ def main() -> int:
     print(f"LOGIC PASS - {_CHECKS} checks green "
           f"(derangement, round_price, cap_total, new_prices, dropshuffle sets + plan fuzz + "
           f"protection, loot zone cap + tier coverage, erreg round-trips + malformed, argv round trip "
-          f"+ fuzz + pairs, backup, empty pools, nexus description + fuzz{extra})")
+          f"+ fuzz + pairs + spell stats standalone, backup, empty pools, nexus description + fuzz{extra})")
     return 0
 
 

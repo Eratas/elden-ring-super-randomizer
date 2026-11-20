@@ -153,18 +153,18 @@ TIPS: dict[str, str] = {
     ),
     "spells": (
         "Shuffle what sorceries and incantations do.\n\n"
-        "Every sorcery and incantation receives another spell's effect. Sorceries and incantations share one "
-        "pool, so a glintstone spell can end up as an incantation and vice versa. Turn it off and Magic.param "
-        "is left alone.\n"
+        "Every sorcery and incantation receives another spell's effect; sorceries and incantations share one "
+        "pool, so a glintstone spell can end up as an incantation and vice versa. With it off, every spell "
+        "keeps its vanilla effect.\n"
         "Example: Glintstone Pebble heals, and a Dragon Communion breath casts a glintstone shard."
     ),
     "spell_stats": (
         "Randomize what spells cost and require.\n\n"
         "Every sorcery and incantation gets new FP and stamina costs and new stat requirements, drawn in bands "
-        "around the vanilla values. It is independent of the weapon stats: a spell whose effect was shuffled "
-        "can keep its original cost.\n"
-        "Example: a comet that costs 40 FP and needs 60 Int instead of 30 and 50.\n"
-        "Needs: Shuffle spell effects."
+        "around the vanilla values; the Int / Faith / Luck set of a random vanilla spell, capped at a 60-point "
+        "sum. It is standalone: it works with the effect shuffle off, and spells keep their own effects and "
+        "animations unless Shuffle spell effects is on.\n"
+        "Example: a comet that costs 40 FP and needs 60 Int instead of 30 and 50."
     ),
 
     # ------------------------------------------------------------------ prices

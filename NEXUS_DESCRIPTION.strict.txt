@@ -251,7 +251,7 @@ Excluded by id: 2070 (Lantern — its two states are two SpEffects, not one effe
 [*] random lets every item draw a donor independently, so effects repeat and some items keep what they had.
 [/list]
 
-Spells share the pool: sorceries and incantations are one list (Magic rows with charaInit 1 or 4, effects excluded by quality = 255 / isForceMagic = 2), so a glintstone spell can end up as an incantation and vice versa. They are a section of their own: --spells moves what a spell [i]does[/i], --spell-stats re-rolls what it [i]costs[/i] (FP, stamina, requirements). The two are independent, so a spell whose effect was shuffled can keep its vanilla cost. --stat-groups spells is still accepted for old command lines.
+Spells share the pool: sorceries and incantations are one list (Magic rows with charaInit 1 or 4, effects excluded by quality = 255 / isForceMagic = 2), so a glintstone spell can end up as an incantation and vice versa. They are a section of their own: --spells moves what a spell [i]does[/i] (a shuffle: one derangement of the pool, so every effect is used exactly once and no spell keeps its own), and --spell-stats re-rolls what it [i]costs[/i] (FP, stamina, requirements). The two are independent: a spell whose effect was shuffled can keep its vanilla cost, and --spell-stats works on its own, without the shuffle. --stat-groups spells is still accepted for old command lines.
 
 [b]Stack sizes (--goods-quantity).[/b] EquipParamGoods.maxNum is how many of an item a pickup or a purchase gives, maxRepositoryNum how many you can carry. Both move together from one stackable item to another, so the pair stays consistent and no item asks for more than it can hold. Only rows that already stack take part.
 

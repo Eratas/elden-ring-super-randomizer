@@ -193,11 +193,14 @@ OPTIONS: tuple[Opt, ...] = (
     _o("spells", "--spells", neg=("--no-spells",), default=False, group="spells",
        label="Shuffle spell effects",
        tip="Shuffle the effect of every sorcery and incantation (Magic.param). Sorceries and incantations "
-           "share one pool, so a glintstone spell can end up as an incantation and vice versa."),
-    _o("spell_stats", "--spell-stats", group="spells", needs=("spells",),
+           "share one pool, so a glintstone spell can end up as an incantation and vice versa. Without it, "
+           "every spell keeps its vanilla effect."),
+    _o("spell_stats", "--spell-stats", group="spells",
        label="Randomize spell stats",
-       tip="Randomize the FP and stamina cost and the stat requirements of every sorcery and incantation, "
-           "independently of the weapon stats. Spells keep their own effects and animations."),
+       tip="Randomize the FP and stamina cost and the stat requirements of every sorcery and incantation. "
+           "Standalone: it works with the effect shuffle off, and spells keep their own effects and "
+           "animations unless Shuffle spell effects is on. Requirements stay a valid set: each spell gets "
+           "the Int / Faith / Luck values of a random vanilla spell, capped at a 60-point sum."),
 
     # --- prices ----------------------------------------------------------------------------
     _o("random_shop_stock", "--random-shop-stock", group="prices",
@@ -808,7 +811,7 @@ def is_active(o: Opt, values: dict) -> bool:
 # a refinement of another option.  Everything else is a master switch, and at least one of them has to be
 # on for a run to change anything.
 _NOT_A_SWITCH = {"repack", "dry_run", "no_reports", "sell_prices", "keep_standard", "weptype",
-                 "no_weapon_names", "spell_stats", "include_flasks", "include_remembrances"}
+                 "no_weapon_names", "include_flasks", "include_remembrances"}
 
 
 def master_switches() -> tuple[Opt, ...]:

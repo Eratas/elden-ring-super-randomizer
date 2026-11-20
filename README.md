@@ -315,10 +315,11 @@ tear" also receives the animations and restrictions that belong to that effect.
 
 Spells share the pool: sorceries and incantations are one list (`Magic` rows with `charaInit` 1 or 4,
 effects excluded by `quality = 255` / `isForceMagic = 2`), so a glintstone spell can end up as an
-incantation and vice versa. They are a section of their own: `--spells` moves what a spell *does*,
-`--spell-stats` re-rolls what it *costs* (FP, stamina, requirements). The two are independent, so a spell
-whose effect was shuffled can keep its vanilla cost. `--stat-groups spells` is still accepted for old
-command lines.
+incantation and vice versa. They are a section of their own: `--spells` moves what a spell *does*
+(a shuffle: one derangement of the pool, so every effect is used exactly once and no spell keeps its
+own), and `--spell-stats` re-rolls what it *costs* (FP, stamina, requirements). The two are independent:
+a spell whose effect was shuffled can keep its vanilla cost, and `--spell-stats` works on its own,
+without the shuffle. `--stat-groups spells` is still accepted for old command lines.
 
 **Stack sizes (`--goods-quantity`).** `EquipParamGoods.maxNum` is how many of an item a pickup or a
 purchase gives, `maxRepositoryNum` how many you can carry. Both move together from one stackable item to

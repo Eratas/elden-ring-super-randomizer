@@ -13,11 +13,12 @@ Staffs and seals share animation bank 41 (wepmotionCategory), so sorcery motions
 and vice versa resolve to existing animations; whether every cross-category pairing also deals damage
 the way the catalyst expects is untested in-game.
 
---random-stats (stat group "spells"): FP cost drawn from weighted tiers (0-10: 50 %, 11-20: 30 %,
+--spell-stats (--random-stats, stat group "spells"): FP cost drawn from weighted tiers (0-10: 50 %, 11-20: 30 %,
 21-40: 20 %), stamina cost likewise (0-20 / 21-40 / 41-60), the charged costs keep the row's ratio,
 the INT / FAI / ARC requirements are the vanilla set of a random pool spell (read before the effects
 move, so the game's own 1-2 attribute combinations at their own frequency; sum <= 60, scaled down
-proportionally otherwise), and every spell takes exactly one memory slot.
+proportionally otherwise), and every spell takes exactly one memory slot.  It is standalone:
+--spell-stats runs with --spells off; the two switches are independent.
 """
 from __future__ import annotations
 

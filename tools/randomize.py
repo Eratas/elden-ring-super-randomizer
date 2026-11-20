@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
     try:
         say(phases.READING)
         stat_groups = v["stat_groups"]
-        spell_stats = bool(v["spells"] and (v["spell_stats"] or "spells" in stat_groups))
+        spell_stats = bool(v["spell_stats"] or "spells" in stat_groups)
         stamina_rate = v["stamina_rate"] or (0.8, 1.2)
 
         seed = v["seed"] if v["seed"] is not None else random.randrange(1, 2**31)
@@ -615,12 +615,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 wlines.append(line)
 
         slines: list[str] = []
-        if v["spells"]:
+        if v["spells"] or spell_stats:
             say(phases.SPELLS)
             sp = spells.Spells(reg)
             slines.append(f"# seed={seed} mode={v['mode']} spells={len(sp.pool)} (sorceries + incantations in one pool)"
                           + (f" anim split ({v['split_anim']} signature)" if v["split_anim"] != "none" else ""))
-            slines += sp.randomize_effects(rng, v["mode"], v["split_anim"] if v["split_anim"] != "none" else None)
+            if v["spells"]:
+                slines += sp.randomize_effects(rng, v["mode"], v["split_anim"] if v["split_anim"] != "none" else None)
             if spell_stats:
                 slines += [""] + sp.random_stats(rng)
             print("\n".join(l for l in slines if l.startswith("#")))
