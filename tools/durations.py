@@ -80,14 +80,15 @@ class Durations:
 
     def randomize(self, rng: random.Random, mode: str, lo: int | None, hi: int | None) -> list[str]:
         from randomize import new_prices
+        if len(self.units) < 2:
+            # Report, do not crash: the vanilla range below is min()/max() over the units, and a
+            # regulation with no timed buffs (a stripped or mod-built SpEffectParam) has none.
+            return [f"# buff durations: fewer than two timed buffs found ({len(self.units)}), nothing changed"]
         old = [u.old for u in self.units]
         goods = sum(1 for u in self.units if u.kind == "goods")
         lines = [f"# buff durations: mode={mode} buffs={len(self.units)} ({goods} consumables + {len(self.units) - goods} spell effects; "
                  f"SpEffectParam.effectEndurance, timed effects of {MIN_BUFF:g} s and longer; vanilla {min(old):g}-{max(old):g} s)",
                  "# owner  old -> new (seconds)   [SpEffect rows]"]
-        if len(self.units) < 2:
-            lines.append("# fewer than two buffs found, nothing changed")
-            return lines
         new = new_prices([int(round(o)) for o in old], rng, mode, lo, hi, "duration")
         for u, n in zip(self.units, new):
             for eid in u.effects:

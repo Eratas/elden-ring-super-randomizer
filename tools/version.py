@@ -10,7 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 HERE = Path(__file__).resolve().parent
 

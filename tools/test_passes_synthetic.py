@@ -11,8 +11,9 @@ every pass over it.
 It asserts behaviour, not just "did not crash":
 
   * --somber-infusable turns a one-row weapon into the full 13-row affinity block;
-  * the three --random-movesets modes, --random-default-ash, --random-weapon-effects and
-    --random-stats all produce a report and change the tables;
+  * the three --random-movesets modes, --random-default-ash, the weapon-effect switches
+     (--random-weapon-onhit-shuffle, --random-weapon-holder-shuffle, --random-weapon-status-roll,
+     --random-loot-effects) and --random-stats all produce a report and change the tables;
   * --random-gem-skills / --random-gem-effects and the armour / talisman / goods passes shuffle
     without losing or duplicating a value (a permutation keeps the column's multiset);
   * --random-spells moves effects with no fixed point (a derangement) and lands every spell on one
@@ -20,8 +21,8 @@ It asserts behaviour, not just "did not crash":
   * the enemy-drop passes change the lot rows and the HP pass changes NpcParam.hp;
   * the same seed gives byte-identical output (reproducibility: a set/dict iterated in a random
     order before an RNG draw would break this on some interpreter);
-  * the degenerate cases fail soft - bound mode with too few Ashes, and a single-moveset pool,
-    report "nothing changed" instead of raising.
+  * the degenerate cases fail soft - bound mode with too few Ashes, a single-moveset pool, and a
+     regulation with no timed buffs report "nothing changed" instead of raising.
 
 No regulation.bin, no game install and no oo2core DLL are needed: it only uses shipped paramdefs and
 names.  Run directly (`python tools/test_passes_synthetic.py`) or through tools/gate.py.
@@ -35,6 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import durations  # noqa: E402
 import enemy_drops  # noqa: E402
 import erreg  # noqa: E402
 import gear  # noqa: E402
@@ -408,6 +410,13 @@ def run() -> None:
     W.by_id = {r.id: r for r in W.rows}
     weapons.Weapons(reg).random_movesets(random.Random(1), mode="affinity")   # must not raise
 
+    # --- buff durations with no timed buff at all: report "nothing changed", never min() on an empty
+    # list (a stripped or mod-built SpEffectParam has no buffs, and that is not a crash) ---
+    reg = build()
+    out = durations.Durations(reg).randomize(random.Random(1), "shuffle", None, None)
+    check(len(out) == 1 and "fewer than two timed buffs" in out[0],
+          "--random-durations: an empty buff pool must report, not crash")
+
 
 def main() -> int:
     try:
@@ -424,7 +433,7 @@ def main() -> int:
         return 1
     print(f"PASSES SYNTHETIC PASS - {_CHECKS} checks green "
           f"(somber, movesets x3, ash, effects, stats, gems, armour, talismans, spells, goods, "
-          f"shops, talkmsg, enemy drops, hp, determinism, degenerate guards)")
+          f"shops, talkmsg, enemy drops, hp, durations, determinism, degenerate guards)")
     return 0
 
 

@@ -192,6 +192,20 @@ def render(markdown: str, strict: bool = False) -> str:
             i += 1
             continue
 
+        if line.lstrip().startswith(">"):
+            # A Markdown blockquote.  The ">" markers are Markdown, not BBCode: joining the lines with
+            # them still attached rendered "no > longer a +25" on the mod page, so they are stripped and
+            # the block becomes a [quote] (a documented tag, so both artifacts stay wiki-legal).
+            buf = []
+            while i < n and lines[i].lstrip().startswith(">"):
+                buf.append(lines[i].lstrip()[1:].strip())
+                i += 1
+            body = inline(" ".join(s for s in buf if s))
+            if body:
+                out.append(f"[quote]{body}[/quote]")
+                out.append("")
+            continue
+
         if line.lstrip().startswith("|"):
             rows = []
             while i < n and lines[i].lstrip().startswith("|"):

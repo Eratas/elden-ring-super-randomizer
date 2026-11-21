@@ -30,6 +30,7 @@ import math
 import random
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import balance  # noqa: E402
@@ -104,6 +105,30 @@ def utf8_stdio() -> None:
             stream.reconfigure(errors="replace")          # type: ignore[attr-defined]
         except (AttributeError, ValueError, OSError):
             pass
+
+
+def fail(message: str) -> NoReturn:
+    """Print a one-line error and stop with a non-zero exit code.
+
+    The text goes to stdout, not into SystemExit: the window runs the engine in a worker thread, logs
+    its stdout and drops a string SystemExit code, so a raise of SystemExit with a message would fail
+    the run there without saying why.  A missing or mistyped --input used to end in a raw pathlib
+    traceback, which is the single most likely user error there is.
+    """
+    print(f"# error: {message}")
+    raise SystemExit(1)
+
+
+def load_regulation(path: str) -> erreg.Regulation:
+    """Read a regulation.bin, turning the two likely user errors into one line instead of a traceback:
+    a path that is missing or unreadable (OSError), and a file that is not a regulation this version
+    understands (ValueError from erreg's decrypt / DCX / BND4 readers)."""
+    try:
+        return erreg.Regulation(path)
+    except OSError as e:
+        fail(f"cannot read the input {path}: {e.strerror or e}")
+    except ValueError as e:
+        fail(f"{path} is not a regulation.bin this version can read: {e}")
 
 
 # ---------------------------------------------------------------- goods
@@ -383,7 +408,11 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
 
     dll = getattr(args, "oodle_dll", None)
     if dll is not None and not oodle.use_dll(dll):
-        raise SystemExit(f"--oodle-dll: {dll} does not exist")
+        # "does not exist" was the whole answer even when the path is a folder or a file with another
+        # name, which is the mistake the message has to correct.
+        p = Path(dll).expanduser()
+        why = "is a directory, not a file" if p.is_dir() else "does not exist"
+        fail(f"--oodle-dll: {dll} {why}")
     # Guard: the output folder also receives the reports and (with weapon names) a msg folder, so an output
     # in the input's folder would litter or overwrite a mod folder, and an output named like the input would
     # replace it.
@@ -395,18 +424,23 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["dry_run"]:
             print("# warning: " + msg)
         else:
-            raise SystemExit(msg)
+            fail(msg)
     codec = erreg.CODEC_ZSTD if (v["dry_run"] or v["simulate"]) else choose_codec(v["compression"], v["compression_level"])
     oodle_level = oodle.LEVELS.get(v["compression_level"], oodle.LEVEL_FAST)
     if v["repack"]:
         if v["dry_run"]:
             print("# --repack with --dry-run: nothing to do")
             return 0
-        reg = erreg.Regulation(v["input"])
+        reg = load_regulation(v["input"])
         out = Path(v["output"])
         out.parent.mkdir(parents=True, exist_ok=True)
-        size = reg.save(out, max_size=v["max_size"] or erreg.REGULATION_MAX_SIZE,
-                        window_log=v["zstd_window"], codec=codec, level=oodle_level)
+        try:
+            size = reg.save(out, max_size=v["max_size"] or erreg.REGULATION_MAX_SIZE,
+                            window_log=v["zstd_window"], codec=codec, level=oodle_level)
+        except OSError as e:
+            fail(f"cannot write {out}: {e.strerror or e}")
+        except ValueError as e:
+            fail(str(e))
         print(f"# repacked {v['input']} -> {out} ({codec}, {size} bytes, "
               f"limit {v['max_size'] or erreg.REGULATION_MAX_SIZE}; content unchanged)")
         if v["backup_replace"]:
@@ -430,8 +464,12 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
 
         pd = erreg.load_paramdef(HERE / "paramdef" / "EquipParamGoods.xml")
         names = erreg.load_names(HERE / "names" / "EquipParamGoods.txt")
-        reg = erreg.Regulation(v["input"])
-        Npc = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
+        reg = load_regulation(v["input"])
+        try:
+            Npc = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
+        except ValueError as e:
+            # a row size that does not match the paramdef: a regulation.bin of another game version
+            fail(f"cannot read the tables of {v['input']}: {e} (a regulation.bin of another game version?)")
         boss = boss_scale.boss_ids(Npc, v.get("boss_min_runes") or 0)   # bosses, before any pass runs
         orig = {r.id: (Npc.get(r, "hp"), Npc.get(r, "getSoul")) for r in Npc.rows}
         P = reg.param("EquipParamGoods", pd)
@@ -667,8 +705,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
     out = Path(v["output"])
     out.parent.mkdir(parents=True, exist_ok=True)
     say(phases.COMPRESSING)
-    size = reg.save(out, max_size=v["max_size"] or erreg.REGULATION_MAX_SIZE,
-                    window_log=v["zstd_window"], codec=codec, level=oodle_level)
+    try:
+        size = reg.save(out, max_size=v["max_size"] or erreg.REGULATION_MAX_SIZE,
+                        window_log=v["zstd_window"], codec=codec, level=oodle_level)
+    except OSError as e:
+        fail(f"cannot write {out}: {e.strerror or e}")
+    except ValueError as e:
+        fail(str(e))
     print(f"# wrote {out} ({codec}, {size} bytes, limit {v['max_size'] or erreg.REGULATION_MAX_SIZE}; "
           f"{(v['max_size'] or erreg.REGULATION_MAX_SIZE) - size} bytes to spare)")
     # the patched text archives are content, not a report: they are always written

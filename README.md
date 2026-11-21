@@ -10,15 +10,15 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.4** — weapon drops now scale upgrade level by area (an early chest is no
-> longer a +25) and bosses roll better; enemy/map loot can no longer be forced onto protected
-> unique items (the cause of "damaged save" from an oversized `regulation.bin`); backups are atomic
-> (a crash can't truncate them); and the window wears a dark + gold theme. Full notes in the
-> [Changelog](#changelog).
+> **What's new in v1.0.5** — a missing or mistyped input, an unreadable file and a regulation of
+> another game version now fail with one line instead of a traceback; empty pools (no timed buffs, no
+> flask lot) report "nothing changed" instead of crashing; and the exe is rebuilt. Everything from
+> v1.0.4 still applies — area-scaled loot upgrades, the weapon-effects section, rare uniques, atomic
+> backups, the dark + gold window. Full notes in the [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.4**, last updated **2026-11-20**.
+every setting. Current version: **1.0.5**, last updated **2026-11-21**.
 
 ```
 Files and output
@@ -674,11 +674,24 @@ game's own `oo2core_6_win64.dll` that the user already has.
 
 ## Changelog
 
+**1.0.5** — 2026-11-21 — a missing or mistyped `--input`, an unreadable file and a `regulation.bin`
+of another game version now fail with one line (`# error: …`, exit 1) instead of a raw Python
+traceback; `--oodle-dll` says when the path is a directory rather than "does not exist"; the window
+shows that message in its log instead of failing with a bare exit code; `--random-durations` reports
+"nothing changed" on a regulation with no timed buffs instead of raising on `min()` of an empty list;
+`--start-with-bell` / `--start-with-lantern` report a missing flask lot instead of raising; the Nexus
+description renders its callout as a quote block instead of leaking the Markdown `>` markers; and the
+executable is rebuilt with PE version metadata 1.0.5.
+
 **1.0.4** — 2026-11-20 — loot upgrade caps no longer overshoot when `--loot-max-level` meets
 `--zone-loot-levels`; one-time and key-item drops are protected in the loot shuffle; backups are
-written atomically (a crash can no longer leave a half-written file over your original); the window
-wears a dark, gold-trimmed Elden Ring palette; and a synthetic pass test suite plus a stricter ruff
-gate guard all of it.
+written atomically (a crash can no longer leave a half-written file over your original); the weapon
+effect switches moved into their own section with unambiguous names (Shuffle on-hit effects, Shuffle
+holder effects, Roll statuses on hit) and gained a fourth, Random effects on loot weapons; dropped
+items can now roll a **rare unique weapon** at a whole-percent rate (`--unique-drops`, `--unique-rate`
+1–20) and three **loot-texture presets** bundle the drop rates; `--spell-stats` stands on its own
+without the spell shuffle; the window wears a dark, gold-trimmed Elden Ring palette; and a synthetic
+pass test suite plus a stricter ruff gate guard all of it.
 
 **1.0.3** — 2026-11-19 — the thirteen boss tips, the KRAK decode fix, and three new test groups.
 

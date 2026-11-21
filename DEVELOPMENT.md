@@ -123,9 +123,11 @@ those invariants, the strict variant, and the staleness of both checked-in files
 `test_passes_synthetic.py` builds a small regulation in memory (real paramdefs, a few weapon types,
 40 distinct Ashes of War, armour and talisman rows, a handful of sorceries, enemy lots and a boss) and
 drives every randomizer pass over it: `--somber-infusable`, the three `--random-movesets` modes,
-`--random-default-ash`, `--random-weapon-effects`, `--random-stats`, the gem / armour / talisman /
-spell / goods / shop passes, an FMG write/read round trip, the enemy-drop and HP passes, a same-seed
-determinism check, and the degenerate cases (too few Ashes, a single moveset) failing soft.
+`--random-default-ash`, the weapon-effect switches (`--random-weapon-onhit-shuffle`,
+`--random-weapon-holder-shuffle`, `--random-weapon-status-roll`, `--random-loot-effects`),
+`--random-stats`, the gem / armour / talisman / spell / goods / shop passes, an FMG write/read round
+trip, the enemy-drop and HP passes, a same-seed determinism check, and the degenerate cases (too few
+Ashes, a single moveset, a regulation with no timed buffs) failing soft.
 
 ## Layout
 

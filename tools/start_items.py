@@ -46,7 +46,9 @@ def give(reg: erreg.Regulation, keys: list[str]) -> list[str]:
         group.append(rid)
         rid += 1
     if not group:
-        raise ValueError(f"ItemLotParam_map row {GROUP} (the flask lot) is missing, cannot add starting items")
+        # Fail soft, like every other pass: a regulation whose ItemLotParam_map has no flask lot (a
+        # stripped or mod-built file) gets a report line, not a traceback.
+        return [f"# starting items: ItemLotParam_map row {GROUP} (the flask lot) is missing, nothing added"]
     goods = [ITEMS[k] for k in keys]
     lines = ["# starting items: " + ", ".join(f"{n} ({g})" for g, n, _ in goods) + " x1 appended to the flask lot "
              f"(ItemLotParam_map rows {GROUP}+, awarded together with the flasks at the start: FogMod's start "
