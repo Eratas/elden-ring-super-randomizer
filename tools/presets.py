@@ -17,13 +17,13 @@ PRESETS: tuple[dict, ...] = (
         "key": "borderlands",
         "label": "Borderlands loot",
         "tip": "Weapons become loot boxes: any enemy drops any weapon, at a random affinity and a random "
-               "upgrade level, with randomized stats. Three rolls per enemy, so a kill can drop nothing or "
-               "three things.",
+               "upgrade level, with randomized stats. Four rolls per enemy with the first guaranteed, so "
+               "a kill drops one to four things.",
         "values": {
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": False, "random_default_ash": True,
             "random_stats": True, "stat_groups": "", "stamina_rate": "0,2.0",
-            "random_enemy_drops": True, "enemy_drop_rolls": 3, "enemy_drop_chance": 50,
+            "random_enemy_drops": True, "enemy_drop_rolls": 4, "enemy_drop_chance": 50,
             "enemy_drop_kinds": "", "random_loot_levels": True, "loot_rarity": "common",
             "loot_boss_bonus": "better", "unique_drops": True, "material_drops": True,
             "random_weapon_drops": True, "random_goods_drops": True, "random_armor_drops": True,
@@ -268,7 +268,7 @@ PRESETS: tuple[dict, ...] = (
             "random_prices": True, "price_mode": "shuffle", "sell_prices": True, "sell_equipment": True,
             "somber_infusable": True, "random_movesets": True, "moveset_mode": "affinity",
             "random_default_ash": True, "random_stats": True, "stat_groups": "", "stamina_rate": "0,2.0",
-            "random_enemy_drops": True, "enemy_drop_rolls": 3, "enemy_drop_chance": 50,
+            "random_enemy_drops": True, "enemy_drop_rolls": 4, "enemy_drop_chance": 50,
             "enemy_drop_kinds": "", "random_loot_levels": True, "loot_rarity": "common",
             "loot_boss_bonus": "better", "unique_drops": True, "material_drops": True,
             "random_runes": True, "rune_mode": "shuffle", "random_enemy_hp": True,
@@ -285,7 +285,7 @@ PRESETS: tuple[dict, ...] = (
     {
         "key": "texture-vanilla-ish",
         "label": "Vanilla-ish loot texture",
-        "tip": "Enemies drop with a thin random texture on top of the normal luck: 3 rolls per enemy at 10%, "
+        "tip": "Enemies keep a thin random texture: 3 rolls per enemy, the first guaranteed and the other two at 10%, "
                "and a rare unique occasionally comes along with the ordinary loot. Safe and familiar.",
         "values": {
             "random_enemy_drops": True, "enemy_drop_rolls": 3, "enemy_drop_chance": 10,

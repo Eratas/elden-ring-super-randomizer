@@ -56,9 +56,9 @@ HERE = Path(__file__).resolve().parent.parent
 CONFIG = ((Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else HERE) / "settings.json")
 RECENT_MAX = 8
 MIN_SIZE = (860, 540)
-DEFAULT_OPEN = {"files": True, "goods": True, "spells": False, "prices": False, "weapons": False,
-                "weapon_effects": False, "gems": False, "gear": False, "drops": False, "world": False,
-                "advanced": False}
+DEFAULT_OPEN = {"files": True, "loot": True, "lootdrops": False, "prices": False, "drops": False,
+                "weapons": False, "weapon_effects": False, "gems": False, "gear": False,
+                "goods": False, "spells": False, "world": False, "advanced": False}
 PATH_KEYS = ("input", "output", "oodle_dll", "archives")
 
 # The passes in the order randomize.py runs them.  phases.py is the single source both the engine and
@@ -66,16 +66,17 @@ PATH_KEYS = ("input", "output", "oodle_dll", "archives")
 PHASES = list(phases.PHASES)
 SECTION_TIPS = {
     "files": "Where the input is, where the output goes, and how the file is compressed.",
-    "goods": "What a consumable does, and how long a buff lasts. The oldest part of the tool.",
-    "spells": "What a sorcery or incantation does, and what it costs.",
+    "loot": "How good the weapons you find are: their upgrade levels and drop curves.",
+    "lootdrops": "Where the loot is found: which enemy, chest or shop gets which item.",
     "prices": "What shops charge and what they pay you.",
+    "drops": "What enemies drop, what they are worth, and how much health they have.",
     "weapons": "Affinities, movesets, default skills and stat rolls, for every weapon row.",
-    "weapon_effects": "The four switches on weapons' effects: what they do when they hit, what they "
-                      "grant while held, the statuses they inflict on hit, and random effects on "
-                      "loot weapons.",
+    "weapon_effects": "Chaotic Weapon Effects: the on-hit bundles, the held-effect bundles, the "
+                      "statuses a weapon really causes, and whether the chaos applies to loot only.",
     "gems": "What an Ash of War does when it is mounted: its skill and its on-hit effects.",
     "gear": "Armour pieces and talismans. Whole columns / rows are shuffled, never invented.",
-    "drops": "What enemies drop, what they are worth, and how much health they have.",
+    "goods": "What a consumable does, and how long a buff lasts. The oldest part of the tool.",
+    "spells": "What a sorcery or incantation does, and what it costs.",
     "world": "Where the two flasks are, and what you start with.",
     "advanced": "Settings that only matter for unusual setups.",
 }

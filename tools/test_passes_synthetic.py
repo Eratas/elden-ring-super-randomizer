@@ -171,6 +171,11 @@ def build() -> erreg.Regulation:
     reg._params["BehaviorParam_PC"] = B
 
     S = _mkparam(_loadpd("SpEffect"))
+    for rid, field in ((6400, "bloodAttackPower"), (6401, "bloodAttackPower"),
+                       (6500, "poizonAttackPower"), (6501, "poizonAttackPower"),
+                       (6600, "freezeAttackPower"), (6650, "sleepAttackPower")):
+        rr = _addrow(S, rid)
+        S.set(rr, field, 50)
     _finalize(S)
     reg._params["SpEffectParam"] = S
 
@@ -279,22 +284,30 @@ def run() -> None:
     check(len(weapons.Weapons(build()).random_stats(random.Random(1))) > 1,
           "--random-stats: empty report")
 
-    # --- loot weapons get true-random on-hit effects ---
+    # --- loot weapons get real on-hit statuses from the input's own SpEffect rows ---
     reg = build()
     wp = weapons.Weapons(reg)
     W = reg._params["EquipParamWeapon"]
     check(2000000 in wp.loot_bases(), "--random-loot-effects: no loot weapon in the synthetic lots")
+    check(bool(wp.status_pools()["flat"]), "--random-loot-effects: no validated status ids in the input")
     out = wp.random_loot_effects(random.Random(1))
     check(len(out) > 1, "--random-loot-effects: empty report")
     for b in wp.loot_bases():
         for off in wp.variants(b):
             row = W.by_id[b + off * 100]
+            fams = []
             for f in weapons.ONHIT_FIELDS:
-                check(W.get(row, f) in weapons.RANDOM_EFFECT_POOL,
-                      f"--random-loot-effects: {b}+{off * 100} slot {f} not a drawn status id")
-    # the draw uses only flat status ids of the game (no series tied to reinforcement slots)
-    check(set(weapons.RANDOM_EFFECT_POOL) == set().union(*weapons.STATUS_FLAT.values()),
-          "--random-loot-effects: pool differs from the flat status pools")
+                eid = W.get(row, f)
+                check(eid == -1 or eid in wp._sp.by_id,
+                      f"--random-loot-effects: {b}+{off * 100} slot {f} is not in SpEffectParam")
+                if eid != -1:
+                    fam = wp.status_family(eid)
+                    if fam:
+                        check(wp.status_value(eid) > 0,
+                              f"--random-loot-effects: {b}+{off * 100} slot {f} has no build-up value")
+                        fams.append(fam)
+            check(len(fams) == len(set(fams)),
+                  f"--random-loot-effects: {b}+{off * 100} repeats a status family: {fams}")
 
     # --- enemy drops change the lot rows; HP pass changes NpcParam.hp ---
     reg = build()

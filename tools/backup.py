@@ -61,6 +61,21 @@ def collect_files(input_file: Path, archives: list[Path]) -> list[Path]:
     return [Path(input_file)] + _archive_files(archives)
 
 
+def detected_archives(input_file: Path, given=()) -> list[Path]:
+    """The msg archives a backup should cover, from the option or from the input mod's own folder.
+
+    The GUI passes the patched archives through --weapon-names, not through the hidden --archives
+    option, so relying on --archives alone backed up no text at all.  When no archive is given, the
+    input mod's ``msg/<language>/item_dlc02.msgbnd.dcx`` files are exactly the ones the game loads
+    next to that regulation.bin, so they are the ones to copy before replacing them.
+    """
+    files = _archive_files([Path(a) for a in given])
+    if files:
+        return files
+    msg = Path(input_file).resolve().parent / "msg"
+    return sorted(msg.glob(f"*/{ARCHIVE_NAME}")) if msg.is_dir() else []
+
+
 def program_dir() -> Path:
     """The folder the program runs from: next to the frozen exe, or the repo root from source."""
     if getattr(sys, "frozen", False):

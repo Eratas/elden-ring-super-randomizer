@@ -41,6 +41,11 @@ UNIQUE_CHANCE = 0.03                 # a drop is a unique weapon instead of the 
 MATERIAL_CHANCE = 0.08               # ... or an upgrade stone, with a small stack
 CATEGORY_GOODS, CATEGORY_WEAPON = 1, 2
 POOL_CATEGORIES = (1, 2, 3, 4, 5)                     # goods, weapon, armor, talisman, ash of war
+# A drop should look like loot, not like a uniform draw over every row in the game: consumables stay
+# common, equipment is the reason to kill something, ashes are the rare find.
+CATEGORY_WEIGHT = {1: 40, 2: 25, 3: 20, 4: 10, 5: 5}
+DEFAULT_ROLLS = 4
+DEFAULT_CHANCE = 50
 # EquipParamGoods.goodsType values that never drop: 1 key item, 9 Flask of Wondrous Physick, 12 info item
 # (letters, notes), 13 (unused), 15 Great Rune.  Flasks of Crimson / Cerulean Tears are goodsType 0 with a suppleType.
 KEEP_GOODS_TYPES = {1, 9, 12, 13, 15}
@@ -185,7 +190,7 @@ class EnemyDrops:
             n, rid = n + 1, rid + 1
         return max(0, n - 1)
 
-    def randomize(self, rng: random.Random, rolls: int | None = None, chance: int = 10,
+    def randomize(self, rng: random.Random, rolls: int | None = DEFAULT_ROLLS, chance: int = DEFAULT_CHANCE,
                   kinds: set[int] | None = None, unique_drops: bool = False,
                   material_drops: bool = False, unique_rate: float = UNIQUE_CHANCE) -> list[str]:
         """rolls=None: the first row of every lot drops for certain, the rows after it keep their chance, every row's
@@ -201,8 +206,12 @@ class EnemyDrops:
         if unique_drops or material_drops:
             self.build_rare_pools()
         by_cat = {c: sum(1 for cat, _, _ in pool if cat == c) for c in POOL_CATEGORIES}
-        mode = (f"every lot gets {rolls} rolls at {chance}% each: 0 to {rolls} items per kill, {rolls * chance / 100:g} on average "
-                "(one-time drops and rows with a key item stay and do not count)" if rolls else
+        cat_items = {c: [entry for entry in pool if entry[0] == c] for c in POOL_CATEGORIES}
+        cats = [c for c in POOL_CATEGORIES if cat_items[c]]
+        cat_weights = [CATEGORY_WEIGHT[c] for c in cats]
+        mode = (f"every lot gets {rolls} rolls, the first guaranteed and the rest at {chance}% each: 1 to {rolls} items "
+                f"per kill, {1 + (rolls - 1) * chance / 100:g} on average (one-time drops and rows with a key item stay "
+                "and do not count)" if rolls else
                 "the first row of every lot always drops, the rows after it keep their chance, one-time drops (rows with a "
                 "flag) and rows with a key item stay")
         lines = [f"# enemy drops: lots={len(lots)} (ItemLotParam_enemy rows NpcParam.itemLotId_enemy points at, with the "
@@ -219,14 +228,32 @@ class EnemyDrops:
         n = {"rows": 0, "certain": 0, "kept": 0, "added": 0, "emptied": 0, "short": 0}
         old: dict[int, str] = {}
 
-        def draw() -> tuple[int, int, int]:
+        def draw(used: set[tuple[int, int]] | None = None) -> tuple[int, int, int]:
             # rare overrides: a unique weapon or an upgrade stone now and then, instead of the common draw
             if material_drops and self.materials and rng.random() < MATERIAL_CHANCE:
-                return rng.choice(self.materials), 1, rng.choice((1, 2, 3, 4, 5))
+                iid = rng.choice([i for i in self.materials if (1, i) not in (used or ())] or self.materials)
+                if used is not None:
+                    used.add((1, iid))
+                return iid, 1, rng.choice((1, 2, 3, 4, 5))
             if unique_drops and self.uniques and rng.random() < unique_rate:
-                return rng.choice(self.uniques), 2, 1
-            cat, iid, nums = rng.choice(pool)
-            return iid, cat, rng.choice(nums)
+                iid = rng.choice([i for i in self.uniques if (2, i) not in (used or ())] or self.uniques)
+                if used is not None:
+                    used.add((2, iid))
+                return iid, 2, 1
+            for _ in range(25):
+                cat = rng.choices(cats, cat_weights)[0]
+                entries = cat_items[cat]
+                fresh = [e for e in entries if (e[0], e[1]) not in (used or ())]
+                entry = rng.choice(fresh or entries)
+                key = (entry[0], entry[1])
+                if used is None or key not in used or not fresh:
+                    if used is not None:
+                        used.add(key)
+                    return entry[1], entry[0], rng.choice(entry[2])
+            entry = rng.choice(pool)
+            if used is not None:
+                used.add((entry[0], entry[1]))
+            return entry[1], entry[0], rng.choice(entry[2])
 
         def set_slot(r, i: int, iid: int, cat: int, weight: int, num: int) -> None:
             for f, v in (("lotItemId", iid), ("lotItemCategory", cat), ("lotItemBasePoint", weight), ("lotItemNum", num),
@@ -237,30 +264,30 @@ class EnemyDrops:
             for i in range(1, SLOTS + 1):
                 set_slot(r, i, 0, 0, 0, 0)
 
-        def randomize_items(r) -> None:
+        def randomize_items(r, used: set[tuple[int, int]]) -> None:
             for i, (iid, _cat, w, _) in enumerate(self.slots(r), 1):
                 if w > 0 and iid > 0:
-                    new_iid, new_cat, num = draw()
+                    new_iid, new_cat, num = draw(used)
                     L.set(r, f"lotItemId{i:02d}", new_iid)
                     L.set(r, f"lotItemCategory{i:02d}", new_cat)
                     L.set(r, f"lotItemNum{i:02d}", num)
 
-        def make_certain(r) -> None:
+        def make_certain(r, used: set[tuple[int, int]]) -> None:
             slots = self.slots(r)
             for i, (iid, _, w, _) in enumerate(slots, 1):
                 if w > 0 and iid <= 0:
                     L.set(r, f"lotItemBasePoint{i:02d}", 0)
             if not any(w > 0 and iid > 0 for iid, _, w, _ in slots):
                 clear(r)
-                iid, cat, num = draw()
+                iid, cat, num = draw(used)
                 set_slot(r, 1, iid, cat, CERTAIN, num)
 
-        def set_roll(r) -> None:
-            """One random item at `chance` percent, nothing otherwise."""
+        def set_roll(r, used: set[tuple[int, int]], certain: bool = False) -> None:
+            """One random item at `chance` percent (or for certain), nothing otherwise."""
             clear(r)
-            iid, cat, num = draw()
-            set_slot(r, 1, iid, cat, chance * 10, num)
-            if chance < 100:
+            iid, cat, num = draw(used)
+            set_slot(r, 1, iid, cat, CERTAIN if certain else chance * 10, num)
+            if not certain and chance < 100:
                 set_slot(r, 2, 0, 0, CERTAIN - chance * 10, 0)
 
         def empty(r) -> None:
@@ -285,6 +312,7 @@ class EnemyDrops:
 
         for k in lots:
             run = self.run(k)
+            used: set[tuple[int, int]] = set()
             for r in run:
                 if r.id not in old:
                     old[r.id] = self.describe(r)
@@ -303,7 +331,7 @@ class EnemyDrops:
                         continue
                     done.add(r.id)
                     if need > 0:
-                        set_roll(r)
+                        set_roll(r, used, certain=(need == rolls))
                         n["rows"] += 1
                         need -= 1
                         lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  {self.describe(r)}")
@@ -318,7 +346,7 @@ class EnemyDrops:
                         n["short"] += 1
                         lines.append(f"{'':>10}  lot {k}: only {rolls - need} of {rolls} rolls, no free id before the next lot")
                         break
-                    set_roll(row)
+                    set_roll(row, used, certain=(need == rolls))
                     done.add(row.id)
                     n["added"] += 1
                     need -= 1
@@ -337,7 +365,7 @@ class EnemyDrops:
                             n["short"] += 1
                             lines.append(f"{'':>10}  lot {k}: no free id before the next lot, no guaranteed row added")
                         else:
-                            iid, cat, num = draw()
+                            iid, cat, num = draw(used)
                             set_slot(row, 1, iid, cat, CERTAIN, num)
                             done.add(row.id)
                             n["added"] += 1
@@ -346,9 +374,9 @@ class EnemyDrops:
                 if r.id not in done:
                     done.add(r.id)
                     n["rows"] += 1
-                    randomize_items(r)
+                    randomize_items(r, used)
                 if j == 0:
-                    make_certain(r)
+                    make_certain(r, used)
                     n["certain"] += 1
                 lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  {self.describe(r)}")
         summary = (f"# rows set to a roll={n['rows']}, rows emptied={n['emptied']}, rows appended={n['added']}, rows left alone={n['kept']}"

@@ -500,6 +500,7 @@ class Param:
 class Regulation:
     def __init__(self, path: str | Path) -> None:
         raw = Path(path).read_bytes()
+        self.source_size = len(raw)
         self.iv = raw[:16]
         dcx = read_dcx(decrypt_regulation(raw))
         self.level = dcx.level
@@ -540,21 +541,28 @@ class Regulation:
         window_log: zstd window (16 is the only value the game accepts; 22 crashed it).
         Returns the file size; raises ValueError if the result is still too large."""
         bnd = self.bnd_bytes()
+        limit = self.output_limit(max_size)
         out = None
         levels = sorted({self.level, 19, 22}) if codec == CODEC_ZSTD else [9]
         for lvl in levels:
             if codec == CODEC_ZSTD and lvl < self.level:
                 continue
             out = encrypt_regulation(write_dcx(Dcx(lvl, bnd, codec), window_log, level), self.iv)
-            if len(out) <= max_size:
+            if len(out) <= limit:
                 break
-        if len(out) > max_size:
+        if len(out) > limit:
             raise ValueError(f"regulation.bin would be {len(out)} bytes, over the game's limit of "
-                             f"{max_size} (0x{max_size:X}); the game would report corrupted save data. "
+                             f"{limit} (0x{limit:X}); the game would report corrupted save data. "
                              "Randomize less (e.g. fewer --stat-groups, no --somber-infusable)"
                              + (" or use --compression kraken." if codec == CODEC_ZSTD else "."))
         Path(path).write_bytes(out)
         return len(out)
+
+    def output_limit(self, max_size: int = REGULATION_MAX_SIZE) -> int:
+        """The effective size ceiling: an input that already loads may not exceed its own size."""
+        if max_size == REGULATION_MAX_SIZE and getattr(self, "source_size", 0) > max_size:
+            return self.source_size
+        return max_size
 
 
 def load_names(path: str | Path) -> dict[int, str]:

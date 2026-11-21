@@ -29,6 +29,12 @@ HERE = Path(__file__).resolve().parent
 AFFINITIES = range(1, 13)                         # id = base + affinity * 100 (+ upgrade level)
 FMG_NAME, FMG_CAPTION = "WeaponName", "WeaponCaption"
 ERROR_MARK = "[ERROR]"                            # cut weapons are named "[ERROR]Heavy ...": not a pattern to learn from
+# English fallback, in the game's own order.  A modded archive that does not name one weapon at all 13
+# affinities used to abort the whole run; an English affinity plus the Paramdex name is readable in
+# game, while "?WeaponName?" is not.
+FALLBACK_AFFIX = {1: ("Heavy ", ""), 2: ("Keen ", ""), 3: ("Quality ", ""), 4: ("Fire ", ""),
+                  5: ("Flame Art ", ""), 6: ("Lightning ", ""), 7: ("Sacred ", ""), 8: ("Magic ", ""),
+                  9: ("Cold ", ""), 10: ("Poison ", ""), 11: ("Blood ", ""), 12: ("Occult ", "")}
 
 
 def shipped_archives() -> list[Path]:
@@ -53,7 +59,8 @@ def read_fmgs(path: Path) -> dict[str, dict[int, str]]:
 
 def affixes(names: dict[int, str]) -> dict[int, tuple[str, str]]:
     """affinity -> (prefix, suffix) that turns a base name into the affinity name in this language, learned from the
-       weapons the archive names at all 13 ids (the most common pattern per affinity)."""
+       weapons the archive names at all 13 ids (the most common pattern per affinity).  Missing patterns are left
+       out: the caller fills them from FALLBACK_AFFIX instead of stopping the run."""
     bases = [b for b in names if b % 10000 == 0 and ERROR_MARK not in names[b]
              and all(b + a * 100 in names for a in AFFINITIES)]
     out: dict[int, tuple[str, str]] = {}
@@ -64,15 +71,15 @@ def affixes(names: dict[int, str]) -> dict[int, tuple[str, str]]:
             k = var.find(base)
             if k >= 0 and var != base and ERROR_MARK not in var:
                 pats[(var[:k], var[k + len(base):])] += 1
-        if not pats:
-            raise SystemExit(f"cannot learn the affinity {a} name pattern: no weapon is named at all 13 affinities in the archive")
-        out[a] = pats.most_common(1)[0][0]
+        if pats:
+            out[a] = pats.most_common(1)[0][0]
     return out
 
 
 class WeaponNames:
     def __init__(self, reg: erreg.Regulation, archives: list[str]) -> None:
         self.W = reg.param("EquipParamWeapon", erreg.load_paramdef(HERE / "paramdef" / "EquipParamWeapon.xml"))
+        self.base_names = erreg.load_names(HERE / "names" / "EquipParamWeapon.txt")
         self.archives = [Path(a) for a in archives]
         self.langs = [a.parent.name.lower() for a in self.archives]
         self.patches: list[tuple[Path, dict[str, dict[int, str]], dict[int, int]]] = []   # (archive, texts, anchor)
@@ -86,23 +93,26 @@ class WeaponNames:
            (where the new entry goes) and a one-line summary."""
         fm = read_fmgs(archive)
         names, caps = fm[FMG_NAME], fm[FMG_CAPTION]
-        affix = affixes(names)
+        learned = affixes(names)
+        affix = {a: learned.get(a, FALLBACK_AFFIX[a]) for a in AFFINITIES}
         new_names: dict[int, str] = {}
         new_caps: dict[int, str] = {}
         anchor: dict[int, int] = {}
         for rid in self.rows():
             b, a = rid - rid % 10000, rid % 10000 // 100
-            if rid in names or b not in names or a not in affix:
+            base = names.get(b) or self.base_names.get(b)
+            if rid in names or not base or a not in affix:
                 continue
             pre, suf = affix[a]
-            new_names[rid] = pre + names[b] + suf
+            new_names[rid] = pre + base + suf
             anchor[rid] = b
             if rid not in caps and b in caps:
                 new_caps[rid] = caps[b]
         example = next(iter(new_names.values()), "")
         detail = (f"{len(new_names)} affinity rows of {len(set(anchor.values()))} weapons get a name"
                   + (f" ({example!r}, ...)" if example else "") + f", {len(new_caps)} a description; affixes: "
-                  + ", ".join(f"{a}={pre!r}+name+{suf!r}" if suf else f"{a}={pre!r}+name" for a, (pre, suf) in affix.items()))
+                  + ", ".join(f"{a}={pre!r}+name+{suf!r}" if suf else f"{a}={pre!r}+name" for a, (pre, suf) in affix.items())
+                  + (f" (fallback for {sorted(set(AFFINITIES) - set(learned))})" if learned.keys() != affix.keys() else ""))
         return {FMG_NAME: new_names, FMG_CAPTION: new_caps}, anchor, detail
 
     def prepare(self) -> list[str]:

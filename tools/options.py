@@ -24,15 +24,16 @@ from tips import TIPS
 # unusual setups; it is collapsed by default.
 GROUPS = (
     ("files", "Files and output"),
-    ("goods", "Consumables and buffs"),
-    ("spells", "Spells"),
+    ("loot", "Loot and upgrade levels"),
+    ("lootdrops", "Where loot drops"),
     ("prices", "Prices and shops"),
+    ("drops", "Enemies and drops"),
     ("weapons", "Weapons"),
-    ("weapon_effects", "Weapon effects"),
+    ("weapon_effects", "Chaotic Weapon Effects"),
     ("gems", "Ashes of War"),
     ("gear", "Armour and talismans"),
-    ("drops", "Enemies, drops and loot"),
-    ("lootdrops", "Where loot drops"),
+    ("goods", "Consumables and buffs"),
+    ("spells", "Spells"),
     ("world", "Flasks and starting items"),
     ("advanced", "Advanced"),
 )
@@ -100,11 +101,21 @@ OPTIONS: tuple[Opt, ...] = (
            "to it, and an output named like the input would replace it."),
     _o("backup_replace", "--backup-replace", neg=("--no-backup-replace",), group="files", default=True,
        label="Backup and replace files",
-       tip="On by default. Before the run touches anything, your input regulation.bin and msg archives are "
-           "copied into a timestamped backup folder (backups/ next to the program), then the freshly "
-           "generated files replace them - so one click on Randomize both backs up and installs.\n\n"
-           "The randomized/ output folder is still written and keeps the reports. Turn it off to only "
-           "write the output folder and leave your files alone; revert any time with the Revert button."),
+       tip="On by default. This copies your input regulation.bin and the msg archives the run is about to "
+           "change into a timestamped backups/ folder next to the program, then overwrites those input files "
+           "with the newly generated ones. It is copy, then replace - not a dry run, and not a second output.\n\n"
+           "The randomized/ output folder is still written separately and keeps the reports. Turn this off to "
+           "leave your input files untouched; use the Revert button to put a backup back."),
+    _o("oodle_dll", "--oodle-dll", kind="path", default=None, group="files", metavar="PATH",
+       label="Oodle DLL",
+       tip="oo2core_6_win64.dll, used to write the game's own Kraken format. It ships with the game (in "
+           "Game\\ ), not with this tool. Without it the output is zstd and larger."),
+    _o("archives", kind="paths", default=(), group="files", metavar="FOLDER", cli=False,
+       label="Text archives folder",
+       tip="Optional. The msg folder (or msg\\<language> folders, ';' separated) whose item_dlc02.msgbnd.dcx "
+           "the weapon names are written into. Empty uses the copy shipped with the tool; pass the mod "
+           "folder of the Item and Enemy Randomizer or the Fog Gate Randomizer when you run on top of them, "
+           "so the names match the items that mod actually hands out."),
     _o("seed", "--seed", kind="int", default=None, group="files",
        label="Seed",
        tip="Fix the seed to reproduce a run exactly. Leave it empty for a fresh one; the seed that was used "
@@ -117,20 +128,9 @@ OPTIONS: tuple[Opt, ...] = (
            "limit. auto picks kraken when the DLL is found. Leave it on kraken unless you have no DLL."),
     _o("compression_level", "--compression-level", kind="enum", default="max", group="files",
        choices=("fast", "max"), label="Effort",
-       tip="max is the default and the safe one: Elden Ring Reforged's own regulation.bin is 3.03 MB, and "
-           "only maximum effort brings the rewritten file back under the game's 2.36 MB limit. It costs "
-           "one to four minutes and the window shows progress. fast is for quick experiments: seconds, "
-           "about 20% larger, and it refuses to write a file that would not fit."),
-    _o("oodle_dll", "--oodle-dll", kind="path", default=None, group="files", metavar="PATH",
-       label="Oodle DLL",
-       tip="oo2core_6_win64.dll, used to write the game's own Kraken format. It ships with the game (in "
-           "Game\\ ), not with this tool. Without it the output is zstd and larger."),
-    _o("archives", kind="paths", default=(), group="files", metavar="FOLDER", cli=False,
-       label="Text archives folder",
-       tip="Optional. The msg folder (or msg\\<language> folders, ';' separated) whose item_dlc02.msgbnd.dcx "
-           "the weapon names are written into. Empty uses the copy shipped with the tool; pass the mod "
-           "folder of the Item and Enemy Randomizer or the Fog Gate Randomizer when you run on top of them, "
-           "so the names match the items that mod actually hands out."),
+       tip="max is the default and gives the smallest file, with the most headroom under the size check; "
+           "it costs one to four minutes and the window shows progress. fast is for quick experiments: "
+           "seconds, about 20% larger, and the tool still refuses to write a file over the limit."),
     _o("repack", "--repack", group="files",
        label="Repack only (change nothing)",
        tip="Read the input and write it out again with no randomization at all. This repairs a "
@@ -147,10 +147,10 @@ OPTIONS: tuple[Opt, ...] = (
     _o("max_size", "--max-size", kind="int", default=None, group="advanced", advanced=True,
        metavar="BYTES",
        label="Output size limit",
-       tip="The game refuses a regulation.bin above 2,359,296 bytes (0x240000) and reports corrupted save "
-           "data, so that is the default and the tool stops rather than write a file that will not load. "
-           "Raise it only if you know your loader accepts more; Elden Ring Reforged itself ships 3.03 MB, "
-           "so some setups do load bigger files than the vanilla limit."),
+       tip="The vanilla save blob is 2,359,296 bytes (0x240000), so that is the default and the tool stops "
+           "rather than write a file that will not load. A larger input that already loads sets the ceiling "
+           "to its own size: Elden Ring Reforged ships 3.03 MB, so its output is allowed up to 3.03 MB. "
+           "Raise this only if you know your loader accepts more."),
 
     _o("simulate", "--simulate", kind="int", default=None, group="advanced", advanced=True,
        metavar="N", gui=False,
@@ -259,13 +259,13 @@ OPTIONS: tuple[Opt, ...] = (
            "mount Ashes of War. The rows this adds are named in the game's own text (Heavy Longsword and "
            "so on); without that patch the game shows ?WeaponName?."),
     _o("random_weapon_onhit_shuffle", "--random-weapon-onhit-shuffle", group="weapon_effects",
-       label="Shuffle on-hit effects"),
+       label="Shuffle on-hit bundles"),
     _o("random_weapon_holder_shuffle", "--random-weapon-holder-shuffle", group="weapon_effects",
-       label="Shuffle holder effects"),
+       label="Shuffle held-effect bundles"),
     _o("random_weapon_status_roll", "--random-weapon-status-roll", group="weapon_effects",
-       label="Roll statuses on hit"),
+       label="Roll chaotic statuses"),
     _o("random_loot_effects", "--random-loot-effects", group="weapon_effects",
-       label="Random effects on loot weapons"),
+       needs=("random_weapon_status_roll",), label="Loot weapons only"),
     _o("random_default_ash", "--random-default-ash", group="weapons",
        label="Random default skill and affinity",
        tip="Roll a random default skill for every weapon and affinity row, chosen so that it animates with "
@@ -302,7 +302,7 @@ OPTIONS: tuple[Opt, ...] = (
            "archive (item_dlc02.msgbnd.dcx) of each language you give. Off: those rows show ?WeaponName? "
            "in game. Done automatically when somber weapons are made infusable."),
     _o("no_weapon_names", "--no-weapon-names", group="weapons", advanced=True,
-       needs=("somber_infusable",), label="Do not patch weapon names",
+              label="Use placeholder names (no text patch)",
        tip="Make somber weapons infusable without touching any text archive. The added rows then appear as "
            "?WeaponName? in game."),
     _o("random_movesets", "--random-movesets", group="weapons",
@@ -362,6 +362,11 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Keeps every armor piece exactly as it is and only moves *where* it drops: the chest piece from "
            "one dungeon can end up on a soldier on the other side of the map. This is the loot shuffle the "
            "old version did, restricted to armor. One-time drops and key items are never moved."),
+    _o("armour_drop_sets", "--armor-drop-sets", group="lootdrops", needs=("random_armor_drops",),
+       label="Move armor sets as a set",
+       tip="Pieces that share a set name are moved together: set A's helm, chest, gauntlets and greaves are "
+           "replaced by set B's four pieces, so looting one piece tells you what the rest of that set is. "
+           "Turn it off and each piece moves on its own. It needs Move armor to random enemies."),
     _o("random_talisman_drops", "--random-talisman-drops", group="lootdrops",
        label="Move talismans to random enemies",
        tip="The same for talismans: every talisman keeps its name, effect and numbers, and only the place "
@@ -391,11 +396,6 @@ OPTIONS: tuple[Opt, ...] = (
        tip="Keeps every Ash of War exactly as it is and only moves where it drops, so any enemy can drop any "
            "ash. Enemy drop tables, map lots and the shops that sell ashes are included. It works with every "
            "other option."),
-    _o("armour_drop_sets", "--armor-drop-sets", group="lootdrops", needs=("random_armor_drops",),
-       label="Move armor sets as a set",
-       tip="Pieces that share a set name are moved together: set A's helm, chest, gauntlets and greaves are "
-           "replaced by set B's four pieces, so looting one piece tells you what the rest of that set is. "
-           "Turn it off and each piece moves on its own. It needs Move armor to random enemies."),
     _o("random_gem_skills", "--random-gem-skills", group="gems",
        label="Shuffle skills",
        tip="Gives every Ash of War another ash's skill (EquipParamGem.swordArtsParamId): Lion's Claw may "
@@ -432,51 +432,54 @@ OPTIONS: tuple[Opt, ...] = (
            "Liurnia and the Weeping Peninsula, which a fog gate run may not reach early."),
     _o("random_enemy_drops", "--random-enemy-drops", group="drops",
        label="Randomize enemy drops",
-       tip="Reroll every enemy's drop table. With the default 3 rolls at 10%, a kill drops 0 to 3 random "
-           "items and averages 0.3, so most kills drop nothing; set Rolls per enemy to 0 for one guaranteed "
-           "drop. Key-item rows and one-time drops are left alone."),
-    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=3, group="drops",
+       tip="Reroll every enemy's drop table. By default the first roll always drops and three more rolls "
+           "each have a 50% chance, so a kill gives 1 to 4 different items and averages 2.5: killing things "
+           "is worth it, and a single enemy can drop several things at once. Set Rolls per enemy to 0 for "
+           "the vanilla shape. Key-item rows and one-time drops are left alone."),
+    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=4, group="drops",
        needs=("random_enemy_drops",), metavar="N",
        label="Rolls per enemy",
-       tip="How many independent drop rolls each enemy gets. 3 by default; 0 keeps the vanilla shape (the "
-           "first row always drops and later rows keep their own chance). Each roll drops at the chance "
-           "below, so a kill drops 0 to N items, N x chance / 100 on average."),
-    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=10, group="drops",
+       tip="How many independent drop rolls each enemy gets. 4 by default and the first is always "
+           "successful, so every kill gives at least one item; 0 keeps the vanilla shape (the first row "
+           "always drops and later rows keep their own chance). Each later roll drops at the chance below. "
+           "A lot never repeats an item it already rolled."),
+    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=50, group="drops",
        needs=("random_enemy_drops",), metavar="P",
        label="Chance per roll (%)",
-       tip="How likely each drop roll is to drop something, in percent (1 to 100). 10 by default; with 3 "
-           "rolls that is 0.3 items per kill on average."),
+       tip="How likely each roll after the guaranteed first one is to drop something, in percent (1 to "
+           "100). 50 by default: with four rolls a kill averages 2.5 items. 100 makes every roll drop, so "
+           "a kill always gives exactly the number of rolls."),
     _o("enemy_drop_kinds", "--enemy-drop-kinds", kind="groups", default="", group="drops",
        needs=("random_enemy_drops",), items=("weapons", "armor", "talismans", "goods", "ashes"),
        label="What enemies can drop",
        tip="Which kinds of item a random enemy drop can be. Empty means all of them. Untick weapons and no "
            "random drop will be a weapon. Key-item rows and one-time drops are left alone whatever this "
            "says. It needs Randomize enemy drops."),
-    _o("random_loot_levels", "--random-loot-levels", group="drops",
+    _o("random_loot_levels", "--random-loot-levels", group="loot",
        label="Random upgrade levels on loot",
        tip="Gives the weapons in enemy drop tables, chests, boss rewards and shops a random upgrade level: "
            "0-25 for a normal weapon, 0-10 for a somber one, +0 for a unique weapon that cannot be "
            "reinforced. Without this every weapon in the game is +0, exactly as in vanilla. Combine it "
            "with several rolls per enemy and one kill can drop a different weapon at a different level."),
-    _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="drops",
+    _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="loot",
        choices=("even", "common", "legendary"), needs=("random_loot_levels",), label="Upgrade rarity",
        tip="How the upgrade level is drawn, so that a +25 stays an event. common (default): 55% of drops "
            "are +0..+3, 28% +4..+9, 12% +10..+15, 4% +16..+20 and 1% +21..+25. legendary: 70% +0..+2, "
            "20% +3..+8, 7% +9..+14, 2.5% +15..+20, 0.5% +21..+25. even: every level equally likely (the "
            "old behaviour). The same curve scales to a somber weapon's +10."),
-    _o("loot_boss_bonus", "--loot-boss-bonus", kind="enum", default="better", group="drops",
+    _o("loot_boss_bonus", "--loot-boss-bonus", kind="enum", default="better", group="loot",
        choices=("same", "better", "best"), needs=("random_loot_levels",),
        label="Bosses roll better",
        tip="Bosses roll their upgrade level from a better curve than ordinary enemies. same: every enemy "
            "uses the chosen curve. better: bosses use the next curve up (even to common, common to "
            "legendary). best: bosses always use the legendary curve. A boss is an enemy worth 5000 runes "
            "or more in the unmodified game."),
-    _o("loot_max_level", "--loot-max-level", kind="int", default=None, group="drops",
+    _o("loot_max_level", "--loot-max-level", kind="int", default=None, group="loot",
        needs=("random_loot_levels",), label="Max upgrade level",
        tip="Highest upgrade level a dropped weapon can roll.\n\n"
            "0 or empty means no cap: a weapon may reach its own ceiling (+25, or +10 for somber). "
            "Example: 10 keeps every drop at +10 or lower."),
-    _o("zone_loot_levels", "--zone-loot-levels", group="drops", needs=("random_loot_levels",),
+    _o("zone_loot_levels", "--zone-loot-levels", group="loot", needs=("random_loot_levels",),
        label="Zone-aware loot levels",
        tip="Scales weapon upgrade levels by the area, so an early chest is not a +25 weapon: Limgrave / "
            "Weeping Peninsula stay low, Liurnia / Caelid / Altus mid, Mountaintops / Haligtree / Farum "
@@ -1004,7 +1007,7 @@ def argv_from_values(values: dict) -> list[str]:
         # trip does not silently turn it back into the table default of 3 rolls.
         a += ["--enemy-drop-rolls", "0" if rolls in (None, "") else str(rolls)]
         if rolls not in (None, "", 0, "0"):
-            a += ["--enemy-drop-chance", str(values.get("enemy_drop_chance") or 10)]
+            a += ["--enemy-drop-chance", str(values.get("enemy_drop_chance") or 50)]
     if values.get("random_enemy_drops"):
         o = BY_KEY["enemy_drop_kinds"]
         have = _groups_value(values, "enemy_drop_kinds")

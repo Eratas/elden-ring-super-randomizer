@@ -15,10 +15,10 @@ ReinforceParamWeapon, so only affinity rows exist.
 4. random_stats():      every (weapon, affinity) row (melee, shields, bows, crossbows, staves,
    seals) gets random attack power per element, critical, poise and stamina damage, guard
    negation, attribute requirements, scaling and status build-ups.
-5. random_loot_effects(): every loot weapon (a weapon that appears in ItemLotParam_enemy or
-   ItemLotParam_map as a lot item) draws true-random on-hit statuses from the flat pools
-   (RANDOM_EFFECT_POOL); random_effects()/random_status_effects() are the granularities for
-   the on-hit slots and the statuses of every weapon.
+5. random_status_effects(): every weapon row draws 0-2 statuses from the input's own SpEffect
+   table, with the effect text; random_loot_effects() is the same draw limited to weapons that
+   appear in ItemLotParam_enemy / ItemLotParam_map.  random_effects() permutes whole on-hit or
+   held-effect bundles inside a weapon class.
 """
 from __future__ import annotations
 
@@ -138,6 +138,25 @@ def cap_total(req: dict, cap: int) -> dict:
     if tot <= cap:
         return req
     return {k: int(v * cap / tot) for k, v in req.items()}
+
+
+def _weighted_sample(rng: random.Random, items, weights, k: int) -> list:
+    """k distinct items, drawn without replacement in proportion to their weights."""
+    pool = [(item, max(0.0, float(weight))) for item, weight in zip(items, weights)]
+    out = []
+    for _ in range(min(k, len(pool))):
+        total = sum(w for _, w in pool) or 1.0
+        point = rng.random() * total
+        upto = 0.0
+        for i, (item, weight) in enumerate(pool):
+            upto += weight
+            if point < upto:
+                out.append(item)
+                pool.pop(i)
+                break
+        else:
+            out.append(pool.pop()[0])
+    return out
 CRIT_WEIGHTS = (35, 25, 15, 10, 8, 5, 2)
 PHYS_CURVES = (0, 1, 2, 7, 8)        # CalcCorrectGraph ids vanilla weapons use for physical scaling
 ELEM_CURVES = (0, 4)                 # ... for elemental scaling
@@ -160,7 +179,6 @@ STATUS_LABEL = {"blood": "bleed", "poizon": "poison", "disease": "rot", "freeze"
 # Flat statuses random_loot_effects draws into the on-hit slots of loot weapons: the statuses
 # every vanilla weapon carries, valid in any slot.  The level-growing series of STATUS_SERIES
 # sit in their reinforce-type slots and are deliberately not drawn.
-RANDOM_EFFECT_POOL = tuple(sorted({v for ids in STATUS_FLAT.values() for v in ids}))
 # crossbows / ballistas use reinforce types whose scaling rates are 0; to give them scaling they take
 # the regular (25 levels) or somber (10 levels) type with the same materials and level count
 CROSSBOW_REINFORCE = {3100: 0, 3500: 0, 3200: 2200, 3300: 2200, 3400: 2200}
@@ -202,6 +220,46 @@ class Weapons:
                 votes.setdefault(self.orig_type[b], {})[c] = votes.get(self.orig_type[b], {}).get(c, 0) + 1
         self.cat_of_type = {t: max(v, key=v.get) for t, v in votes.items()}
         self._animated_cache: dict[int, set[int]] = {}
+        self._profile = self._build_profile()
+        self._status: dict | None = None
+        self._offset_series: list[tuple[str, int, int]] | None = None
+        self._offset_map: dict[int, int] = {}
+        self._status_warned = False
+
+    def _build_profile(self) -> dict[int, list[float]]:
+        """Per-affinity scaling shares, learned from what the affinity adds over Standard.
+
+        Absolute coefficients hide the affinity: Elden Ring Reforged keeps the weapon's Strength and
+        Dexterity and *adds* 147 Intelligence to a Magic row, so summing whole rows made Magic look
+        Strength-first.  The difference from the same weapon's Standard row is the affinity's actual
+        identity (Heavy adds Strength, Keen adds Dexterity, Magic adds Intelligence, ...), and each
+        weapon contributes one equal vote, so a colossal does not drown out a dagger.  When a mod
+        only redistributes (vanilla) or adds nothing (Fire in some tables), the row's own shares are
+        the fallback.
+        """
+        raw = {a: [0.0] * len(STATS) for a in range(13)}
+        votes = dict.fromkeys(range(13), 0)
+        for b in self.bases():
+            if not self.named(b) or self.orig_type[b] not in INFUSABLE_TYPES or b not in self.W.by_id:
+                continue
+            std = [self.W.get(self.W.by_id[b], f"correct{st}") for st in STATS]
+            for a in self.variants(b):
+                row = self.W.by_id[b + a * 100]
+                cur = [self.W.get(row, f"correct{st}") for st in STATS]
+                if a:
+                    add = [max(0.0, cur[i] - std[i]) for i in range(len(STATS))]
+                else:
+                    add = []
+                if not any(add):
+                    add = cur
+                total = sum(add)
+                if total <= 0:
+                    continue
+                for i in range(len(STATS)):
+                    raw[a][i] += add[i] / total
+                votes[a] += 1
+        return {a: ([v / votes[a] for v in vals] if votes[a] else [0.0] * len(STATS))
+                for a, vals in raw.items()}
 
     def animated(self, cat: int) -> set[int]:
         """swordArts ids of ashes whose animations exist in animation category `cat`
@@ -226,7 +284,8 @@ class Weapons:
     def name(self, rid: int) -> str:
         b, a = base_id(rid), affinity(rid)
         n = self.names.get(b, f"#{b}")
-        return n if a == 0 else f"{AFFINITY_NAMES[a]} {n}"
+        # a DLC / cut row can carry an affinity outside 0-12; a report must never die on it
+        return n if a == 0 else f"{AFFINITY_NAMES.get(a, f'#{a}')} {n}"
 
     # --- 1. somber weapons: add affinity rows ------------------------------------------
     def somber_infusable(self) -> list[str]:
@@ -314,21 +373,180 @@ class Weapons:
             s(new, f, v)
 
     def status_family(self, sp_id: int) -> str | None:
-        """'blood', 'poizon', 'freeze', ... for a status build-up SpEffect, else None."""
+        """'blood', 'poizon', 'freeze', ... for a status build-up SpEffect, else None.
+
+        Only the six status families a weapon can inflict count.  A buff SpEffect also carries an
+        ``*AttackPower`` field (physics / magic), and treating that as a status was how a damage buff
+        could be moved into an on-hit slot.
+        """
         if not hasattr(self, "_sp"):
-            self._sp = self.reg.param("SpEffectParam", erreg.load_paramdef(D / "SpEffect.xml"))
-            self._sp_fields = [f.name for f in self._sp.pd.fields if f.name.endswith("AttackPower")]
+            try:
+                self._sp = self.reg.param("SpEffectParam", erreg.load_paramdef(D / "SpEffect.xml"))
+                self._sp_fields = [f.name for f in self._sp.pd.fields if f.name.endswith("AttackPower")]
+            except ValueError:                 # a synthetic / cut table without SpEffect rows
+                self._sp = None
+                self._sp_fields = []
             self._fam_cache = {}
+        if self._sp is None:
+            return None
         if sp_id not in self._fam_cache:
             r = self._sp.by_id.get(sp_id)
             fam = None
             if r is not None:
                 for f in self._sp_fields:
-                    if self._sp.get(r, f) > 0:
+                    if self._sp.get(r, f) > 0 and f[:-len("AttackPower")] in STATUS_LABEL:
                         fam = f[: -len("AttackPower")]
                         break
             self._fam_cache[sp_id] = fam
         return self._fam_cache[sp_id]
+
+    def status_value(self, sp_id: int) -> int:
+        """The build-up strength of a status SpEffect row, 0 when the row is missing or empty."""
+        if self.status_family(sp_id) is None:
+            return 0
+        r = self._sp.by_id[sp_id]
+        return max((self._sp.get(r, f) for f in self._sp_fields
+                    if f[:-len("AttackPower")] in STATUS_LABEL), default=0)
+
+    def _reinforce(self) -> list[tuple[str, int, int]]:
+        """(family, base SpEffect id, slot index) read from ReinforceParamWeapon, plus the slot map.
+
+        The game adds the upgrade level to the id in that slot, so only the base id may ever be
+        written there: writing 105100 and then upgrading to +2 would ask for 105300.
+        """
+        if self._offset_series is not None:
+            return self._offset_series
+        self._offset_series = []
+        try:
+            R = self.reg.param("ReinforceParamWeapon",
+                              erreg.load_paramdef(D / "ReinforceParamWeapon.xml"))
+        except ValueError:
+            return self._offset_series
+        for r in R.rows:
+            base = r.id - r.id % 100
+            for i, f in enumerate(("spEffectId1", "spEffectId2", "spEffectId3")):
+                v = R.get(r, f)
+                if not v:
+                    continue
+                self._offset_map.setdefault(base, i)
+                fam = self.status_family(v)
+                if fam:
+                    self._offset_series.append((fam, v, i))
+        self._offset_series = list(dict.fromkeys(self._offset_series))
+        return self._offset_series
+
+    def offset_slot(self, rt: int) -> int | None:
+        """The effect slot a reinforce type adds the upgrade level to, or None."""
+        self._reinforce()
+        return self._offset_map.get(rt - rt % 100) if rt else None
+
+    def status_pools(self) -> dict:
+        """Status ids that actually exist in this regulation, plus the reinforce offsets.
+
+        The hard-coded vanilla ids are only a starting point: Elden Ring Reforged renumbers
+        SpEffect rows, and a status id that is valid in vanilla can be missing there.  A missing id
+        is exactly what produced the ``Poison (0)`` passive in game, so every id is checked against
+        the input and the ids its own weapons already use are always accepted.
+        """
+        if self._status is not None:
+            return self._status
+        flat: dict[str, set[int]] = {fam: set() for fam in STATUS_LABEL}
+        series: dict[str, int] = {}
+        for fam, ids in STATUS_FLAT.items():
+            flat[fam].update(i for i in ids if self.status_value(i) > 0)
+        for b in self.bases():
+            if not self.named(b):
+                continue
+            for a in self.variants(b):
+                row = self.W.by_id[b + a * 100]
+                for f in ONHIT_FIELDS:
+                    eid = self.W.get(row, f)
+                    fam = self.status_family(eid) if eid != -1 else None
+                    if fam and self.status_value(eid) > 0:
+                        flat[fam].add(eid)
+        for fam, base, _slot in self._reinforce():
+            if self.status_value(base) > 0:
+                series.setdefault(fam, base)
+        # a series base is also a valid flat id; keep it out of the flat pool so a slot with an
+        # upgrade offset never receives an id the game would add the level to
+        for fam, base in series.items():
+            flat[fam].discard(base)
+        self._status = {
+            "flat": {f: tuple(sorted(ids)) for f, ids in flat.items() if ids},
+            "series": series,
+            "msg": dict(STATUS_MSG),
+        }
+        return self._status
+
+    def _profile_for(self, row, vanilla_corr: list[float]) -> list[float]:
+        """The scaling share to use for one row: its affinity's profile, or its own for Standard."""
+        a = affinity(row.id)
+        prof = list(self._profile.get(a, [0.0] * len(STATS)))
+        if a == 0 or not any(prof):
+            prof = [float(v) for v in vanilla_corr]
+        if not any(prof):
+            prof = [1.0] * len(STATS)
+        total = sum(prof)
+        return [v / total for v in prof]
+
+    def _assign_statuses(self, row, rng: random.Random) -> list[str]:
+        """Give a weapon row 0-2 real statuses, with the matching passive text.
+
+        Only ids present in the input are drawn (no more ``(0)`` build-ups), no family is repeated,
+        a real non-status on-hit effect is never overwritten, and a reinforce offset slot receives
+        only the base id of a growing series.  Returns the families written.
+        """
+        g, s = self.W.get, self.W.set
+        pools = self.status_pools()
+        flat = pools["flat"]
+        if not flat:
+            if not self._status_warned:
+                self._status_warned = True
+            return []
+        eff = [g(row, f) for f in ONHIT_FIELDS]
+        msg = [g(row, f) for f in MSG_SLOTS]
+        for i, e in enumerate(eff):
+            if e != -1 and self.status_family(e):
+                eff[i] = -1
+        protected = {i for i, e in enumerate(eff) if e != -1 and e in self._sp.by_id}
+        offset_slot = self.offset_slot(g(row, "reinforceTypeId"))
+        n = rng.choices((0, 1, 2), (25, 55, 20))[0]
+        free = [i for i, e in enumerate(eff)
+                if e == -1 or (i not in protected and e not in self._sp.by_id)]
+        for i in free:              # a dead id (a placeholder from a modded table) is not a status
+            eff[i] = -1
+        chosen: list[tuple[int, str, int]] = []       # (slot, family, id)
+        series = {fam: base for fam, base in pools["series"].items() if fam in flat}
+        if offset_slot is not None and offset_slot in free and series and n:
+            fam = rng.choice(sorted(series))
+            chosen.append((offset_slot, fam, series[fam]))
+            n -= 1
+        if offset_slot is not None and offset_slot in free:
+            # the game adds the upgrade level to whatever sits in this slot, so a flat status
+            # would silently become a different (usually missing) id as the weapon is upgraded
+            free.remove(offset_slot)
+        fams = [f for f in sorted(flat) if f not in {c[1] for c in chosen}]
+        rng.shuffle(fams)
+        for fam in fams[:max(0, n)]:
+            if not free:
+                break
+            slot = free.pop(0)
+            chosen.append((slot, fam, rng.choice(flat[fam])))
+        for slot, _fam, eid in chosen:
+            eff[slot] = eid
+        # messages are an unordered list of effect texts: drop the status ones, add one per family
+        status_msgs = set(STATUS_MSG.values())
+        out_msg = [m for m in msg if m != -1 and m not in status_msgs]
+        for _slot, fam, _eid in chosen:
+            m = pools["msg"].get(fam, -1)
+            if m != -1 and m not in out_msg:
+                out_msg.append(m)
+        out_msg = (out_msg + [-1, -1, -1])[:3]
+        for f, v in zip(ONHIT_FIELDS, eff):
+            s(row, f, v)
+        for f, v in zip(MSG_SLOTS, out_msg):
+            s(row, f, v)
+        return [fam for _slot, fam, _eid in chosen]
 
     # --- 2. movesets ------------------------------------------------------------------
     def random_movesets(self, rng: random.Random, mode: str = "affinity", variety: int = 3,
@@ -787,61 +1005,107 @@ class Weapons:
             return "bow"
         return "catalyst"
 
-    def random_effects(self, rng: random.Random, fields=WEAPON_EFFECT_FIELDS) -> list[str]:
-        """Shuffle the given on-hit / holder property fields among weapons of the same class."""
+    def random_effects(self, rng: random.Random, fields=ONHIT_FIELDS) -> list[str]:
+        """Permute the given on-hit / holder bundle among the rows of the same weapon class.
+
+        The unit is a row, not a weapon: a Blood Dagger's bleed bundle and a plain Dagger's empty
+        bundle are different, and collapsing every affinity onto the base row's bundle erased the
+        difference the game shows.  An on-hit bundle carries its effect-text ids with it; holder
+        bundles are only exchanged between rows that already have one, so a weapon never gains an
+        always-on effect it was not designed to hold.
+        """
         fields = tuple(fields)
+        onhit = fields == ONHIT_FIELDS
+        bundle = fields + (MSG_SLOTS if onhit else ())
         W, g, s = self.W, self.W.get, self.W.set
-        groups: dict[str, list[int]] = {}
-        for b in self.bases():
-            if self.named(b):
-                groups.setdefault(self.orig_type[b], []).append(b)
+        by_class: dict[int, list] = {}
+        for r in W.rows:
+            b = base_id(r.id)
+            if b not in self.orig_type or not self.named(b) or r.id % 100:
+                continue                       # named rows, affinity level 0 only
+            if not onhit and all(g(r, f) == -1 for f in fields):
+                continue                       # nothing to exchange: leave the weapon's own state
+            by_class.setdefault(self.orig_type[b], []).append(r)
+        groups = {k: v for k, v in by_class.items() if len(v) > 1}
         total = sum(len(v) for v in groups.values())
         if total < 2:
-            return ["# weapon effects: fewer than two weapons, nothing changed"]
-        lines = [f"# weapon effects: {total} weapons, {len(fields)} fields shuffled inside "
-                 f"each class ({', '.join(f'{k} {len(v)}' for k, v in sorted(groups.items()))})",
-                 "# weapon  <-  effects of"]
+            return ["# weapon effects: fewer than two rows of a class carry one, nothing changed"]
+        lines = [f"# weapon effects: {total} rows in {len(groups)} classes, {len(fields)} fields shuffled "
+                 f"inside each class" + (" (+ effect text ids)" if onhit else ""),
+                 "# weapon  <-  bundle of"]
+        shown = 0
         for cls in sorted(groups):
-            bases = groups[cls]
-            old = {b: tuple(g(W.by_id[b], f) for f in fields) for b in bases}
-            donors = bases[:]
+            rows = groups[cls]
+            old = {r.id: tuple(g(r, f) for f in bundle) for r in rows}
+            if onhit:
+                self.status_pools()
+                if self._sp is not None:
+                    clean = {}
+                    for rid, vals in old.items():
+                        eff = [e if e == -1 or e in self._sp.by_id else -1 for e in vals[:len(fields)]]
+                        msg = list(vals[len(fields):])
+                        clean[rid] = tuple(eff + (msg if any(e != -1 for e in eff) else [-1] * len(msg)))
+                    old = clean
+            donors = rows[:]
             rng.shuffle(donors)
-            for b, donor in zip(bases, donors):
-                for offset in self.variants(b):
-                    row = W.by_id[b + offset * 100]
-                    for f, value in zip(fields, old[donor]):
-                        s(row, f, value)
-                lines.append(f"{self.names.get(b, f'weapon {b}'):<44} <-  {self.names.get(donor, f'weapon {donor}')}")
+            for r, donor in zip(rows, donors):
+                for f, v in zip(bundle, old[donor.id]):
+                    s(r, f, v)
+                if shown < 12:
+                    lines.append(f"{self.name(r.id):<48} <-  {self.name(donor.id)}")
+                    shown += 1
         return lines
 
-    def random_status_effects(self, rng: random.Random) -> list[str]:
-        """True-random on-hit statuses: every weapon slot that already carries a status id is redrawn with
-        a status id from the game's own pools - the flat statuses of STATUS_FLAT or the level-growing
-        series of STATUS_SERIES.  This is a draw, not a donor swap, so what a weapon inflicts on hit can
-        change.  Slots that hold nothing stay empty, and the holder fields are not touched: they keep the
-        permutation from random_effects(), or stay vanilla when that switch is off."""
-        W, g, s = self.W, self.W.get, self.W.set
-        n = 0
-        lines = ["# weapon statuses on hit: every status slot rerolled with a true-random status id"]
-        for b in self.bases():
+    def clean_dead_effects(self) -> list[str]:
+        """Clear on-hit ids that do not exist in this regulation's SpEffectParam.
+
+        ERR uses 109900 as a missing-row placeholder; other mods leave old ids behind when they
+        renumber rows.  Such an id shows a broken passive in game, so it is replaced by -1 (and its
+        paired text id by -1).
+        """
+        self.status_pools()
+        if self._sp is None:
+            return []
+        changed = 0
+        for row in self.W.rows:
+            for i, f in enumerate(ONHIT_FIELDS):
+                e = self.W.get(row, f)
+                if e != -1 and e not in self._sp.by_id:
+                    self.W.set(row, f, -1)
+                    if i < len(MSG_SLOTS):
+                        self.W.set(row, MSG_SLOTS[i], -1)
+                    changed += 1
+        return [f"# weapon effects: cleared {changed} dead on-hit ids that do not exist in this "
+                f"regulation's SpEffectParam"]
+
+    def random_status_effects(self, rng: random.Random, loot_only: bool = False) -> list[str]:
+        """Give every weapon row 0-2 real statuses drawn from the input's own status pools.
+
+        A draw, not a permutation: the same status may appear on two weapons.  Only ids present in
+        the regulation are used, the text id matches the status family, and a row never carries the
+        same family twice.  With loot_only the draw is restricted to the weapons the game hands out
+        from a drop lot or map lot.
+        """
+        pools = self.status_pools()
+        if not pools["flat"]:
+            return ["# weapon statuses: no status SpEffect ids in this regulation, nothing changed"]
+        bases = self.loot_bases() if loot_only else self.bases()
+        changed = 0
+        examples: list[str] = []
+        for b in bases:
             if not self.named(b):
                 continue
-            for offset in self.variants(b):
-                row = W.by_id[b + offset * 100]
-                for f in ONHIT_FIELDS:
-                    cur = g(row, f)
-                    if cur == -1:
-                        continue
-                    fam = self.status_family(cur)
-                    if not fam:
-                        continue                        # a non-status on-hit effect: the pass does not touch it
-                    series = STATUS_SERIES.get(fam, ())
-                    pool = tuple(series) if cur in series else tuple(STATUS_FLAT.get(fam, ()))
-                    if pool:
-                        s(row, f, rng.choice(pool))
-                        n += 1
-        lines.append(f"# {n} on-hit status slots rerolled")
-        return lines
+            for a in self.variants(b):
+                row = self.W.by_id[b + a * 100]
+                before = tuple(self.W.get(row, f) for f in ONHIT_FIELDS)
+                fams = self._assign_statuses(row, rng)
+                if tuple(self.W.get(row, f) for f in ONHIT_FIELDS) != before:
+                    changed += 1
+                    if len(examples) < 12:
+                        examples.append(f"{self.name(row.id):<48} {', '.join(fams) or 'no status'}")
+        total = sum(len(v) for v in pools["flat"].values())
+        return [f"# weapon statuses: {changed} rows redrawn from {total} status ids that exist in this "
+                f"regulation" + (" (loot weapons only)" if loot_only else "")] + examples
 
     def loot_bases(self) -> list[int]:
         """Weapon bases that appear in the game's drop lots: a lotItemId slot of an ItemLotParam_enemy
@@ -860,24 +1124,8 @@ class Weapons:
         return sorted(b for b in self.bases() if b in have and self.named(b))
 
     def random_loot_effects(self, rng: random.Random) -> list[str]:
-        """Give every loot weapon true-random on-hit passive effects: each of the three on-hit
-        slots of each loot weapon is redrawn from RANDOM_EFFECT_POOL, even when the slot held
-        nothing.  This is a fresh draw per slot, not the permutation of random_effects():
-        duplicates across loot weapons are expected, and the holder effects are untouched.
-        randomize.py runs this after the shuffles, so loot weapons keep the draws when Shuffle
-        on-hit effects is on as well."""
-        W, s = self.W, self.W.set
-        bases = self.loot_bases()
-        n = 0
-        lines = [f"# loot weapons: {len(bases)} bases appear in the drop lots, on-hit slots redrawn"]
-        for b in bases:
-            for offset in self.variants(b):
-                row = W.by_id[b + offset * 100]
-                for f in ONHIT_FIELDS:
-                    s(row, f, rng.choice(RANDOM_EFFECT_POOL))
-                    n += 1
-        lines.append(f"# {n} on-hit status slots redrawn on loot weapons")
-        return lines
+        """The same draw as random_status_effects, limited to weapons that appear in loot lots."""
+        return self.random_status_effects(rng, loot_only=True)
 
     def random_stats(self, rng: random.Random, groups=STAT_GROUPS,
                      stamina_rate: tuple[float, float] = STAMINA_RATE_RANGE,
@@ -925,12 +1173,6 @@ class Weapons:
                          on most unique weapons; bows and shields use their own greases, gated elsewhere)."""
         W, g, s = self.W, self.W.get, self.W.set
         groups = set(groups)
-        R = self.reg.param("ReinforceParamWeapon", erreg.load_paramdef(D / "ReinforceParamWeapon.xml"))
-        offset_slot: dict[int, int] = {}            # reinforce type -> effect slot that grows with the level
-        for r in R.rows:
-            for i, f in enumerate(("spEffectId1", "spEffectId2", "spEffectId3")):
-                if R.get(r, f):
-                    offset_slot[r.id - r.id % 100] = i
         A = self.reg.param("AttackElementCorrectParam", erreg.load_paramdef(D / "AttackElementCorrectParam.xml"))
         targets = [(b, W.by_id[b + a * 100]) for b in self.bases()
                    if self.named(b) and self.orig_type[b] in STAT_TYPES for a in self.variants(b)]
@@ -963,6 +1205,8 @@ class Weapons:
             wt = self.orig_type[b]
             grp = self.stat_group(wt)
             pool = donors[grp]
+            vanilla_corr = [g(row, f"correct{st}") for st in STATS]
+            vanilla_req = [g(row, f"proper{st}") for st in STATS]
             rt = g(row, "reinforceTypeId")
             if "scaling" in groups and rt in CROSSBOW_REINFORCE:
                 rt = CROSSBOW_REINFORCE[rt]
@@ -1005,20 +1249,30 @@ class Weapons:
                 for f in GUARD_RESIST:
                     s(row, f, resist)
             # scaling --------------------------------------------------------------
+            scaling_weights = [g(row, f"correct{st}") for st in STATS]   # vanilla until this block
             if "scaling" in groups:
-                chosen = rng.sample(STATS, rng.choices((1, 2, 3, 4), (30, 45, 20, 5))[0])
-                cpool = donors["bow"] if grp == "xbow" else pool
-                total = 0.0
-                for _ in range(8):
-                    total = rng.choice(cpool)["corr"] * rng.uniform(0.85, 1.15)
-                    if total >= 15:
-                        break
-                if total < 15:
-                    total = rng.uniform(40, 90)
-                w = [rng.uniform(0.15, 1.0) for _ in chosen]
-                for st in STATS:
-                    v = round(total * w[chosen.index(st)] / sum(w)) if st in chosen else 0
-                    s(row, f"correct{st}", float(v))
+                profile = self._profile_for(row, vanilla_corr)
+                count = rng.choices((1, 2, 3), (25, 50, 25))[0]
+                chosen = _weighted_sample(rng, list(range(len(STATS))),
+                                          [max(p, 0.02) for p in profile], count)
+                top = max(range(len(STATS)), key=lambda i: profile[i])
+                if chosen and top not in chosen and rng.random() < 0.85:
+                    chosen[0] = top
+                chosen = list(dict.fromkeys(chosen))
+                share = [profile[i] * rng.uniform(0.75, 1.25) if i in chosen else 0.0
+                         for i in range(len(STATS))]
+                tw = sum(share) or 1.0
+                share = [x / tw for x in share]
+                for i in chosen:                       # every chosen attribute must show on the page
+                    share[i] = max(share[i], 0.08)
+                tw = sum(share) or 1.0
+                share = [x / tw for x in share]
+                base_total = sum(vanilla_corr)
+                total = (max(15.0, base_total * rng.uniform(0.85, 1.15)) if base_total
+                         else rng.uniform(40, 90))
+                for i, st in enumerate(STATS):
+                    s(row, f"correct{st}", float(round(total * share[i])) if share[i] else 0.0)
+                scaling_weights = share
                 if grp == "catalyst":
                     c = rng.choice(CATALYST_CURVES)
                     for e in ELEMENTS:
@@ -1027,7 +1281,7 @@ class Weapons:
                     s(row, "correctType_Physics", rng.choice(PHYS_CURVES))
                     for e in ELEMENTS[1:]:
                         s(row, f"correctType_{e}", rng.choice(ELEM_CURVES))
-                smask = sum(1 << i for i, st in enumerate(STATS) if st in chosen)
+                smask = sum(1 << i for i in chosen)
                 aid = AEC_NEW + smask       # bits for damage types the row lacks are harmless (0 attack)
                 if aid not in A.by_id:
                     ar = A.add_row(aid, A.by_id[AEC_BASE])
@@ -1036,54 +1290,32 @@ class Weapons:
                             A.set(ar, f"is{AEC_STAT[st]}Correct_by{e}", smask >> i & 1)
                     n_aec += 1
                 s(row, "attackElementCorrectId", aid)
-            scaling_stats = [st for st in STATS if g(row, f"correct{st}") > 0]
             # requirements ---------------------------------------------------------
-            # A requirement is tied to the weapon's own vanilla profile: a dagger keeps needing a
-            # handful of points, a greatsword keeps needing a lot.  Drawing from the global pool is
-            # what used to hand a starter dagger 50 Int (2026-11-17).  req_mode widens or narrows the
-            # band; "extras" is the most an attribute the weapon does not scale with may add.
+            # The old pass rolled requirements from the row's vanilla profile and ignored what the
+            # scaling had just rolled, which could produce "30 Dexterity, S Intelligence".  Here the
+            # requirement is the scaling budget: only the attributes the weapon actually scales with
+            # get points, in proportion to their share, so the two pages always agree.
             if "requirements" in groups:
-                # the row's own vanilla numbers: an affinity row has its own profile (a Heavy Dagger
-                # needs less Dexterity than a plain one), and nothing has touched proper* yet
-                base = {st: g(row, f"proper{st}") for st in STATS}
-                req = dict.fromkeys(STATS, 0)
-                for st in STATS:
-                    if st in scaling_stats:
-                        if base.get(st, 0):
-                            req[st] = max(1, int(round(base[st] * rng.uniform(*REQ_BANDS[req_mode][0]))))
-                        else:
-                            req[st] = rng.randint(*REQ_BANDS[req_mode][1])
-                    elif rng.random() < REQ_BANDS[req_mode][4]:
-                        req[st] = rng.randint(*REQ_BANDS[req_mode][1])
-                req = cap_total(req, max(REQ_BANDS[req_mode][2], int(sum(base.values()) * REQ_BANDS[req_mode][3])))
-                for st in STATS:
-                    s(row, f"proper{st}", req[st])
+                weights = list(scaling_weights)
+                if not any(weights):
+                    weights = [g(row, f"correct{st}") for st in STATS]   # scaling group switched off
+                tw = sum(weights)
+                if tw > 0:
+                    shares = [w / tw for w in weights]
+                    tier = max(sum(vanilla_req), REQ_BANDS[req_mode][2])
+                    budget = max(REQ_BANDS[req_mode][2],
+                                 min(REQ_MAX, round(tier * rng.uniform(0.9, REQ_BANDS[req_mode][3]))))
+                    raw = {st: (shares[i] * rng.uniform(0.85, 1.15) if shares[i] > 0.02 else 0.0)
+                           for i, st in enumerate(STATS)}
+                    total_share = sum(raw.values()) or 1.0
+                    req = {st: (max(1, round(budget * v / total_share)) if v else 0)
+                           for st, v in raw.items()}
+                    req = cap_total(req, REQ_MAX)
+                    for st in STATS:
+                        s(row, f"proper{st}", req[st])
             # status build-ups -----------------------------------------------------
             if "effects" in groups:
-                slot = offset_slot.get(rt)
-                eff = [g(row, f) for f in EFFECT_SLOTS]
-                msg = [g(row, f) for f in MSG_SLOTS]
-                eff = [-1 if (e != -1 and self.status_family(e)) else e for e in eff]
-                msg = [-1 if m in STATUS_MSG_IDS else m for m in msg]
-                fams = rng.sample(sorted(STATUS_FLAT), rng.choices((0, 1, 2), (45, 40, 15))[0])
-                if slot is not None and eff[slot] == -1:
-                    if not any(f in STATUS_SERIES for f in fams):
-                        fams = [rng.choice(sorted(STATUS_SERIES))] + fams[:1]
-                    fams.sort(key=lambda f: f not in STATUS_SERIES)     # series family first
-                for fam in fams:
-                    if slot is not None and eff[slot] == -1 and fam in STATUS_SERIES:
-                        eff[slot] = rng.choice(STATUS_SERIES[fam])
-                    else:
-                        free = [i for i in range(3) if eff[i] == -1 and i != slot]
-                        if not free:
-                            continue
-                        eff[free[0]] = rng.choice(STATUS_FLAT[fam])
-                    if -1 in msg:
-                        msg[msg.index(-1)] = STATUS_MSG[fam]
-                for f, v in zip(EFFECT_SLOTS, eff):
-                    s(row, f, v)
-                for f, v in zip(MSG_SLOTS, msg):
-                    s(row, f, v)
+                self._assign_statuses(row, rng)
             s(row, "isEnhance", 1)                  # greases / buffs on every row, whatever it rolled
             # stamina consumption ----------------------------------------------------
             stam_note = ""

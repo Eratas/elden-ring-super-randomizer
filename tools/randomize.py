@@ -582,10 +582,10 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             if v["random_weapon_holder_shuffle"]:
                 wlines += [""] + wp.random_effects(rng, weapons.HOLDER_FIELDS)
             if v["random_weapon_status_roll"]:
-                wlines += [""] + wp.random_status_effects(rng)
-            if v["random_loot_effects"]:
-                # after the shuffles: loot weapons keep the random draws where a shuffle also ran
-                wlines += [""] + wp.random_loot_effects(rng)
+                # Loot weapons only is a scope switch: the same draw, but restricted to the weapons
+                # that appear in enemy and map lots.  It is not a second pass that re-rolls them.
+                wlines += [""] + wp.random_status_effects(rng, loot_only=bool(v["random_loot_effects"]))
+            wlines += [""] + wp.clean_dead_effects()
             print("\n".join(l for l in wlines if l.startswith("#")))
 
         glines: list[str] = []
@@ -636,6 +636,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["somber_infusable"] and not v["no_weapon_names"]:
             say(phases.WEAPON_NAMES)
             given = list(v["weapon_names"] or ())
+            if not given:
+                # The input mod's own msg folder is the text the player actually loads next to that
+                # regulation.bin.  Using it makes the names appear, and gives backup-and-replace the
+                # exact archives to copy before they are overwritten.
+                auto = sorted((Path(v["input"]).resolve().parent / "msg").glob(
+                    f"*/{weapon_names.ARCHIVE}"))
+                given = [str(p.parent) for p in auto]
             archives = (textarchives.expand_archives("--weapon-names", given, weapon_names.ARCHIVE)
                         or [str(p) for p in weapon_names.shipped_archives()])
             if not archives:
@@ -712,8 +719,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         fail(f"cannot write {out}: {e.strerror or e}")
     except ValueError as e:
         fail(str(e))
-    print(f"# wrote {out} ({codec}, {size} bytes, limit {v['max_size'] or erreg.REGULATION_MAX_SIZE}; "
-          f"{(v['max_size'] or erreg.REGULATION_MAX_SIZE) - size} bytes to spare)")
+    limit = reg.output_limit(v["max_size"] or erreg.REGULATION_MAX_SIZE)
+    print(f"# wrote {out} ({codec}, {size} bytes, limit {limit}; {limit - size} bytes to spare)")
     # the patched text archives are content, not a report: they are always written
     if wnames is not None:
         for src, texts, anchor in wnames.patches:
@@ -778,9 +785,24 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
              + (f", runes: {out.with_name('runes.txt')}" if rlines else "")) + ")")
     if v["backup_replace"] and not v["dry_run"]:
         import backup
-        bdir = backup.backup_and_replace(Path(v["input"]), out, list(v["archives"] or ()))
+        # --weapon-names is the option the window and the automatic path actually use; --archives is
+        # the legacy command-line folder and is usually empty.  Falling back to the input mod's own
+        # msg folder is what makes the backup cover the text the run is about to replace.
+        given = [str(a) for a in (wnames.archives if wnames is not None else (v["archives"] or ()))]
+        # Never copy or replace the archives shipped with the program: they are this tool's own files,
+        # not the player's.  If the run used them, the input mod's msg folder is still the text the game
+        # will load, so that is what auto-detection finds.
+        given = [a for a in given
+                 if textarchives.MSG_DIR.resolve() not in Path(a).resolve().parents]
+        archs = backup.detected_archives(Path(v["input"]), given)
+        bdir = backup.backup_and_replace(Path(v["input"]), out, archs)
         if bdir is not None:
-            print(f"# backup and replace: original files copied to {bdir} before replacing them")
+            copied = [p for p in bdir.iterdir() if p.name != backup.MANIFEST]
+            print(f"# backup and replace: {len(copied)} file(s) copied to {bdir}: "
+                  + ", ".join(p.name for p in sorted(copied)))
+            print(f"# backup and replace: then replaced {v['input']}"
+                  + (f" and {len(archs)} msg archive(s)" if archs else "")
+                  + "; use the backup folder to undo")
         else:
             print("# backup and replace: input file not found, nothing was backed up")
     say(phases.DONE)

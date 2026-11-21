@@ -10,12 +10,14 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.5** — the weapon effects have a section of their own (shuffle on-hit, shuffle
-> holder, true-random status rolls, and random effects on loot weapons); dropped items can roll a rare
-> unique weapon at a rate you set; spell stat randomization stands alone; and a missing or mistyped
-> input, an unreadable file and a regulation of another game version now fail with one line instead of
-> a traceback. v1.0.4 brought area-scaled loot upgrades, protected unique items, atomic backups and the
-> dark + gold window. Full notes in the [Changelog](#changelog).
+> **What's new in v1.0.6** — **Chaotic weapon effects** replaces the old weapon-effect options with
+> permutations that move the whole on-hit or held-effect bundle, and status rolls that only use real
+> SpEffect rows from *your* regulation (the "(0)" passives are gone); **requirements follow the
+> scaling** the weapon actually received, so a Strength weapon never asks for Arcane; shops draw from
+> curated pools, stock at least 40 rows when they can, and never repeat an item; enemy lots default to
+> four rolls with the first guaranteed; the backup now copies the text archives it replaces as well as
+> `regulation.bin`; and missing affinity names fall back to Paramdex names instead of
+> `?WeaponItem? +5`. Full notes in the [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
@@ -114,16 +116,16 @@ synthesized somber affinity) does not exist in theirs, so their pass cannot see 
 | **Consumables** | every usable item (pots, greases, meats, boluses, tools, usable key items) receives another item's use effect; `shuffle` (every effect used exactly once) or `random` (repeats allowed); the use **animation** can stay with the effect, come from another item of the same class, or from any item; flasks and remembrances can join the pool; **stack sizes** shuffled; buff **durations** shuffled separately |
 | **Spells** | every sorcery and incantation receives another spell's effect (one pool for both); the cast animation can stay, come from a spell with the same signature, or from any spell; **spell stats** (FP / stamina cost and requirements) randomized independently of the weapon stats |
 | **Prices** | shop prices (`ShopLineupParam.value`) and sell prices (`EquipParamGoods.sellValue`) shuffled, or redrawn inside a range; sell prices optional; weapons, armour and Ashes of War can join the sell pool |
-| **Shops** | every merchant slot can be filled with a random item of its own category, price untouched — every shop sells something else |
-| **Weapons** | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; **requirements stay in the weapon's own tier** so looted weapons stay usable; and the weapon effects are reshaped in their own section: **Shuffle on-hit effects** and **Shuffle holder effects** deal the on-hit statuses and the held-effect bundles out as permutations between weapons of the same class, **Roll statuses on hit** redraws the on-hit statuses from the game's own status pools, and **Random effects on loot weapons** gives loot weapons true-random on-hit statuses from those pools |
+| **Shops** | every merchant slot is refilled from a curated pool of real items (no debug rows, no "Type N" armour, no Depleted Ash); a shop never repeats an item in one run, and small general shops are filled to at least 40 rows when the pools allow it — prices untouched |
+| **Weapons** | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; **requirements are derived from the scaling the row actually received**, so a Strength/Arcane split asks for both and a 20-Strength requirement never lands on an S-Arcane weapon; **Chaotic weapon effects** has its own section: **Shuffle on-hit bundles** and **Shuffle held bundles** move the complete effect bundle (including its text ids) inside a class, **Roll chaotic statuses** gives each row 0–2 real statuses from the input's own SpEffect table with matching text and no repeated family, and **Chaotic statuses on loot only** limits that roll to weapons that appear in loot |
 | **Ashes of War** | every Ash of War can receive another ash's **skill** (Lion's Claw becomes Sky Shot) and/or another ash's **on-hit effects**; donors come only from ashes that fit the same weapon types, and the two switches are independent |
-| **Loot** | enemy drop tables rerolled (choose the kinds); 1…N rolls per enemy at P% each (default 3 at 10%, so most kills drop nothing); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a **rarity curve**, and **bosses roll a better curve**; **rare unique weapons** and **upgrade materials** can turn up |
+| **Loot** | enemy drop tables rerolled (choose the kinds); 1…N rolls per enemy at P% each (default 4 at 50%, first roll guaranteed, so a kill drops 1–4 items and 2.5 on average); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a **rarity curve**, and **bosses roll a better curve**; **rare unique weapons** and **upgrade materials** can turn up |
 | **Where loot drops** | every category can be **moved between enemies** without changing the items: weapons, goods, armour, talismans, Ashes of War. Armour sets can move as a set |
 | **Armour & talismans** | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally **keeping each set coherent**), or move armour to different enemies; talismans shuffle whole rows and can move between enemies |
 | **Enemies** | rune drops (`NpcParam.getSoul`) and hit points (`NpcParam.hp`) shuffled, redrawn in a range, or scaled per band; bosses can be scaled back up and their runes coupled to their hit points |
 | **World** | the Flask of Crimson Tears and the Flask of Cerulean Tears move to a random pickup / boss reward / gift / merchant, and what was there goes to the first Site of Grace; start with the Spirit Calling Bell and/or the Lantern |
 | **Checking a seed** | a **loot simulator** builds the tables in memory and shows what N random kills dropped, without writing or compressing anything |
-| **Safety** | **backup and replace** copies your input files aside before overwriting them, and **Revert** puts them back |
+| **Safety** | **backup and replace** copies `regulation.bin` **and every text archive it replaces** aside before overwriting them, and **Revert** puts them back; the output folder is a separate copy with the logs |
 | **Output** | kraken (the game's own Oodle format, needs the game's `oo2core_6_win64.dll`), leviathan, zstd (no DLL, larger), or auto; fast or maximum effort; `--repack` repairs a regulation.bin another tool wrote in a form the game rejects |
 
 **Not included**: a character-creation / starting-class randomizer, a `regulation.bin`
@@ -151,9 +153,10 @@ That is as close to Borderlands-style loot as a static rewrite gets.
 
 ## The window
 
-Eleven collapsible sections: **Files and output · Consumables and buffs · Spells · Prices and shops ·
-Weapons · Ashes of War · Armour and talismans · Enemies, drops and loot · Where loot drops · Flasks and
-starting items · Advanced.**
+Thirteen collapsible sections, ordered by what most runs need first: **Files and output · Loot and
+upgrade levels · Where loot drops · Prices and shops · Enemies and drops · Weapons · Chaotic Weapon
+Effects · Ashes of War · Armour and talismans · Consumables and buffs · Spells · Flasks and starting
+items · Advanced.**
 
 * **Presets** — a dropdown in the title bar loads a whole coherent set of options in one click; any
   manual change turns the box into **Custom**. Save your own with *Save preset*, move them between
@@ -203,7 +206,7 @@ starting items · Advanced.**
 |---|---|
 | **Gentle start** | consumables, spells, prices and buffs only. The safest first run. |
 | **Classic randomizer** | the traditional set: effects and prices. Weapons stay as they are. |
-| **Borderlands loot** | any enemy drops any weapon at a random affinity, upgrade level and stat roll, 3 rolls per kill. |
+| **Borderlands loot** | any enemy drops any weapon at a random affinity, upgrade level and stat roll, four rolls per kill with the first guaranteed. |
 | **Loot and stats** | weapons get new movesets, skills and stats, and every weapon can drop anywhere. |
 | **Armor and talismans** | armour numbers shaken and rolled, sets coherent, armour and talismans lootable anywhere. |
 | **Ashes of War** | every ash gets another ash's skill and effects, and ashes drop from any enemy. |
@@ -214,7 +217,7 @@ starting items · Advanced.**
 | **Balanced** | weapons and enemies tuned for an even, playable run. |
 | **Glass cannon** | enemies hit much harder but die much faster. |
 | **Full chaos** | every pass on. Expect a very different game and a slow compression. |
-| **Vanilla-ish loot texture** | the usual 3 rolls at 10% per enemy, and a rare unique occasionally comes along with the ordinary loot. |
+| **Vanilla-ish loot texture** | a thin texture: 3 rolls per enemy, the first guaranteed and the other two at 10%, and a rare unique occasionally comes along with the ordinary loot. |
 | **Event loot texture** | bigger drops: every enemy gets 5 rolls at 25%, and uniques are more common. |
 | **Generous loot texture** | very rich loot: every enemy gets 8 rolls at 30%, and uniques are common. |
 
@@ -469,19 +472,21 @@ caps every drop at +N (0 = no cap).
 ### Enemies and drops
 
 * **`--random-enemy-drops`** — reroll every enemy's drop table. Each enemy gets `--enemy-drop-rolls`
-  independent rolls (default 3), each dropping at `--enemy-drop-chance` percent (default 10), so the
-  default is 0.3 items per kill and roughly seven kills in ten drop nothing. `--enemy-drop-rolls 0`
-  restores the old shape: the first row always drops and later rows keep their chance. The pool is every
-  named goods row (no key items), every weapon / armour / talisman / Ash of War row with a real name and a
-  price, with weapons normalized to +0 and flasks excluded. Rows that already hold a key item
-  (`goodsType` 1) and one-time flag awards are left alone. `--enemy-drop-kinds` restricts the categories.
-* **`--enemy-drop-rolls N` / `--enemy-drop-chance P`** — N independent rolls per enemy, each dropping at
-  P%, so a kill drops 0…N items (N·P/100 on average). The added rows take ids above every existing one;
+  rolls (default 4); the **first roll always drops**, later rolls drop at `--enemy-drop-chance` percent
+  (default 50), so a kill yields 1–4 items and 2.5 on average. The categories are weighted (goods 40,
+  weapons 25, armour 20, talismans 10, Ashes of War 5) and the same item never appears twice in one lot.
+  `--enemy-drop-rolls 0` restores the old shape: the first row always drops and later rows keep their
+  chance. The pool is every named goods row (no key items), every weapon / armour / talisman / Ash of War
+  row with a real name and a price, with weapons normalized to +0 and flasks excluded. Rows that already
+  hold a key item (`goodsType` 1) and one-time flag awards are left alone. `--enemy-drop-kinds` restricts
+  the categories.
+* **`--enemy-drop-rolls N` / `--enemy-drop-chance P`** — N rolls per enemy; the first is guaranteed and
+  the rest drop at P%, so a kill drops 1…N items (1 + (N−1)·P/100 on average). The added rows take ids above every existing one;
   the game caps a lot at 64 rows, and the tool refuses to add a row that would cross that cap.
 * **`--unique-drops` / `--unique-rate`** — `--unique-drops` is the switch: off (the default), no random
   drop is ever a unique weapon. On, every item that actually drops rolls the rate: a whole percent from
-  1 to 20 (default 3). The rate is per dropped item, not per roll, so at the default 3 × 10% drop
-  settings it yields about 0.9 uniques per 100 kills. Upgrade material drops roll first, so with both on
+  1 to 20 (default 3). The rate is per dropped item, not per roll, so at the default 4 × 50% settings
+  it yields about 7.5 uniques per 100 kills. Upgrade material drops roll first, so with both on
   the effective unique rate is slightly lower.
 * **`--random-enemy-hp`** — `NpcParam.hp` of every enemy with hit points: `shuffle`, `range`, `bands`
   (weak / normal / strong tiers), or `balanced` (every enemy stays within 0.75–1.5× vanilla).
@@ -674,6 +679,19 @@ game's own `oo2core_6_win64.dll` that the user already has.
   redistribute the game's files or DLL.
 
 ## Changelog
+
+**1.0.6** — 2026-11-22 — the weapon-effect section is now **Chaotic weapon effects**: bundle
+permutations move the complete on-hit or held bundle with its text ids, status rolls draw only ids that
+exist in the loaded regulation and write the matching passive text (the old zero-value "(0)" rows are
+gone), and a loot-only switch limits the status roll to loot weapons. **Attribute scaling and
+requirements are learned from the row's delta over Standard** and the requirement is derived from the
+actual scaling share, so they can no longer disagree. Shops use curated pools (real goods, base weapon
+rows, no debug/NPC/"Type N" rows, no Depleted Ash), never repeat an item in one run, and fill small
+general shops to 40 rows; enemy drops use weighted categories with a guaranteed first roll (default 4
+rolls at 50%), dedupe each lot and sanitize rare draws; the backup copies the text archives it replaces
+(and auto-detects them under `<input>/msg/*/item_dlc02.msgbnd.dcx`); missing affinity names fall back to
+Paramdex names and canonical English affixes instead of `?WeaponItem? +5`; and every option label and
+tip was revised in all 13 language packs.
 
 **1.0.5** — 2026-11-22 — the weapon effects moved into a section of their own with unambiguous names
 (Shuffle on-hit effects, Shuffle holder effects, Roll statuses on hit) and gained a fourth, Random
