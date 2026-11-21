@@ -623,6 +623,10 @@ def build_argparse(prog: str | None = None, description: str = "", epilog: str =
         else:                                            # str / path
             kw.update(metavar=o.metavar or None)
             ap.add_argument(*o.flags, dest=o.key, **kw)
+    # --version is not an option: argparse prints it and exits before anything runs, so it never
+    # reaches values_from_args() and never appears in the window (which is generated from OPTIONS).
+    import version
+    ap.add_argument("--version", action="version", version=f"%(prog)s {version.__version__}")
     return ap
 
 

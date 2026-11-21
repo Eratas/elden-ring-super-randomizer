@@ -46,6 +46,10 @@ echo TK_LIBRARY=%TK_LIBRARY%
 rem PyInstaller's full output goes to build\pyinstaller.log (send that file when something goes wrong);
 rem on failure it is shown in full.
 if not exist build mkdir build
+rem A leftover exe locks dist\EldenRingSuperRandomizer.exe and PyInstaller dies with "PermissionError ...
+rem Access is denied" while replacing it.  A --self-test run leaves a message box open (and its process
+rem alive) until someone clicks OK, so clear any running copy before packing.  "not found" is not an error.
+taskkill /f /im EldenRingSuperRandomizer.exe >nul 2>&1
 set "LOG=%~dp0build\pyinstaller.log"
 echo Packing, this takes a minute or two; the full output is written to %LOG% ...
 rem --hidden-import lang_*: the window's 13 language packs (tools\lang_*.py) are imported lazily by
