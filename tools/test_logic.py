@@ -1277,6 +1277,8 @@ def test_nexus_doc() -> None:
         ("- one\n- two", "[list]\n[*] one\n[*] two\n[/list]"),
         ("1. one\n2. two", "[list=1]\n[*] one\n[*] two\n[/list]"),
         ("| a | b |\n|---|---|\n| 1 | 2 |", "[list]\n[*] [b]a | b[/b]\n[*] 1 | 2\n[/list]"),
+        ("> quoted", "[quote]quoted[/quote]"),
+        ("> one\n> two", "[quote]one two[/quote]"),
         ("```\nx = 1\n```", "[code]\nx = 1\n[/code]"),
         ("para one\nstill one\n\npara two", "para one still one\n\npara two"),
     ]
@@ -1287,6 +1289,13 @@ def test_nexus_doc() -> None:
     got = md2nexus.render("- first line\n  continued here\n- second").strip()
     check(got == "[list]\n[*] first line continued here\n[*] second\n[/list]",
           f"a wrapped list item split into two: {got!r}")
+
+    # In the strict render [quote] is the fenced-block wrapper, so a blockquote must not wear it too:
+    # two indistinguishable [quote] blocks would make the raw file unreadable.
+    got = md2nexus.render("> quoted", strict=True).strip()
+    check(got == "quoted", f"the strict render wrapped a blockquote in [quote]: {got!r}")
+    check(md2nexus.problems(md2nexus.render("> quoted", strict=True), strict=True) == [],
+          "the strict blockquote render reported problems")
 
     check(md2nexus.problems(md2nexus.render("# T\n\nplain text")) == [],
           f"a clean document reported problems: {md2nexus.problems(md2nexus.render('# T'))}")

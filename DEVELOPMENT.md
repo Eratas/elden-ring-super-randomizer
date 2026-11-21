@@ -83,12 +83,16 @@ python tools\md2nexus.py --stdout   rem print the normal render
 python tools\md2nexus.py --stdout --strict-tags   rem ... the wiki-tags-only render
 ```
 
-Two artifacts, byte-identical except for the fenced-block wrapper:
+Two artifacts, identical except for the fenced-block wrapper and the callout:
 
-| File | Fenced blocks | Use it when |
-|---|---|---|
-| `NEXUS_DESCRIPTION.txt` | `[code]` | normal case — it is what Nexus's own Markdown→BBCode converters emit |
-| `NEXUS_DESCRIPTION.strict.txt` | `[quote]` | you want zero risk on a first upload: `[code]` is the one emitted tag the Nexus wiki does not document |
+| File | Fenced blocks | Callout (`> …`) | Use it when |
+|---|---|---|---|
+| `NEXUS_DESCRIPTION.txt` | `[code]` | `[quote]` | normal case — it is what Nexus's own Markdown→BBCode converters emit |
+| `NEXUS_DESCRIPTION.strict.txt` | `[quote]` | plain paragraph | you want zero risk on a first upload: `[code]` is the one emitted tag the Nexus wiki does not document |
+
+The strict render leaves the callout unwrapped on purpose: `[quote]` is its fenced-block tag there, and
+two indistinguishable `[quote]` blocks would make the raw file unreadable. The count is exact — the
+strict file carries one `[quote]` per fenced block and no other.
 
 Never hand-edit either file; edit `README.md` and re-run the generator. The renderer only
 emits tags from the Nexus wiki's list (plus `[code]`), refuses any other tag, refuses leftover Markdown

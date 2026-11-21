@@ -723,5 +723,7 @@ python tools\md2nexus.py    rem rewrite NEXUS_DESCRIPTION.txt + NEXUS_DESCRIPTIO
 Never edit either file by hand. Two artifacts come out of the same README: `NEXUS_DESCRIPTION.txt` wraps
 fenced blocks in the `code` tag (what Nexus's own converters emit), and `NEXUS_DESCRIPTION.strict.txt`
 wraps them in a quote block instead, because `code` is the one tag this renderer emits that the Nexus
-wiki does not document. The two are byte-identical apart from those 11 wrappers. The gate re-renders both
-and fails if either drifts, so the description on the mod page cannot silently go stale.
+wiki does not document. The two are identical apart from those 11 wrappers and the callout at the top,
+which the strict render leaves as a plain paragraph so that a quote block in the strict file always
+means a fenced block. The gate re-renders both and fails if either drifts, so the description on the
+mod page cannot silently go stale.

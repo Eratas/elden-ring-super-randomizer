@@ -19,8 +19,10 @@ Two artifacts are generated from the same README:
 
 [code] is what Nexus's own Markdown->BBCode converters emit, but it is *not* in the Nexus wiki's tag
 list, so it could not be verified against the live site.  The strict render uses only tags the wiki
-documents, at the cost of code blocks looking like quotes.  Both are generated and both are checked by
-the gate, so neither can rot: use the strict one for a first upload if you want zero risk.
+documents, at the cost of code blocks looking like quotes.  A Markdown blockquote (`> text`) is a
+[quote] in the normal render and a plain paragraph in the strict one, so that a [quote] in the strict
+file always means a fenced block.  Both are generated and both are checked by the gate, so neither can
+rot: use the strict one for a first upload if you want zero risk.
 
 Mapping (only tags the Nexus wiki documents, plus [code]):
 
@@ -28,6 +30,7 @@ Mapping (only tags the Nexus wiki documents, plus [code]):
     **bold**          [b]                 *italic*        [i]
     `code`            plain text          (Nexus has no inline code tag)
     fenced block      [code]              ---             [line]
+    > quote           [quote]             (plain text in the strict render)
     - item            [list] [*]          1. item         [list=1] [*]
     [text](url)       [url=url]text[/url] (no quotes around the url - the wiki warns Nexus rejects them)
     | a | b |         [list] of "a | b" rows, the header row in [b] (Nexus has no table tag)
@@ -193,16 +196,18 @@ def render(markdown: str, strict: bool = False) -> str:
             continue
 
         if line.lstrip().startswith(">"):
-            # A Markdown blockquote.  The ">" markers are Markdown, not BBCode: joining the lines with
-            # them still attached rendered "no > longer a +25" on the mod page, so they are stripped and
-            # the block becomes a [quote] (a documented tag, so both artifacts stay wiki-legal).
+            # A Markdown blockquote.  The ">" markers are Markdown, not BBCode: joining the lines
+            # with them still attached rendered "no > longer a +25" on the mod page, so they are
+            # stripped.  The normal render wraps the block in [quote]; the strict render leaves it as
+            # a plain paragraph, because there [quote] is the fenced-block wrapper and a second,
+            # indistinguishable [quote] would make the raw file unreadable.
             buf = []
             while i < n and lines[i].lstrip().startswith(">"):
                 buf.append(lines[i].lstrip()[1:].strip())
                 i += 1
             body = inline(" ".join(s for s in buf if s))
             if body:
-                out.append(f"[quote]{body}[/quote]")
+                out.append(f"[quote]{body}[/quote]" if not strict else body)
                 out.append("")
             continue
 
