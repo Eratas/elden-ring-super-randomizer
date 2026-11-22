@@ -81,5 +81,5 @@ def give(reg: erreg.Regulation, keys: list[str]) -> list[str]:
         L.set(row, "cumulateNumFlagId", 0)
         L.set(row, "cumulateNumMax", 0)
         group.append(new_id)
-        lines.append(f"ItemLotParam_map {new_id} = {name} ({gid}) x1, getItemFlagId {flag}")
+        lines.append(f"ItemLotParam_map {new_id} = {name} ({gid}) x1, getItemFlagId {item_flag}")
     return lines
