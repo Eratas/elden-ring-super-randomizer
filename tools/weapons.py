@@ -489,6 +489,32 @@ class Weapons:
         total = sum(prof)
         return [v / total for v in prof]
 
+    def _sync_status_texts(self, row) -> None:
+        """Rewrite the three effect texts so every status on the row is described.
+
+        A row can carry three texts and no more, and a status without its text is a passive the player
+        cannot see (the "it does nothing" case).  The status texts therefore come first and the texts of
+        real non-status effects fill whatever is left.  Called after every pass that moves a status, so a
+        bundle inherited from a row whose own text list was incomplete is repaired on arrival.
+        """
+        g, s = self.W.get, self.W.set
+        self.status_pools()
+        fams: list[str] = []
+        for f in ONHIT_FIELDS:
+            eid = g(row, f)
+            if eid != -1:
+                fam = self.status_family(eid)
+                if fam and fam not in fams:
+                    fams.append(fam)
+        status_msgs = set(STATUS_MSG.values())
+        out = [STATUS_MSG[f] for f in fams if f in STATUS_MSG]
+        for m in (g(row, f) for f in MSG_SLOTS):
+            if m != -1 and m not in status_msgs and m not in out and len(out) < len(MSG_SLOTS):
+                out.append(m)
+        out = (out + [-1] * len(MSG_SLOTS))[:len(MSG_SLOTS)]
+        for f, v in zip(MSG_SLOTS, out):
+            s(row, f, v)
+
     def _assign_statuses(self, row, rng: random.Random) -> list[str]:
         """Give a weapon row 0-2 real statuses, with the matching passive text.
 
@@ -504,7 +530,6 @@ class Weapons:
                 self._status_warned = True
             return []
         eff = [g(row, f) for f in ONHIT_FIELDS]
-        msg = [g(row, f) for f in MSG_SLOTS]
         for i, e in enumerate(eff):
             if e != -1 and self.status_family(e):
                 eff[i] = -1
@@ -534,18 +559,9 @@ class Weapons:
             chosen.append((slot, fam, rng.choice(flat[fam])))
         for slot, _fam, eid in chosen:
             eff[slot] = eid
-        # messages are an unordered list of effect texts: drop the status ones, add one per family
-        status_msgs = set(STATUS_MSG.values())
-        out_msg = [m for m in msg if m != -1 and m not in status_msgs]
-        for _slot, fam, _eid in chosen:
-            m = pools["msg"].get(fam, -1)
-            if m != -1 and m not in out_msg:
-                out_msg.append(m)
-        out_msg = (out_msg + [-1, -1, -1])[:3]
         for f, v in zip(ONHIT_FIELDS, eff):
             s(row, f, v)
-        for f, v in zip(MSG_SLOTS, out_msg):
-            s(row, f, v)
+        self._sync_status_texts(row)      # the status texts go in first, other texts fill the rest
         return [fam for _slot, fam, _eid in chosen]
 
     # --- 2. movesets ------------------------------------------------------------------
@@ -1051,6 +1067,8 @@ class Weapons:
             for r, donor in zip(rows, donors):
                 for f, v in zip(bundle, old[donor.id]):
                     s(r, f, v)
+                if onhit:
+                    self._sync_status_texts(r)      # a donor's incomplete text list is repaired here
                 if shown < 12:
                     lines.append(f"{self.name(r.id):<48} <-  {self.name(donor.id)}")
                     shown += 1
@@ -1060,21 +1078,24 @@ class Weapons:
         """Clear on-hit ids that do not exist in this regulation's SpEffectParam.
 
         ERR uses 109900 as a missing-row placeholder; other mods leave old ids behind when they
-        renumber rows.  Such an id shows a broken passive in game, so it is replaced by -1 (and its
-        paired text id by -1).
+        renumber rows.  Such an id shows a broken passive in game, so it is replaced by -1.  The three
+        text ids are an unordered list, not one per slot, so they are rebuilt from what is left rather
+        than cleared slot-by-slot (which used to delete a live status's own text).
         """
         self.status_pools()
         if self._sp is None:
             return []
         changed = 0
         for row in self.W.rows:
-            for i, f in enumerate(ONHIT_FIELDS):
+            dead = False
+            for f in ONHIT_FIELDS:
                 e = self.W.get(row, f)
                 if e != -1 and e not in self._sp.by_id:
                     self.W.set(row, f, -1)
-                    if i < len(MSG_SLOTS):
-                        self.W.set(row, MSG_SLOTS[i], -1)
                     changed += 1
+                    dead = True
+            if dead:
+                self._sync_status_texts(row)
         return [f"# weapon effects: cleared {changed} dead on-hit ids that do not exist in this "
                 f"regulation's SpEffectParam"]
 
