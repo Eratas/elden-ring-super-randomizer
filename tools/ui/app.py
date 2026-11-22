@@ -1377,11 +1377,10 @@ class App:
 
     def _close(self) -> None:
         self._save(now=True)
-        if self.running:
-            messagebox.showwarning(self.t("ui:close_running_title", "Close blocked"),
-                                    self.t("ui:close_running_body",
-                                           "A randomization run is in progress. Wait for it to finish before closing."),
-                                    parent=self.root)
+        if self.running and not messagebox.askyesno(
+                self.t("ui:close_running_title", "Close?"),
+                self.t("ui:close_running_body", "A run is in progress. Close the window anyway?"),
+                parent=self.root):
             return
         self.root.destroy()
 
