@@ -186,7 +186,7 @@ class LootDialog:
             kind, payload = self.q.get_nowait()
         except queue.Empty:
             kind = None
-        if kind == "result":
+        if kind == "result" and self.busy and self.top.winfo_exists():
             self.text.delete("1.0", "end")
             self.text.insert("end", "\n".join(payload) + ("\n" if payload else ""))
             self.text.see("end")
@@ -194,6 +194,9 @@ class LootDialog:
             self.app.sim_busy = False
             self.run.configure(state="normal", text=self.app.t("dlg:simulate", "Simulate"))
             return
+        if kind == "result":
+            self.busy = False
+            self.app.sim_busy = False
         if self.busy and self.top.winfo_exists():
             try:
                 self.top.after(200, self._poll)
@@ -202,4 +205,5 @@ class LootDialog:
 
     def _close(self) -> None:
         self.app.sim_busy = False
+        self.busy = False
         self.top.destroy()

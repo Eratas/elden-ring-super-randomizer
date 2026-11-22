@@ -56,8 +56,8 @@ HERE = Path(__file__).resolve().parent.parent
 CONFIG = ((Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else HERE) / "settings.json")
 RECENT_MAX = 8
 MIN_SIZE = (860, 540)
-DEFAULT_OPEN = {"files": True, "loot": True, "lootdrops": False, "prices": False, "drops": False,
-                "weapons": False, "weapon_effects": False, "gems": False, "gear": False,
+DEFAULT_OPEN = {"files": True, "loot": True, "prices": False, "weapons": False,
+                "weapon_effects": False, "gems": False, "gear": False, "drops": False,
                 "goods": False, "spells": False, "world": False, "advanced": False}
 PATH_KEYS = ("input", "output", "oodle_dll", "archives")
 
@@ -66,16 +66,16 @@ PATH_KEYS = ("input", "output", "oodle_dll", "archives")
 PHASES = list(phases.PHASES)
 SECTION_TIPS = {
     "files": "Where the input is, where the output goes, and how the file is compressed.",
-    "loot": "How good the weapons you find are: their upgrade levels and drop curves.",
-    "lootdrops": "Where the loot is found: which enemy, chest or shop gets which item.",
-    "prices": "What shops charge and what they pay you.",
-    "drops": "What enemies drop, what they are worth, and how much health they have.",
+    "loot": "All the loot in one place: what enemies drop and how often, how good a dropped weapon "
+            "is, and where each kind of item can be found.",
+    "prices": "What shops stock, what they charge and what they pay you.",
+    "drops": "How much health enemies have and what they are worth in runes.",
     "weapons": "Affinities, movesets, default skills and stat rolls, for every weapon row.",
     "weapon_effects": "Chaotic Weapon Effects: the on-hit bundles, the held-effect bundles, the "
                       "statuses a weapon really causes, and whether the chaos applies to loot only.",
     "gems": "What an Ash of War does when it is mounted: its skill and its on-hit effects.",
     "gear": "Armour pieces and talismans. Whole columns / rows are shuffled, never invented.",
-    "goods": "What a consumable does, and how long a buff lasts. The oldest part of the tool.",
+    "goods": "What a consumable does, how many a pickup gives, and how long a buff lasts.",
     "spells": "What a sorcery or incantation does, and what it costs.",
     "world": "Where the two flasks are, and what you start with.",
     "advanced": "Settings that only matter for unusual setups.",
@@ -396,7 +396,7 @@ class App:
             if not opts:
                 continue
             sec = Section(page.body, title, open_=DEFAULT_OPEN.get(key, False),
-                          tip=self.t(f"ui:sec:{key}", SECTION_TIPS.get(key, "")))
+                          tip=self.t(f"ui:sec_tip:{key}", SECTION_TIPS.get(key, "")))
             sec.header.configure(text=(("\u25be  " if sec.is_open else "\u25b8  ") + self.t(f"ui:sec:{key}", title)))
             sec.title = self.t(f"ui:sec:{key}", title)
             sec._label()
@@ -1196,6 +1196,8 @@ class App:
         self.root.after(500, self._tick)
 
     def _poll(self) -> None:
+        if not self.root.winfo_exists():
+            return                                     # the window was destroyed under a running poll
         try:
             while True:
                 kind, payload = self.queue.get_nowait()
@@ -1265,8 +1267,9 @@ class App:
                 subprocess.Popen(["open", folder])
             else:
                 subprocess.Popen(["xdg-open", folder])
-        except Exception:
-            pass
+        except Exception as error:
+            messagebox.showerror(self.t("ui:open_failed", "Open failed"),
+                                 f"Could not open the output folder: {error}", parent=self.root)
 
     def _backup_now(self) -> None:
         """Copy the input files into a timestamped backup, without running anything."""
@@ -1374,6 +1377,12 @@ class App:
 
     def _close(self) -> None:
         self._save(now=True)
+        if self.running:
+            messagebox.showwarning(self.t("ui:close_running_title", "Close blocked"),
+                                    self.t("ui:close_running_body",
+                                           "A randomization run is in progress. Wait for it to finish before closing."),
+                                    parent=self.root)
+            return
         self.root.destroy()
 
 

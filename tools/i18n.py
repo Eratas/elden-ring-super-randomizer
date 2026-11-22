@@ -10,8 +10,8 @@ Adding a language is one file: `tools/lang_<code>.py` with a dict `T` whose keys
     opt:<option key>:tip       its hover text
     ui:<name>                  a piece of the window chrome
 
-Anything missing falls back to English, so a half‑finished pack still works.  The language itself is
-never saved: the window always starts in English and the list is in the top right corner.
+Anything missing falls back to English, so a half‑finished pack still works.  The window opens in the
+language you last chose and the choice is saved (App.__init__ reads cfg["lang"], save_config writes it).
 """
 from __future__ import annotations
 

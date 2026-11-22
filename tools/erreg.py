@@ -5,6 +5,7 @@ Unmodified params are written back byte-for-byte.
 """
 from __future__ import annotations
 
+import os
 import re
 import struct
 import xml.etree.ElementTree as ET
@@ -555,7 +556,18 @@ class Regulation:
                              f"{limit} (0x{limit:X}); the game would report corrupted save data. "
                              "Randomize less (e.g. fewer --stat-groups, no --somber-infusable)"
                              + (" or use --compression kraken." if codec == CODEC_ZSTD else "."))
-        Path(path).write_bytes(out)
+        # atomic: a reader (or a backup-and-replace) must never see a half-written regulation.bin
+        target = Path(path)
+        tmp = target.with_name(target.name + ".tmp")
+        try:
+            tmp.write_bytes(out)
+            os.replace(tmp, target)
+        except BaseException:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
         return len(out)
 
     def output_limit(self, max_size: int = REGULATION_MAX_SIZE) -> int:

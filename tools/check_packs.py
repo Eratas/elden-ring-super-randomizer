@@ -17,6 +17,8 @@ For every `lang_<code>.py` next to this file the check verifies that
   * every option label and tip the table defines exists in every pack (coverage),
   * every enum option's English tip names each of its choices, so a tip can never invent a value
     that `validate()` would reject,
+  * no non-English pack tip is byte-identical to the English tip (a machine copy-paste, not a
+    translation - only long tips, see untranslated_tip_problems),
   * tips are at least two non-empty, non-repeated paragraphs and reach the depth threshold,
   * quotes are balanced (guillemets, straight and curly double quotes),
   * the Russian pack uses an em-dash for asides, an en-dash for numeric ranges and a dot for
@@ -79,11 +81,39 @@ CURLY_OPEN, CURLY_CLOSE = "\u201c", "\u201d"                  # “ ”
 
 # Keys a pack may define to localize a GUI choice token (ui:tok:<value>).  They are optional: a pack
 # that leaves them out falls back to the raw English token, so they are excluded from key-set parity.
-OPTIONAL_PREFIXES = ("ui:tok:",)
+# Same for ui:sec_tip:<section> - the section tooltips; a pack that leaves them out falls back to the
+# English SECTION_TIPS text in ui/app.py.
+OPTIONAL_PREFIXES = ("ui:tok:", "ui:sec_tip:")
 
 
 def _structural_keys(keys) -> set[str]:
     return {k for k in keys if not k.startswith(OPTIONAL_PREFIXES)}
+
+
+def untranslated_tip_problems(packs: dict[str, dict[str, str]]) -> list[str]:
+    """A non-English pack whose tip is byte-identical to the English tip is untranslated.
+
+    Only tips the gate enforces at some depth (English length >= 120, so a machine copy is a real
+    tell) are compared: short tips may legitimately equal the English form where a language has no
+    shorter one.
+    """
+    problems: list[str] = []
+    try:
+        from tips import TIPS
+    except Exception:  # tips is next to us; a failure here is not a translation problem
+        return problems
+    for code, table in packs.items():
+        if code == "en":
+            continue
+        for key, value in table.items():
+            if not key.startswith("opt:") or not key.endswith(":tip"):
+                continue
+            english = TIPS.get(key[4:-4])        # TIPS keys are bare (no "opt:" prefix)
+            if english is None or len(english) < 120:
+                continue
+            if value.strip() == english.strip():
+                problems.append(f"{code}: {key} is identical to the English tip - add a translation")
+    return problems
 
 
 def placeholders(text: str) -> set[str]:
@@ -486,6 +516,10 @@ def report(packs: dict[str, dict[str, str]], min_tip: int, quiet: bool = False,
         problems_total.append(problem)
 
     for problem in choices_problems(packs):
+        print(f"        - {problem}")
+        problems_total.append(problem)
+
+    for problem in untranslated_tip_problems(packs):
         print(f"        - {problem}")
         problems_total.append(problem)
 
