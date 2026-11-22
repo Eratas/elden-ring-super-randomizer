@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'Kommandoraden som det här fönstret kör. Klicka för a
     'ui:sec_tip:spells': 'Vad en aura eller en förbannelse gör och vad den kostar.',
     'ui:sec_tip:world': 'Var de två fläckar är, och med vad du startar.',
     'ui:sec_tip:advanced': 'Inställningar som bara betyder något i ovanliga inställningar.',
+    'opt:goods_name_gaps:label': 'Varning om varor utan namn',
+    'opt:goods_name_gaps:tip': "Listar de användbara varorna som inte har en post i tools/names/EquipParamGoods.txt.\n\nVerktyget läser varonamnet från textfilerna som spelet levererar med datfilerna; där en id inte har en post visar verktygets rapporter id:t där namnet skulle vara - '?'-stil namn som spelet själv använder för oupptäckta objekt. Passet ändrar inget; det varnar bara och listar id:n, ikonerna och sorteringsordningen för de påverkade varorna.\n\nExempel: ett objekt som faller i spelet men har ingen namngivande post finns i varningen med dess id. Risk: ingen. Namnfilen är data: att lägga till en id-post där är sättet att ge objektet ett namn.",
+    'phase:goods name gaps': 'goods name gaps',
 }

@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'La línea de comandos que ejecutará esta ventana. Haz c
     'ui:sec_tip:spells': 'Qué hace un hechizo o incantación, y cuánto cuesta.',
     'ui:sec_tip:world': 'Dónde están las dos botellas y con qué empiezas.',
     'ui:sec_tip:advanced': 'Ajustes que solo importan para configuraciones poco habituales.',
+    'opt:goods_name_gaps:label': 'Advertencia de bienes sin nombre',
+    'opt:goods_name_gaps:tip': "Lista los bienes utilizables que no tienen entrada en tools/names/EquipParamGoods.txt.\n\nLa herramienta lee los nombres de los bienes de los archivos de texto que el juego envía con los archivos de datos; donde un ID no tiene entrada, los informes de la herramienta muestran el ID donde iría el nombre - los nombres estilo '?' que el juego usa por sí mismo para elementos no descubiertos. El paso no cambia nada; solo advierte y lista los IDs, iconos y orden de clasificación de los bienes afectados.\n\nEjemplo: un elemento que cae en el juego pero no tiene entrada de nombre aparece en la advertencia con su ID. Riesgo: ninguno. El archivo de nombres son datos: añadir una entrada con el ID es la forma de dar un nombre al elemento.",
+    'phase:goods name gaps': 'goods name gaps',
 }

@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'La riga di comando che questa finestra eseguirà. Fai cl
     'ui:sec_tip:spells': 'Cosa fa un incantesimo o una benedizione e quanto costa.',
     'ui:sec_tip:world': 'Dove sono le due scorte e cosa inizi.',
     'ui:sec_tip:advanced': 'Impostazioni che hanno senso solo in configurazioni poco comuni.',
+    'opt:goods_name_gaps:label': 'Avvisa sui beni senza nome',
+    'opt:goods_name_gaps:tip': "Elenca i beni utilizzabili senza una voce in tools/names/EquipParamGoods.txt.\n\nLo strumento legge i nomi dei beni dai file di testo che il gioco fornisce con i file dati; dove un id non ha una voce, i report dello strumento mostrano l'id al posto del nome - i nomi stile '?' che il gioco usa per sé per gli oggetti non scoperti. Il passaggio non cambia nulla; avvisa solo elencando id, icone e ordine dei beni interessati.\n\nEsempio: un oggetto che cade nel gioco ma senza voce di nome appare nel warning con il suo id. Rischio: nessuno. Il file nomi sono dati: aggiungere una voce con l'id è il modo per dare un nome all'oggetto.",
+    'phase:goods name gaps': 'goods name gaps',
 }

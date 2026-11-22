@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'De opdrachtregel die dit venster uitvoert. Klik om te ko
     'ui:sec_tip:spells': 'Wat een magie of zegding doet, en wat de kosten zijn.',
     'ui:sec_tip:world': 'Waar de twee flessen liggen en wat je bij het starten hebt.',
     'ui:sec_tip:advanced': 'Instellingen die alleen bij ongebruikelijke instellingen er toe doen.',
+    'opt:goods_name_gaps:label': 'Waarschuwing over goederen zonder namen',
+    'opt:goods_name_gaps:tip': "Genoteert de bruikbare goederen zonder een vermelding in tools/names/EquipParamGoods.txt.\n\nDe tool leest goederennamen uit de tekstbestanden die het spel samen met de databestanden meebrengt; waar een id geen vermelding heeft, toont het hulpmiddel de id in plaats van de naam - de '?'-stijl namen die het spel zelf gebruikt voor onbekende items. De pas verandert niets; het waarschuwt slechts en genoteert de ids, iconen en sorteervolgorde van de getroffen goederen.\n\nVoorbeeld: een item dat in het spel valt maar geen naamvermelding heeft, verschijnt in de waarschuwing met zijn id. Risico: geen. Het namenbestand is data: een id-vermelding eraan toevoegen is de manier om het item een naam te geven.",
+    'phase:goods name gaps': 'goods name gaps',
 }

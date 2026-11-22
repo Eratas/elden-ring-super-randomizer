@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'Die Befehlszeile, die dieses Fenster ausführt. Zum Kopi
     'ui:sec_tip:spells': 'Was eine Zauberbuchlung tut und was sie kostet.',
     'ui:sec_tip:world': 'Wo die beiden Flaschen sind und was du anfängst.',
     'ui:sec_tip:advanced': 'Einstellungen, die nur bei unüblichen Einrichtungen zählen.',
+    'opt:goods_name_gaps:label': 'Warnung für Waren ohne Namen',
+    'opt:goods_name_gaps:tip': "Listet die verwendbaren Güter ohne Eintrag in tools/names/EquipParamGoods.txt auf.\n\nDas Tool liest die Güternamen aus den Textdateien, die das Spiel mit den Datendateien mitbringt; wo eine ID keinen Eintrag hat, zeigt das Tool in den Berichten die ID an der Stelle des Namens - die '?'-Namen, die das Spiel selbst für nicht entdeckte Gegenstände verwendet. Der Pass ändert nichts; er warnt nur und listet die IDs, Symbole und Sortierung der betroffenen Güter auf.\n\nBeispiel: Ein Gegenstand, der im Spiel fällt, aber keinen Namenseintrag hat, erscheint in der Warnung mit seiner ID. Risiko: keines. Die Namensdatei ist Daten: Einträge hinzuzufügen ist der Weg, um dem Gegenstand einen Namen zu geben.",
+    'phase:goods name gaps': 'goods name gaps',
 }

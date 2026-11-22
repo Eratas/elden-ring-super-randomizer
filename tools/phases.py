@@ -13,6 +13,7 @@ READING = "reading the input"
 BUFF_DURATIONS = "buff durations"
 CONSUMABLE_EFFECTS = "consumable effects"
 STACK_SIZES = "stack sizes"
+NAMES_GAPS = "goods name gaps"
 PRICES = "prices"
 ENEMY_RUNES = "enemy runes"
 ENEMY_HP = "enemy hit points"
@@ -39,6 +40,7 @@ PHASES: tuple[str, ...] = (
     BUFF_DURATIONS,
     CONSUMABLE_EFFECTS,
     STACK_SIZES,
+    NAMES_GAPS,
     PRICES,
     ENEMY_RUNES,
     ENEMY_HP,

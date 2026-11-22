@@ -501,6 +501,13 @@ def run() -> None:
     pairs_after = sorted((gd.get(r, "maxNum"), gd.get(r, "maxRepositoryNum")) for r in gd.rows)
     check(pairs_before == pairs_after, "--random-goods: (max, repo) multiset changed (must be a swap)")
 
+    # --- goods name gaps: the warning lists usable goods missing from names/EquipParamGoods.txt ---
+    import names_gaps
+    out = names_gaps.goods_gaps(build())
+    check(bool(out), "goods name gaps: the synthetic world produced no warning report")
+    check(any("5002" in ln for ln in out), "goods name gaps: the nameless goods (5002) are missing from the warning")
+    check(names_gaps.goods_gaps(build()) == out, "goods name gaps: not reproducible")
+
     # --- shops: every weapon slot rerolls from the named weapon pool ---
     check(len(shops.randomize(build(), random.Random(1))) > 1, "--random-shops: empty report")
 

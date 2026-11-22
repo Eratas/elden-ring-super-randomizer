@@ -10,6 +10,7 @@ Passes, in the order they run (the order matters: the random generator is shared
 values another pass is about to change):
 
     goods      every usable item gets another item's use effect, stack sizes (EquipParamGoods)
+    goods_name_gaps  the warning about usable goods without names (read-only)
     prices     shop prices and sell prices (ShopLineupParam, EquipParamGoods, equipment tables)
     durations  how long buffs last (SpEffectParam.effectEndurance)
     runes      the runes an enemy gives (NpcParam.getSoul)
@@ -44,6 +45,7 @@ import gear  # noqa: E402
 import gems  # noqa: E402
 import goods  # noqa: E402
 import loot  # noqa: E402
+import names_gaps  # noqa: E402
 import oodle  # noqa: E402
 import options  # noqa: E402
 import phases  # noqa: E402
@@ -519,6 +521,11 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             say(phases.STACK_SIZES)
             qlines = goods.randomize(reg, names, rng)
             print("\n".join(l for l in qlines if l.startswith("#")))
+        glines: list[str] = []                             # read-only warning about goods without names
+        if v["goods_name_gaps"]:
+            say(phases.NAMES_GAPS)
+            glines = names_gaps.goods_gaps(reg)
+            print("\n".join(l for l in glines if l.startswith("#")))
         if v["random_prices"]:
             say(phases.PRICES)
             lines += [""] + randomize_prices(reg, rng, v["price_mode"], v["price_min"], v["price_max"],
@@ -772,6 +779,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             dump("start.txt", tlines)
         if qlines:
             dump("goods.txt", qlines)
+        if glines:
+            dump("goods_gaps.txt", glines)
         if shop_lines:
             dump("shops.txt", shop_lines)
         if dlines:

@@ -17,4 +17,7 @@ T = {'ui:tip_command': '此窗口将执行的命令行。点击复制。', 'opt:
     'ui:sec_tip:spells': '咒语的作用和消耗。',
     'ui:sec_tip:world': '两个瓶子的位置，以及你的初始装备。',
     'ui:sec_tip:advanced': '只在特殊情况下才有意义的设置。',
+    'opt:goods_name_gaps:label': '警告未命名的商品',
+    'opt:goods_name_gaps:tip': '列出 tools/names/EquipParamGoods.txt 中没有条目的可用商品。\n\n工具从游戏随数据文件一起提供的文本文件中读取商品名称；在某个 ID 没有条目时，工具的报告会在名称位置显示该 ID——即游戏自身对未发现物品使用的“?”风格名称。该步骤不改变任何内容；只是警告，列出受影响商品的 ID、图标和排序顺序。\n\n示例：游戏中会掉落、但没有名称条目的物品会以其 ID 出现在警告中。风险：无。名称文件是数据：在其中添加 ID 条目是赋予物品名称的方法。',
+    'phase:goods name gaps': 'goods name gaps',
 }

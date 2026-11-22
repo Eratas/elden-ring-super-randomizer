@@ -255,6 +255,8 @@ OPTIONS: tuple[Opt, ...] = (
     # --- consumables and buffs -------------------------------------------------------------
     _o("goods", "--goods", neg=("--no-goods",), default=False, group="goods",
        label="Shuffle consumable effects"),
+    _o("goods_name_gaps", "--goods-name-gaps", group="goods",
+       label="Warn about goods without names"),
     _o("mode", "--mode", kind="enum", default="shuffle", group="goods", choices=("shuffle", "random"),
        needs=("goods",), label="Assignment"),
     _o("include_flasks", "--include-flasks", group="goods", needs=("goods",),
@@ -641,6 +643,7 @@ def argv_from_values(values: dict) -> list[str]:
     for key, flag in (("random_prices", "--random-prices"),
                       ("random_shop_stock", "--random-shop-stock"),
                       ("goods_quantity", "--goods-quantity"),
+                       ("goods_name_gaps", "--goods-name-gaps"),
                       ("random_armor", "--random-armor"),
                       ("random_armor_fresh", "--random-armor-fresh"),
                       ("random_armor_drops", "--random-armor-drops"),

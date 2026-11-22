@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'Linia poleceń, którą wykona to okno. Kliknij, aby sko
     'ui:sec_tip:spells': 'Czym jest czar lub wzwód, i co się za to płaci.',
     'ui:sec_tip:world': 'Gdzie są dwie butelki i czym zaczynasz.',
     'ui:sec_tip:advanced': 'Ustawienia, które mają znaczenie tylko w nietypowych konfiguracjach.',
+    'opt:goods_name_gaps:label': 'Ostrzeżenie o towarach bez nazw',
+    'opt:goods_name_gaps:tip': "Wymienia używalne towary bez wpisu w tools/names/EquipParamGoods.txt.\n\nNarzędzie czyta nazwy towarów z plików tekstowych, które gra dostarcza ze swoimi plikami danych; gdzie id nie ma wpisu, raporty narzędzia pokazują id w miejscu nazwy - nazwy w stylu '?' używane przez samą grę dla nieodkrytych przedmiotów. Przechodzenie nie zmienia niczego; tylko ostrzega, wymieniając id, ikony i kolejność sortowania dotkniętych towarów.\n\nPrzykład: przedmiot, który wypada w grze, ale nie ma wpisu nazwy, pojawia się w ostrzeżeniu z jego id. Ryzyko: brak. Plik nazw jest danymi: dodanie wpisu z id jest sposobem na nadanie temu przedmiotowi nazwy.",
+    'phase:goods name gaps': 'goods name gaps',
 }

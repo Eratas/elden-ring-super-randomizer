@@ -17,4 +17,7 @@ T = {'ui:tip_command': 'La ligne de commande que cette fenêtre exécutera. Cliq
     'ui:sec_tip:spells': 'Ce que fait une sorcellerie ou une incantation, et ce que cela coûte.',
     'ui:sec_tip:world': 'Où se trouvent les deux bouteilles et ce que vous commencez.',
     'ui:sec_tip:advanced': "Réglages qui n'importent que pour des configurations inhabituelles.",
+    'opt:goods_name_gaps:label': 'Avertissement sur les marchandises sans nom',
+    'opt:goods_name_gaps:tip': "Liste les marchandises utilisables qui n'ont pas d'entrée dans tools/names/EquipParamGoods.txt.\n\nL'outil lit les noms des marchandises dans les fichiers texte fournis avec les fichiers de données ; là où un id n'a pas d'entrée, les rapports de l'outil montrent l'id à la place du nom - les noms de type '?' que le jeu utilise lui-même pour les objets non découverts. Le passage ne change rien ; il avertit seulement et liste les ids, icônes et ordre de tri des marchandises concernées.\n\nExemple : un article qui tombe dans le jeu mais sans entrée de nom apparaît dans l'avertissement avec son id. Risque : aucun. Le fichier de noms est des données : ajouter une entrée avec l'id y est la façon de donner un nom à l'article.",
+    'phase:goods name gaps': 'goods name gaps',
 }
