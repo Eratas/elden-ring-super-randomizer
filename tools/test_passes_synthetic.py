@@ -382,6 +382,21 @@ def run() -> None:
     out = ed.randomize_dropped_weapons(random.Random(3), kinds={3})
     check(any("nothing changed" in ln for ln in out), "randomized weapons: kinds filter ignored")
 
+    # --- map lots (chests/rewards): weapon slots reroll too ---
+    reg, ed = _two_drop_world()
+    M = reg._params["ItemLotParam_map"]
+    mrow = M.add_row(10010, M.by_id[400000000])     # 10010 is a locations-listed map lot
+    M.set(mrow, "lotItemId01", 4000000)
+    M.set(mrow, "lotItemCategory01", 2)
+    M.set(mrow, "lotItemBasePoint01", 10)
+    M.set(mrow, "lotItemNum01", 1)
+    out = ed.randomize_dropped_weapons(random.Random(5))
+    check(any("10010" in ln for ln in out), "randomized weapons: no report line for the map-lot weapon")
+    check(M.get(mrow, "lotItemId01") in pool_ids,
+          "randomized weapons: map-lot slot holds an id that is not in the pool")
+    check(ed.L.get(ed.L.by_id[300000000], "lotItemId01") > 0,
+          "randomized weapons: enemy-drop pass lost its slot after the map-lot extension")
+
     # --- a status whose text list is missing its own line is repaired (the silent-passive case) ---
     reg = build()
     wp = weapons.Weapons(reg)

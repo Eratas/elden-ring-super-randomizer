@@ -342,16 +342,21 @@ class EnemyDrops:
         return lines
 
     def randomize_dropped_weapons(self, rng: random.Random, kinds: set[int] | None = None) -> list[str]:
-        """Every weapon slot in an enemy drop lot holds a random weapon from the pool.
+        """Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards,
+        gifts) holds a random weapon from the pool.
 
-        The game awards the lot when an enemy dies; this rewrites the weapon id of every weapon slot
-        in the lots NpcParam points at (and the rows after them) to a fresh draw from the pool - the
-        weapons the input hands out somewhere.  It changes what you find when you pick up a drop,
-        not where loot drops and not what a weapon is; rows with a one-time flag stay as they are."""
+        The game awards the enemy lots when an enemy dies and the map lots at area events; this
+        rewrites the weapon id of every weapon slot to a fresh draw from the pool - the weapons the
+        input hands out somewhere.  It changes what you find when you pick up a drop, not where
+        loot drops and not what a weapon is; rows with a one-time flag stay as they are."""
         L = self.L
         rows: dict[int, object] = {}
         for k in self.lots():
             for r in self.run(k):
+                rows.setdefault(r.id, r)
+        for k in load_locations().get("ItemLotParam_map", {}):
+            r = self.M.by_id.get(k)
+            if r is not None:
                 rows.setdefault(r.id, r)
         pool = [e[1] for e in self.build_pool(list(rows.values()), kinds) if e[0] == CATEGORY_WEAPON]
         slots = [(r, i) for r in rows.values() if not self.protected(r)
@@ -362,7 +367,7 @@ class EnemyDrops:
         if len(pool) < 2 or not slots:
             return [f"# randomize dropped weapons: {len(pool)} pool weapons, {len(slots)} weapon slots, nothing changed"]
         lines = [f"# randomize dropped weapons: rerolled {len(slots)} slot(s) over the {len(pool)}-weapon pool",
-                 "# lot row  [enemy of its drop table]  old weapon -> new weapon"]
+                 "# lot row  [enemy or map lot]  old weapon -> new weapon"]
         for r, i in slots:
             lname = self.lot_names.get(r.id) or "?"
             old = L.get(r, f"lotItemId0{i}")
