@@ -8,15 +8,15 @@ The Item and Enemy Randomizer swaps the two slots around and clears most one-tim
 
 For every lot an NpcParam row points at (1361 in vanilla 1.17.1; rows nothing points at are cut content and
 stay as they are):
-  - its first row drops for certain: the "nothing" slots lose their weight, and a row without an item slot
-    (the 0 % rows of the Crucible Knights and others) gets one;
-  - every item slot of every row of the lot gets a random item; the rows after the first keep their chance,
-    so an enemy with several rolls still has its rare extra drops, only random ones;
+  - the lot is given exactly `rolls` rows, each holding one random item at `chance` percent and otherwise
+    "nothing", so every kill rolls that many independent dice and can give 0 to `rolls` items.  Rows are
+    filled, emptied or appended as needed; `rolls` of 0 (or an empty field) means one guaranteed item per
+    kill instead, which is the same as one roll at 100 percent;
   - a row with a getItemFlagId is a one-time drop (the Alabaster Lord's sword, the Banished Knight's Dragon
     Communion Seal, the Silver Tear Orbs' Larval Tears; the item randomizer's own placements) and is left
     alone, item and chance, as is a row holding a key item (belt and braces: the item randomizer may put a key
-    item into an enemy drop).  When such a row is the lot's first, a row with a guaranteed random item is
-    appended to the lot (next id), so the enemy still drops something once its one-time drop is gone.
+    item into an enemy drop).  Such a row is not one of the lot's dice, so the lot keeps its full number of
+    rolls around it.
 
 The pool is every item the input hands out somewhere: the pickups, rewards and gifts of names/item_locations.txt,
 the shops listed there and the enemy drops themselves -- weapons (upgrade level dropped), armor, talismans, Ashes
@@ -44,8 +44,8 @@ POOL_CATEGORIES = (1, 2, 3, 4, 5)                     # goods, weapon, armor, ta
 # A drop should look like loot, not like a uniform draw over every row in the game: consumables stay
 # common, equipment is the reason to kill something, ashes are the rare find.
 CATEGORY_WEIGHT = {1: 40, 2: 25, 3: 20, 4: 10, 5: 5}
-DEFAULT_ROLLS = 4
-DEFAULT_CHANCE = 50
+DEFAULT_ROLLS = 3
+DEFAULT_CHANCE = 25
 # EquipParamGoods.goodsType values that never drop: 1 key item, 9 Flask of Wondrous Physick, 12 info item
 # (letters, notes), 13 (unused), 15 Great Rune.  Flasks of Crimson / Cerulean Tears are goodsType 0 with a suppleType.
 KEEP_GOODS_TYPES = {1, 9, 12, 13, 15}
@@ -193,10 +193,16 @@ class EnemyDrops:
     def randomize(self, rng: random.Random, rolls: int | None = DEFAULT_ROLLS, chance: int = DEFAULT_CHANCE,
                   kinds: set[int] | None = None, unique_drops: bool = False,
                   material_drops: bool = False, unique_rate: float = UNIQUE_CHANCE) -> list[str]:
-        """rolls=None: the first row of every lot drops for certain, the rows after it keep their chance, every row's
-           items are random.  rolls=N: every lot gets exactly N rows, each one random item at `chance` percent (rows
-           appended or emptied as needed), so a kill drops 0 to N items.  `kinds` restricts the item categories."""
+        """Every lot gets exactly `rolls` dice, each one a random item at `chance` percent and nothing otherwise, so a
+           kill drops 0 to `rolls` items.  `rolls` of 0 or None gives one guaranteed item per kill instead, which is
+           one die at 100 percent.  Nothing is ever forced to drop unless that guaranteed mode is chosen.  `kinds`
+           restricts the item categories."""
         L = self.L
+        rolls = max(0, int(rolls or 0))
+        chance = max(1, min(100, int(chance)))
+        guaranteed = rolls == 0
+        count = 1 if guaranteed else rolls
+        rolls = count                       # one path below: every lot is filled to exactly `count` dice
         lots = self.lots()
         rows: dict[int, object] = {}
         for k in lots:
@@ -209,15 +215,13 @@ class EnemyDrops:
         cat_items = {c: [entry for entry in pool if entry[0] == c] for c in POOL_CATEGORIES}
         cats = [c for c in POOL_CATEGORIES if cat_items[c]]
         cat_weights = [CATEGORY_WEIGHT[c] for c in cats]
-        mode = (f"every lot gets {rolls} rolls, the first guaranteed and the rest at {chance}% each: 1 to {rolls} items "
-                f"per kill, {1 + (rolls - 1) * chance / 100:g} on average (one-time drops and rows with a key item stay "
-                "and do not count)" if rolls else
-                "the first row of every lot always drops, the rows after it keep their chance, one-time drops (rows with a "
-                "flag) and rows with a key item stay")
+        mode = (f"every lot rolls {count} die/dice at {chance}% each: 0 to {count} items per kill, "
+                f"{count * chance / 100:g} on average" if not guaranteed else
+                "every lot drops one item for certain (rolls 0)")
         lines = [f"# enemy drops: lots={len(lots)} (ItemLotParam_enemy rows NpcParam.itemLotId_enemy points at, with the "
                  f"consecutive rows after them: {len(rows)} rows), pool={len(pool)} items ({by_cat[1]} goods, {by_cat[2]} weapons, "
                  f"{by_cat[3]} armor pieces, {by_cat[4]} talismans, {by_cat[5]} ashes of war: every item the input hands out "
-                 f"somewhere, each once); {mode}",
+                 f"somewhere, each once); {mode} (one-time drops and rows with a key item stay and do not count)",
                  "# lot row  [enemy] vanilla content (Paramdex name)  :  before  ->  after   (chance per item; 'kept' = left alone, "
                  "'+ row' = row appended to the lot)"]
         if len(pool) < 2:
@@ -225,7 +229,7 @@ class EnemyDrops:
             return lines
         done: set[int] = set()
         n_empty: set[int] = set()        # rows that are no roll of their lot: emptied or left alone
-        n = {"rows": 0, "certain": 0, "kept": 0, "added": 0, "emptied": 0, "short": 0}
+        n = {"rows": 0, "kept": 0, "added": 0, "emptied": 0, "short": 0}
         old: dict[int, str] = {}
 
         def draw(used: set[tuple[int, int]] | None = None) -> tuple[int, int, int]:
@@ -264,24 +268,6 @@ class EnemyDrops:
             for i in range(1, SLOTS + 1):
                 set_slot(r, i, 0, 0, 0, 0)
 
-        def randomize_items(r, used: set[tuple[int, int]]) -> None:
-            for i, (iid, _cat, w, _) in enumerate(self.slots(r), 1):
-                if w > 0 and iid > 0:
-                    new_iid, new_cat, num = draw(used)
-                    L.set(r, f"lotItemId{i:02d}", new_iid)
-                    L.set(r, f"lotItemCategory{i:02d}", new_cat)
-                    L.set(r, f"lotItemNum{i:02d}", num)
-
-        def make_certain(r, used: set[tuple[int, int]]) -> None:
-            slots = self.slots(r)
-            for i, (iid, _, w, _) in enumerate(slots, 1):
-                if w > 0 and iid <= 0:
-                    L.set(r, f"lotItemBasePoint{i:02d}", 0)
-            if not any(w > 0 and iid > 0 for iid, _, w, _ in slots):
-                clear(r)
-                iid, cat, num = draw(used)
-                set_slot(r, 1, iid, cat, CERTAIN, num)
-
         def set_roll(r, used: set[tuple[int, int]], certain: bool = False) -> None:
             """One random item at `chance` percent (or for certain), nothing otherwise."""
             clear(r)
@@ -316,74 +302,74 @@ class EnemyDrops:
             for r in run:
                 if r.id not in old:
                     old[r.id] = self.describe(r)
-            if rolls:
-                active = [r for r in run if r.id in done and r.id not in n_empty]
-                need = rolls - len(active)
-                for r in run:
-                    if r.id in done:
-                        continue
-                    why = self.protected(r)
-                    if why:
-                        done.add(r.id)
-                        n_empty.add(r.id)              # not a roll of this lot either
-                        n["kept"] += 1
-                        lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  kept ({why})")
-                        continue
-                    done.add(r.id)
-                    if need > 0:
-                        set_roll(r, used, certain=(need == rolls))
-                        n["rows"] += 1
-                        need -= 1
-                        lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  {self.describe(r)}")
-                    else:
-                        empty(r)
-                        n_empty.add(r.id)
-                        n["emptied"] += 1
-                        lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  nothing (beyond the {rolls} rolls)")
-                while need > 0:
-                    row = append_row(run)
-                    if row is None:
-                        n["short"] += 1
-                        lines.append(f"{'':>10}  lot {k}: only {rolls - need} of {rolls} rolls, no free id before the next lot")
-                        break
-                    set_roll(row, used, certain=(need == rolls))
-                    done.add(row.id)
-                    n["added"] += 1
-                    need -= 1
-                    lines.append(f"{row.id:>10}  + row for lot {k}  :  nothing  ->  {self.describe(row)}")
-                continue
-            for j, r in enumerate(list(run)):          # append_row extends run; the new row needs no pass of its own
+            active = [r for r in run if r.id in done and r.id not in n_empty]
+            need = count - len(active)
+            for r in run:
+                if r.id in done:
+                    continue
                 why = self.protected(r)
                 if why:
-                    if r.id not in done:
-                        done.add(r.id)
-                        n["kept"] += 1
-                        lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  kept ({why})")
-                    if j == 0:
-                        row = append_row(run)
-                        if row is None:
-                            n["short"] += 1
-                            lines.append(f"{'':>10}  lot {k}: no free id before the next lot, no guaranteed row added")
-                        else:
-                            iid, cat, num = draw(used)
-                            set_slot(row, 1, iid, cat, CERTAIN, num)
-                            done.add(row.id)
-                            n["added"] += 1
-                            lines.append(f"{row.id:>10}  + row for lot {k}  :  nothing  ->  {self.describe(row)}")
-                    continue
-                if r.id not in done:
                     done.add(r.id)
+                    n_empty.add(r.id)              # not a die of this lot: a one-time drop or a key item
+                    n["kept"] += 1
+                    lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  kept ({why})")
+                    continue
+                done.add(r.id)
+                if need > 0:
+                    set_roll(r, used, certain=guaranteed)
                     n["rows"] += 1
-                    randomize_items(r, used)
-                if j == 0:
-                    make_certain(r, used)
-                    n["certain"] += 1
-                lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  {self.describe(r)}")
+                    need -= 1
+                    lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  {self.describe(r)}")
+                else:
+                    empty(r)
+                    n_empty.add(r.id)
+                    n["emptied"] += 1
+                    lines.append(f"{r.id:>10}  {name(r)}  :  {old[r.id]}  ->  nothing (beyond the {count} rolls)")
+            while need > 0:
+                row = append_row(run)
+                if row is None:
+                    n["short"] += 1
+                    lines.append(f"{'':>10}  lot {k}: only {count - need} of {count} rolls, no free id before the next lot")
+                    break
+                set_roll(row, used, certain=guaranteed)
+                done.add(row.id)
+                n["added"] += 1
+                need -= 1
+                lines.append(f"{row.id:>10}  + row for lot {k}  :  nothing  ->  {self.describe(row)}")
         summary = (f"# rows set to a roll={n['rows']}, rows emptied={n['emptied']}, rows appended={n['added']}, rows left alone={n['kept']}"
-                   + (f", lots short of rolls (no free id)={n['short']}" if n["short"] else "") if rolls else
-                   f"# rows randomized={n['rows']} (guaranteed first rows={n['certain']}), rows left alone={n['kept']}, "
-                   f"guaranteed rows appended={n['added']}" + (f", lots without one (no free id)={n['short']}" if n["short"] else ""))
+                   + (f", lots short of rolls (no free id)={n['short']}" if n["short"] else ""))
         lines.insert(2, summary)
+        return lines
+
+    def randomize_dropped_weapons(self, rng: random.Random, kinds: set[int] | None = None) -> list[str]:
+        """Every weapon slot in an enemy drop lot holds a random weapon from the pool.
+
+        The game awards the lot when an enemy dies; this rewrites the weapon id of every weapon slot
+        in the lots NpcParam points at (and the rows after them) to a fresh draw from the pool - the
+        weapons the input hands out somewhere.  It changes what you find when you pick up a drop,
+        not where loot drops and not what a weapon is; rows with a one-time flag stay as they are."""
+        L = self.L
+        rows: dict[int, object] = {}
+        for k in self.lots():
+            for r in self.run(k):
+                rows.setdefault(r.id, r)
+        pool = [e[1] for e in self.build_pool(list(rows.values()), kinds) if e[0] == CATEGORY_WEAPON]
+        slots = [(r, i) for r in rows.values() if not self.protected(r)
+                 for i in range(1, SLOTS + 1)
+                 if L.get(r, f"lotItemCategory0{i}") == CATEGORY_WEAPON
+                 and L.get(r, f"lotItemId0{i}") > 0
+                 and L.get(r, f"lotItemBasePoint0{i}") > 0]
+        if len(pool) < 2 or not slots:
+            return [f"# randomize dropped weapons: {len(pool)} pool weapons, {len(slots)} weapon slots, nothing changed"]
+        lines = [f"# randomize dropped weapons: rerolled {len(slots)} slot(s) over the {len(pool)}-weapon pool",
+                 "# lot row  [enemy of its drop table]  old weapon -> new weapon"]
+        for r, i in slots:
+            lname = self.lot_names.get(r.id) or "?"
+            old = L.get(r, f"lotItemId0{i}")
+            new = rng.choice(pool)
+            L.set(r, f"lotItemId0{i}", new)
+            lines.append(f"{r.id:>10}  {lname:<40}  {self.item_name(old, CATEGORY_WEAPON)} -> "
+                         f"{self.item_name(new, CATEGORY_WEAPON)}")
         return lines
 
 
@@ -428,19 +414,19 @@ def randomize_hp(reg: erreg.Regulation, rng: random.Random, mode: str, lo: int |
 
 
 def sample(reg: erreg.Regulation, rng: random.Random, count: int, rolls: int | None = None,
-           chance: int = 10) -> list[str]:
+           chance: int = DEFAULT_CHANCE) -> list[str]:
     """The loot simulator: `count` random kills, each drop row rolled at its own chance.
 
     The roll mirrors what the game does with a lot - every row is independent and a row drops one of its
     slots, weighted by the chance printed in drops.txt - so a kill shows what it would really have given,
-    "nothing" included.  It uses whatever the passes left in the tables, so run it with the options you
-    want to judge."""
+    "nothing" included.  It reads whatever the passes left in the tables, so it reports the drop settings
+    of the run it is attached to."""
     ed = EnemyDrops(reg)
     lots = ed.lots()
     if not lots or count < 1:
         return ["# loot simulation: no enemy drop lots"]
-    model = (f"{rolls} rolls at {chance}% each, so 0 to {rolls} items per kill"
-             if rolls else "the first row always drops, later rows roll at their own chance")
+    model = (f"the roll settings were {rolls} rolls at {chance}% each, so 0 to {rolls} items per kill"
+             if rolls else "the roll settings were one guaranteed item per kill")
     lines = [f"# loot simulation: {count} random kills. {model}.",
              "# Each line is one kill, exactly as the game would roll it - nothing is forced to drop.",
              "# enemy  :  what dropped"]

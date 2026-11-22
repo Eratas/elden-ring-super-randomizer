@@ -15,6 +15,7 @@ values another pass is about to change):
     runes      the runes an enemy gives (NpcParam.getSoul)
     hp         the hit points of an enemy (NpcParam.hp)
     drops      what an enemy drops (ItemLotParam_enemy)
+    dropped_weapons  enemy drop slots hold fresh random weapons (ItemLotParam_enemy)
     weapons    somber affinities, movesets, default skills, per-row stats (EquipParamWeapon ...)
     ashes      skills and on-hit effects of Ashes of War (EquipParamGem)
     armour     armour stats (EquipParamProtector), talisman rows (EquipParamAccessory)
@@ -550,6 +551,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 v["unique_drops"], v["material_drops"], v["unique_rate"] / 100)
             print("\n".join(l for l in elines if l.startswith("#")))
 
+        dw_lines: list[str] = []       # on-pickup reroll: fresh random weapons in the drop lots
+        if v["random_dropped_weapons"]:
+            say(phases.DROPPED_WEAPONS)
+            dw_lines += enemy_drops.EnemyDrops(reg).randomize_dropped_weapons(
+                rng, _kinds(v["enemy_drop_kinds"]))
+            print("\n".join(l for l in dw_lines if l.startswith("#")))
+
         if v["random_shop_stock"]:
             say(phases.SHOP_STOCK)
             shop_lines = shops.randomize(reg, rng, _kinds(v["shop_stock_kinds"]))
@@ -706,7 +714,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["simulate"]:
             say(phases.LOOT_SIMULATION)
             print("\n".join(enemy_drops.sample(reg, rng, v["simulate"], v["enemy_drop_rolls"],
-                                                   v["enemy_drop_chance"] or 10)))
+                                                   v["enemy_drop_chance"]
+                                                   or enemy_drops.DEFAULT_CHANCE)))
         say(phases.DONE)
         return 0
     out = Path(v["output"])

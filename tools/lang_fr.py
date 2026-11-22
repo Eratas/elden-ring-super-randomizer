@@ -3,4 +3,8 @@ T = {'ui:tip_command': 'La ligne de commande que cette fenêtre exécutera. Cliq
     "ui:sec_tip:loot": "Tout le butin au même endroit : ce que les ennemis lâchent et à quelle fréquence, la qualité d'une arme trouvée et où chaque type d'objet se trouve.",
     "ui:close_running_title": "Fermer ?",
     "ui:close_running_body": "Une exécution de randomisation est en cours. Fermer quand même ?",
-    "ui:open_failed": "Échec de l'ouverture", 'ui:sec:weapon_effects': 'Effets chaotiques des armes'}
+    "ui:open_failed": "Échec de l'ouverture", 'ui:sec:weapon_effects': 'Effets chaotiques des armes',
+    'opt:random_dropped_weapons:label': 'Armes aléatoires au sol',
+    'opt:random_dropped_weapons:tip': "Chaque emplacement d'arme dans les drops des ennemis montre une arme aléatoire.\n\nLe passage réécrit l'id d'arme de chaque emplacement vers un tirage frais dans le groupe que « Déplacer les armes vers des ennemis aléatoires » utilise - les armes que le fichier d'entrée distribue ailleurs, une par emplacement de drop d'ennemi. Il change ce que vous trouvez en ramassant un drop, pas où le butin tombe ni ce qu'est une arme ; le drop vient toujours du même lot, mais l'arme affichée est nouvelle et aléatoire à chaque fois.\n\nExemple : le drop de [Oomen] de 214000990 (Oomen Cleaver) dépose maintenant une arme aléatoire différente. Risque : il change ce qui tombe, pas ce que sont les armes - voir Mélanger les statistiques des armes.",
+    'phase:randomized weapons on pickups': 'Armes aléatoires au sol',
+}

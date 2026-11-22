@@ -17,6 +17,7 @@ PRICES = "prices"
 ENEMY_RUNES = "enemy runes"
 ENEMY_HP = "enemy hit points"
 ENEMY_DROPS = "enemy drops"
+DROPPED_WEAPONS = "randomized weapons on pickups"
 SHOP_STOCK = "shop stock"
 WEAPONS = "weapons"
 ASHES_OF_WAR = "ashes of war"
@@ -42,6 +43,7 @@ PHASES: tuple[str, ...] = (
     ENEMY_RUNES,
     ENEMY_HP,
     ENEMY_DROPS,
+    DROPPED_WEAPONS,
     SHOP_STOCK,
     WEAPONS,
     ASHES_OF_WAR,

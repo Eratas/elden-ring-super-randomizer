@@ -11,6 +11,9 @@ Both front ends read this file:
 dict back into an argument list, and `validate` coerces and checks a dict that may come from the GUI
 (everything a GUI holds is a string).  The round trip dict -> argv -> dict is the contract the GUI's
 command preview and the worker thread share.
+
+The hover text lives in tips.py and is looked up by key; this table only holds the structure (kind,
+default, limits and dependencies), so a label can be translated without touching the rules.
 """
 from __future__ import annotations
 
@@ -20,18 +23,18 @@ from typing import Any
 from tips import TIPS
 
 # -------------------------------------------------------------------------------- helpers
-# Groups, in the order the GUI lays them out.  "advanced" collects the knobs that only matter in
-# unusual setups; it is collapsed by default.
+# Groups, in the order the GUI lays them out.  Loot lives in one section on purpose: the drop table,
+# the upgrade level of what drops and the places loot can be found are one subject, not three.
+# "advanced" collects the knobs that only matter in unusual setups; it is collapsed by default.
 GROUPS = (
     ("files", "Files and output"),
     ("loot", "Loot and upgrade levels"),
-    ("lootdrops", "Where loot drops"),
     ("prices", "Prices and shops"),
-    ("drops", "Enemies and drops"),
     ("weapons", "Weapons"),
     ("weapon_effects", "Chaotic Weapon Effects"),
     ("gems", "Ashes of War"),
     ("gear", "Armour and talismans"),
+    ("drops", "Enemies: health and runes"),
     ("goods", "Consumables and buffs"),
     ("spells", "Spells"),
     ("world", "Flasks and starting items"),
@@ -80,7 +83,7 @@ class Opt:
 
 
 def _o(key: str, *flags: str, **kw) -> Opt:
-    # The long hover text lives in tips.py; the short one-liners below are only a fallback.
+    # The long hover text lives in tips.py; a key with no entry there falls back to the label.
     tip = TIPS.get(key)
     if tip:
         kw["tip"] = tip
@@ -91,173 +94,120 @@ def _o(key: str, *flags: str, **kw) -> Opt:
 OPTIONS: tuple[Opt, ...] = (
     # --- files -----------------------------------------------------------------------------
     _o("input", "--input", kind="str", default="regulation.bin", group="files",
-       label="Input regulation.bin",
-       tip="The regulation.bin to rewrite: the vanilla file, or one another randomizer (Item and Enemy "
-           "Randomizer, Fog Gate Randomizer) already produced. It is only read, never modified."),
+       label="Input regulation.bin"),
     _o("output", "--output", kind="str", default="randomized/regulation.bin", group="files",
-       label="Output file",
-       tip="Where the new regulation.bin is written. Give it a folder of its own: the reports (mapping.txt, "
-           "weapons.txt, spells.txt ...) and, when weapon names are patched, a msg folder are written next "
-           "to it, and an output named like the input would replace it."),
+       label="Output file"),
     _o("backup_replace", "--backup-replace", neg=("--no-backup-replace",), group="files", default=True,
-       label="Backup and replace files",
-       tip="On by default. This copies your input regulation.bin and the msg archives the run is about to "
-           "change into a timestamped backups/ folder next to the program, then overwrites those input files "
-           "with the newly generated ones. It is copy, then replace - not a dry run, and not a second output.\n\n"
-           "The randomized/ output folder is still written separately and keeps the reports. Turn this off to "
-           "leave your input files untouched; use the Revert button to put a backup back."),
+       label="Backup and replace files"),
     _o("oodle_dll", "--oodle-dll", kind="path", default=None, group="files", metavar="PATH",
-       label="Oodle DLL",
-       tip="oo2core_6_win64.dll, used to write the game's own Kraken format. It ships with the game (in "
-           "Game\\ ), not with this tool. Without it the output is zstd and larger."),
+       label="Oodle DLL"),
     _o("archives", kind="paths", default=(), group="files", metavar="FOLDER", cli=False,
-       label="Text archives folder",
-       tip="Optional. The msg folder (or msg\\<language> folders, ';' separated) whose item_dlc02.msgbnd.dcx "
-           "the weapon names are written into. Empty uses the copy shipped with the tool; pass the mod "
-           "folder of the Item and Enemy Randomizer or the Fog Gate Randomizer when you run on top of them, "
-           "so the names match the items that mod actually hands out."),
-    _o("seed", "--seed", kind="int", default=None, group="files",
-       label="Seed",
-       tip="Fix the seed to reproduce a run exactly. Leave it empty for a fresh one; the seed that was used "
-           "is printed at the top of the log and in mapping.txt, so you can enter it here later."),
+       label="Text archives folder"),
+    _o("seed", "--seed", kind="int", default=None, group="files", label="Seed"),
     _o("compression", "--compression", kind="enum", default="kraken", group="files",
-       choices=("auto", "kraken", "zstd", "leviathan"), label="Compression",
-       tip="kraken is the game's own Oodle format and gives the smallest file; it needs "
-           "oo2core_6_win64.dll from the game's Game folder (Mod Engine 2 setups already have it). "
-           "zstd needs no DLL but is about 35% larger, which can push the file over the game's size "
-           "limit. auto picks kraken when the DLL is found. Leave it on kraken unless you have no DLL."),
+       choices=("auto", "kraken", "zstd", "leviathan"), label="Compression"),
     _o("compression_level", "--compression-level", kind="enum", default="max", group="files",
-       choices=("fast", "max"), label="Effort",
-       tip="max is the default and gives the smallest file, with the most headroom under the size check; "
-           "it costs one to four minutes and the window shows progress. fast is for quick experiments: "
-           "seconds, about 20% larger, and the tool still refuses to write a file over the limit."),
-    _o("repack", "--repack", group="files",
-       label="Repack only (change nothing)",
-       tip="Read the input and write it out again with no randomization at all. This repairs a "
-           "regulation.bin that another tool wrote in a form the game rejects (Fog Gate Randomizer v0.2.3 "
-           "output crashes game 1.17.1 at startup)."),
-    _o("dry_run", "--dry-run", group="advanced", advanced=True,
-       label="Preview only (write nothing)",
-       tip="Run every pass and print the reports, but write no file. Use it to try a seed or a set of "
-           "options without producing a mod."),
-    _o("no_reports", "--no-reports", group="advanced", advanced=True,
-       label="Do not write the report files",
-       tip="Skip mapping.txt, weapons.txt, spells.txt and the other plain-text reports next to the output. "
-           "The console still shows the summary of every pass."),
-    _o("max_size", "--max-size", kind="int", default=None, group="advanced", advanced=True,
-       metavar="BYTES",
-       label="Output size limit",
-       tip="The vanilla save blob is 2,359,296 bytes (0x240000), so that is the default and the tool stops "
-           "rather than write a file that will not load. A larger input that already loads sets the ceiling "
-           "to its own size: Elden Ring Reforged ships 3.03 MB, so its output is allowed up to 3.03 MB. "
-           "Raise this only if you know your loader accepts more."),
+       choices=("fast", "max"), label="Effort"),
+    _o("repack", "--repack", group="files", label="Repack only (change nothing)"),
 
-    _o("simulate", "--simulate", kind="int", default=None, group="advanced", advanced=True,
-       metavar="N", gui=False,
-       label="Simulate N drops instead of writing",
-       tip="Build the randomized tables, then print N random kills and what they dropped, and write no "
-           "file. This is the loot simulator: it uses the same tables and the same seed as a real run, so "
-           "what it prints is what you would loot. Costs the passes but not the compression."),
-
-    # --- consumables and spells -----------------------------------------------------------
-    _o("goods", "--goods", neg=("--no-goods",), default=False, group="goods",
-       label="Shuffle consumable effects",
-       tip="Master switch for the consumable shuffle: every usable item (pots, greases, meats, boluses, "
-           "tools, usable key items) receives the use effect of another item. Turn it off to leave "
-           "EquipParamGoods exactly as it is."),
-    _o("mode", "--mode", kind="enum", default="shuffle", group="goods", choices=("shuffle", "random"),
-       needs=("goods",), label="Assignment",
-       tip="shuffle deals the effects out like cards: every effect is used exactly once and no item keeps "
-           "its own. random lets every item draw independently, so effects repeat and an item can keep "
-           "what it had. This applies to spells as well."),
-    _o("include_flasks", "--include-flasks", group="goods", needs=("goods",),
-       label="Include the flasks",
-       tip="Put the Flask of Crimson Tears and the Flask of Cerulean Tears into the pool, so a flask can "
-           "end up with another item's effect. Off: the flasks keep their healing."),
-    _o("include_remembrances", "--include-remembrances", group="goods", needs=("goods",),
-       label="Include remembrances",
-       tip="Put remembrances into the pool: using one for runes becomes a random effect, and some ordinary "
-           "item can suddenly grant runes."),
-    _o("goods_quantity", "--goods-quantity", group="goods",
-       label="Shuffle stack sizes",
-       tip="Moves the pair (how many a pickup gives, how many you can carry) from one item to another, so "
-           "a fistful of pots can become a crate and a rune can become a single one. Only items that "
-           "already stack take part; the two numbers always travel together, so no item ends up asking for "
-           "more than it can hold."),
-    _o("split_anim", "--split-anim", kind="enum", default="none", group="goods",
-       choices=("none", "same", "any"), needs=("goods",), metavar="same|any",
-       label="Use animation",
-       tip="none: the animation travels with the effect, so a pot stays a pot. same: the animation is "
-           "taken from another item of the same class (thrown stays thrown, applied stays applied). any: "
-           "from any item at all, so a pot may be eaten and a fist may be thrown; that combination is "
-           "untested in game. Also splits the cast animation of sorceries and incantations."),
-    _o("spells", "--spells", neg=("--no-spells",), default=False, group="spells",
-       label="Shuffle spell effects",
-       tip="Shuffle the effect of every sorcery and incantation (Magic.param). Sorceries and incantations "
-           "share one pool, so a glintstone spell can end up as an incantation and vice versa. Without it, "
-           "every spell keeps its vanilla effect."),
-    _o("spell_stats", "--spell-stats", group="spells",
-       label="Randomize spell stats",
-       tip="Randomize the FP and stamina cost and the stat requirements of every sorcery and incantation. "
-           "Standalone: it works with the effect shuffle off, and spells keep their own effects and "
-           "animations unless Shuffle spell effects is on. Requirements stay a valid set: each spell gets "
-           "the Int / Faith / Luck values of a random vanilla spell, capped at a 60-point sum."),
+    # --- loot: what drops, how good it is, and where it is found -----------------------------
+    _o("random_enemy_drops", "--random-enemy-drops", group="loot",
+       label="Randomize enemy drops"),
+    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=3, group="loot",
+       needs=("random_enemy_drops",), metavar="N", label="Rolls per enemy"),
+    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=25, group="loot",
+       needs=("random_enemy_drops",), metavar="P", label="Chance per roll (%)"),
+    _o("enemy_drop_kinds", "--enemy-drop-kinds", kind="groups", default="", group="loot",
+       needs=("random_enemy_drops",), items=("weapons", "armor", "talismans", "goods", "ashes"),
+       label="What enemies can drop"),
+    _o("unique_drops", "--unique-drops", group="loot", needs=("random_enemy_drops",),
+       label="Rare unique weapons"),
+    _o("unique_rate", "--unique-rate", kind="int", default=3, metavar="PERCENT", group="loot",
+       needs=("random_enemy_drops", "unique_drops"), label="Unique weapon rate"),
+    _o("material_drops", "--material-drops", group="loot", needs=("random_enemy_drops",),
+       label="Upgrade material drops"),
+    _o("random_dropped_weapons", "--random-dropped-weapons", group="loot",
+       label="Randomize dropped weapons"),
+    _o("random_loot_levels", "--random-loot-levels", group="loot",
+       label="Random upgrade levels on loot"),
+    _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="loot",
+       choices=("even", "common", "legendary"), needs=("random_loot_levels",), label="Upgrade rarity"),
+    _o("loot_max_level", "--loot-max-level", kind="int", default=None, group="loot",
+       needs=("random_loot_levels",), label="Max upgrade level"),
+    _o("loot_boss_bonus", "--loot-boss-bonus", kind="enum", default="better", group="loot",
+       choices=("same", "better", "best"), needs=("random_loot_levels",),
+       label="Bosses roll better"),
+    _o("zone_loot_levels", "--zone-loot-levels", group="loot", needs=("random_loot_levels",),
+       label="Zone-aware loot levels"),
+    _o("random_weapon_drops", "--random-weapon-drops", group="loot",
+       label="Move weapons to random enemies"),
+    _o("random_armor_drops", "--random-armor-drops", group="loot",
+       label="Move armor to random enemies"),
+    _o("armour_drop_sets", "--armor-drop-sets", group="loot", needs=("random_armor_drops",),
+       label="Move armor sets as a set"),
+    _o("random_talisman_drops", "--random-talisman-drops", group="loot",
+       label="Move talismans to random enemies"),
+    _o("random_goods_drops", "--random-goods-drops", group="loot",
+       label="Move goods to random enemies"),
+    _o("random_ashes_drops", "--random-ashes-drops", group="loot",
+       label="Move Ashes of War to random enemies"),
 
     # --- prices ----------------------------------------------------------------------------
     _o("random_shop_stock", "--random-shop-stock", group="prices",
-       label="Randomize what shops sell",
-       tip="Every merchant slot is filled with a random item of its own category instead of the item it "
-           "always sold. Prices, stock and cost type stay as they are, so the slot keeps selling at its "
-           "vanilla price. Each slot is drawn independently, nothing is swapped between merchants. A "
-           "static file cannot make stock change on a timer - that would need a runtime mod - so this is "
-           "the static half: every shop sells something else. It works with every other option."),
+       label="Randomize what shops sell"),
     _o("shop_stock_kinds", "--shop-stock-kinds", kind="groups", default="", group="prices",
        needs=("random_shop_stock",), items=("weapons", "armor", "talismans", "goods", "ashes"),
-       label="Shop stock categories",
-       tip="Which kinds of item merchants may sell. Empty means all of them. Untick weapons and no shop "
-           "will sell one. It needs Randomize what shops sell."),
-    _o("random_prices", "--random-prices", group="prices",
-       label="Shuffle shop prices",
-       tip="Permute the rune price of every goods slot in every shop (ShopLineupParam.value) and the sell "
-           "value of goods (EquipParamGoods.sellValue). Shops that an item randomizer filled with other "
-           "items are included, because the slot is what is priced."),
+       label="Shop stock categories"),
+    _o("random_prices", "--random-prices", group="prices", label="Shuffle shop prices"),
     _o("price_mode", "--price-mode", kind="enum", default="shuffle", group="prices",
-       choices=("shuffle", "range"), needs=("random_prices",), label="Method",
-       tip="shuffle permutes the prices that already exist. range draws a new price for every entry between "
-           "the two limits (log-uniform, rounded so prices still look like shop prices)."),
+       choices=("shuffle", "range"), needs=("random_prices",), label="Method"),
     _o("price_min", "--price-min", kind="int", default=None, group="prices",
-       needs=("random_prices",), label="Minimum price",
-       tip="range method: lowest price to draw. Empty uses the cheapest price that exists today."),
+       needs=("random_prices",), label="Minimum price"),
     _o("price_max", "--price-max", kind="int", default=None, group="prices",
-       needs=("random_prices",), label="Maximum price",
-       tip="range method: highest price to draw. Empty uses the most expensive price that exists today."),
+       needs=("random_prices",), label="Maximum price"),
     _o("sell_prices", "--sell-prices", neg=("--no-sell-prices",), default=False, group="prices",
-       needs=("random_prices",),
-       label="Shuffle sell prices too",
-       tip="Also randomize what merchants pay you for goods. Buy and sell prices are drawn independently, "
-           "so an item may sell for more than a shop asks for it; that is deliberate. Turn this off to "
-           "change only the buy prices."),
+       needs=("random_prices",), label="Shuffle sell prices too"),
     _o("sell_min", "--sell-min", kind="int", default=None, group="prices",
-       needs=("random_prices", "sell_prices"), label="Minimum sell price",
-       tip="range method: lowest sell price to draw. Empty uses the lowest that exists today."),
+       needs=("random_prices", "sell_prices"), label="Minimum sell price"),
     _o("sell_max", "--sell-max", kind="int", default=None, group="prices",
-       needs=("random_prices", "sell_prices"), label="Maximum sell price",
-       tip="range method: highest sell price to draw. Empty uses the highest that exists today."),
+       needs=("random_prices", "sell_prices"), label="Maximum sell price"),
     _o("sell_equipment", "--sell-equipment", group="prices", needs=("random_prices",),
-       label="Include weapons, armor and Ashes of War",
-       tip="Extend the sell-price shuffle to equipment: one pool each for weapons, armor pieces and Ashes "
-           "of War. Every affinity row of a weapon gets the same new price. Rows that cannot be sold "
-           "(sellValue 0) are left alone."),
+       label="Include weapons, armor and Ashes of War"),
 
     # --- weapons ---------------------------------------------------------------------------
     _o("weapons", "--weapons", group="weapons", gui=False, label="All four weapon options",
-       tip="Switch the four options below on or off together.",
        expands=("somber_infusable", "random_movesets", "random_default_ash", "random_stats")),
     _o("somber_infusable", "--somber-infusable", group="weapons",
-       label="Make somber weapons infusable",
-       tip="Give every somber and unique weapon the twelve affinities (Heavy through Occult) and let it "
-           "mount Ashes of War. The rows this adds are named in the game's own text (Heavy Longsword and "
-           "so on); without that patch the game shows ?WeaponName?."),
+       label="Make somber weapons infusable"),
+    _o("random_movesets", "--random-movesets", group="weapons", label="Shuffle movesets"),
+    _o("moveset_mode", "--moveset-mode", kind="enum", default="affinity", group="weapons",
+       choices=("affinity", "bound", "weapon"), needs=("random_movesets",), label="Moveset mode"),
+    _o("moveset_variety", "--moveset-variety", kind="int", default=3, group="weapons",
+       needs=("random_movesets",), label="Bound variety"),
+    _o("keep_standard", "--keep-standard-moveset", group="weapons", needs=("random_movesets",),
+       label="Leave Standard rows alone"),
+    _o("shield", "--shield-movesets", kind="enum", default="shields", group="weapons",
+       choices=("shields", "none", "all"), needs=("random_movesets",), label="Shields"),
+    _o("bow", "--bow-movesets", kind="enum", default="bows", group="weapons",
+       choices=("bows", "none"), needs=("random_movesets",), label="Bows"),
+    _o("weptype", "--weptype-follows", group="weapons", needs=("random_movesets",),
+       label="Weapon type follows the moveset"),
+    _o("random_default_ash", "--random-default-ash", group="weapons",
+       label="Random default skill and affinity"),
+    _o("random_stats", "--random-stats", group="weapons", label="Randomize weapon stats"),
+    _o("req_mode", "--req-mode", kind="enum", default="tight", group="weapons",
+       choices=("tight", "normal", "wild"), needs=("random_stats",), label="Requirement spread"),
+    _o("stat_groups", "--stat-groups", kind="groups", default="", group="weapons",
+       needs=("random_stats",), items=("attack", "guard", "requirements", "scaling", "effects", "stamina"),
+       label="Stat groups"),
+    _o("stamina_rate", "--stamina-rate", kind="pair", default="0.8,1.2", group="weapons",
+       needs=("random_stats",), label="Stamina multiplier range"),
+    _o("weapon_names", "--weapon-names", kind="paths", default=None, group="weapons", metavar="FOLDER",
+       needs=("somber_infusable",), label="Name the new affinity rows"),
+    _o("no_weapon_names", "--no-weapon-names", group="weapons", advanced=True,
+       label="Use placeholder names (no text patch)"),
+
+    # --- chaotic weapon effects ------------------------------------------------------------
     _o("random_weapon_onhit_shuffle", "--random-weapon-onhit-shuffle", group="weapon_effects",
        label="Shuffle on-hit bundles"),
     _o("random_weapon_holder_shuffle", "--random-weapon-holder-shuffle", group="weapon_effects",
@@ -266,321 +216,92 @@ OPTIONS: tuple[Opt, ...] = (
        label="Roll chaotic statuses"),
     _o("random_loot_effects", "--random-loot-effects", group="weapon_effects",
        needs=("random_weapon_status_roll",), label="Loot weapons only"),
-    _o("random_default_ash", "--random-default-ash", group="weapons",
-       label="Random default skill and affinity",
-       tip="Roll a random default skill for every weapon and affinity row, chosen so that it animates with "
-           "the row's moveset. Also gives the weapons handed out by pickups, shops and starting classes a "
-           "random affinity, which is what makes two copies of the same weapon play differently."),
-    _o("random_stats", "--random-stats", group="weapons",
-       label="Randomize weapon stats",
-       tip="Randomize attack values per element, critical damage, poise and stamina damage, guard negation, "
-           "stat requirements, scaling, status build-up and stamina cost on every weapon and affinity row, "
-           "bows and catalysts included. Every affinity gets its own numbers, so the same weapon at a "
-           "different infusion really is a different weapon."),
-    _o("req_mode", "--req-mode", kind="enum", default="tight", group="weapons",
-       choices=("tight", "normal", "wild"), needs=("random_stats",), label="Requirement spread",
-       tip="How far weapon requirements may wander from what the weapon needs in the vanilla game. "
-           "tight (default) keeps a dagger needing a handful of points and a greatsword needing a lot, so "
-           "a weapon you loot is almost always usable. normal is the widest band that still respects the "
-           "weapon's own tier. wild can hand a starter weapon high requirements. It needs Randomize "
-           "weapon stats."),
-    _o("stat_groups", "--stat-groups", kind="groups", default="", group="weapons",
-       needs=("random_stats",), items=("attack", "guard", "requirements", "scaling", "effects", "stamina"),
-       label="Stat groups",
-       tip="Which groups of numbers are randomized. Leave them all on for the full effect, or tick only "
-           "the ones you care about (attack, guard, requirements, scaling, status effects, stamina). "
-           "Everything you leave unticked stays exactly as the weapon had it."),
-    _o("stamina_rate", "--stamina-rate", kind="pair", default="0.8,1.2", group="weapons",
-       needs=("random_stats",), label="Stamina multiplier range",
-       tip="The stamina multiplier of every weapon row is drawn from this range (low,high). The default "
-           "0.8-1.2 keeps stamina close to what the weapon had; widen it (0,2.0) for wild costs. The cost "
-           "is normalised so the first light attack costs the weapon's base cost times the multiplier, "
-           "whatever moveset the row ended up with."),
-    _o("weapon_names", "--weapon-names", kind="paths", default=None, group="weapons", metavar="FOLDER",
-       needs=("somber_infusable",), label="Name the new affinity rows",
-       tip="Write a name and description for every affinity row the somber patch added, into the item text "
-           "archive (item_dlc02.msgbnd.dcx) of each language you give. Off: those rows show ?WeaponName? "
-           "in game. Done automatically when somber weapons are made infusable."),
-    _o("no_weapon_names", "--no-weapon-names", group="weapons", advanced=True,
-              label="Use placeholder names (no text patch)",
-       tip="Make somber weapons infusable without touching any text archive. The added rows then appear as "
-           "?WeaponName? in game."),
-    _o("random_movesets", "--random-movesets", group="weapons",
-       label="Shuffle movesets",
-       tip="Give every melee weapon and shield the moveset of a random other weapon: the animation set and "
-           "the attack behaviour. Shields only swap with shields and bows only with bows, so a shield in "
-           "the left hand still blocks instead of swinging."),
-    _o("moveset_mode", "--moveset-mode", kind="enum", default="affinity", group="weapons",
-       choices=("affinity", "bound", "weapon"), needs=("random_movesets",), label="Moveset mode",
-       tip="affinity: every affinity row of a weapon gets its own moveset. bound: rows draw from per-affinity "
-           "clusters, and an Ash of War keeps only the affinities it can actually animate. weapon: one "
-           "moveset per weapon, and the weapon type follows it so the smithing table only offers "
-           "animations that exist."),
-    _o("moveset_variety", "--moveset-variety", kind="int", default=3, group="weapons",
-       needs=("random_movesets",), label="Bound variety",
-       tip="bound mode: how many animation categories each affinity owns. 1 gives every weapon of an "
-           "affinity the same moveset; higher numbers mix more, but leave fewer affinities per Ash of War."),
-    _o("keep_standard", "--keep-standard-moveset", group="weapons", needs=("random_movesets",),
-       label="Leave Standard rows alone",
-       tip="affinity mode: keep each weapon's own moveset on its Standard row and randomize the other "
-           "twelve. bound mode always does this."),
-    _o("shield", "--shield-movesets", kind="enum", default="shields", group="weapons",
-       choices=("shields", "none", "all"), needs=("random_movesets",), label="Shields",
-       tip="shields: shields swap only among the four shield animation sets and weapons never get one, so "
-           "a left-hand shield still guards. none: shields keep their moveset. all: shields and weapons "
-           "swap freely, and a left-hand shield then attacks instead of guarding."),
-    _o("bow", "--bow-movesets", kind="enum", default="bows", group="weapons",
-       choices=("bows", "none"), needs=("random_movesets",), label="Bows",
-       tip="bows: every bow, crossbow and ballista takes the moveset of a random other bow-class weapon, "
-           "with its ammunition unchanged. none: bows are left alone."),
-    _o("weptype", "--weptype-follows", group="weapons", needs=("random_movesets",),
-       label="Weapon type follows the moveset",
-       tip="affinity and bound modes: each randomized row also takes the donor's weapon type, so the "
-           "smithing table lists exactly the Ashes of War that animate with that row. Untested against "
-           "the game's save checks."),
-    _o("random_armor_fresh", "--random-armor-fresh", group="gear",
-       label="Randomize armor stats",
-       tip="Rolls every piece's numbers again instead of swapping them: a knight's armor keeps knightly "
-           "numbers, but no two pieces share a stat block, and a starter chest piece can roll like a "
-           "late-game one. Values stay inside the range that slot uses in vanilla, so nothing becomes "
-           "absurd. Use it together with Shuffle armor stats for the widest spread."),
-    _o("armour_keep_sets", "--armor-keep-sets", neg=("--no-armor-keep-sets",), group="gear",
-       needs=("random_armor_fresh",), default=True,
-       label="Keep armor sets together",
-       tip="Pieces that share a set name (Knight Helm, Knight Armor, Knight Gauntlets, Knight Greaves) are "
-           "scaled by one factor instead of being rolled separately, so a set stays internally consistent "
-           "while still being different from vanilla. Turn it off and every piece rolls on its own, which "
-           "can make one piece of a set great and another useless."),
-    _o("random_armor", "--random-armor", group="gear",
-       label="Shuffle armor stats",
-       tip="Shakes every armor column (defenses, resistances, damage negation, weight) among the pieces of "
-           "the same slot, so a helm ends up with another helm's numbers. Only the values the game already "
-           "uses are dealt out, so nothing becomes absurd. Two copies of one piece are still identical: "
-           "that would need a runtime mod, not a rewritten regulation.bin."),
-    _o("random_armor_drops", "--random-armor-drops", group="lootdrops",
-       label="Move armor to random enemies",
-       tip="Keeps every armor piece exactly as it is and only moves *where* it drops: the chest piece from "
-           "one dungeon can end up on a soldier on the other side of the map. This is the loot shuffle the "
-           "old version did, restricted to armor. One-time drops and key items are never moved."),
-    _o("armour_drop_sets", "--armor-drop-sets", group="lootdrops", needs=("random_armor_drops",),
-       label="Move armor sets as a set",
-       tip="Pieces that share a set name are moved together: set A's helm, chest, gauntlets and greaves are "
-           "replaced by set B's four pieces, so looting one piece tells you what the rest of that set is. "
-           "Turn it off and each piece moves on its own. It needs Move armor to random enemies."),
-    _o("random_talisman_drops", "--random-talisman-drops", group="lootdrops",
-       label="Move talismans to random enemies",
-       tip="The same for talismans: every talisman keeps its name, effect and numbers, and only the place "
-           "it is found changes. Combine it with Shuffle talismans for both a different effect and a "
-           "different source."),
-    _o("random_talismans", "--random-talismans", group="gear",
-       label="Shuffle talismans",
-       tip="Permutes whole talisman rows, so every talisman keeps its name and icon but receives another "
-           "talisman's effect and numbers. This tool has no field table for EquipParamAccessory, so whole "
-           "rows move rather than single stats."),
 
     # --- ashes of war ----------------------------------------------------------------------
-    _o("random_goods_drops", "--random-goods-drops", group="lootdrops",
-       label="Move goods to random enemies",
-       tip="Keeps every consumable exactly as it is and only moves where it drops, so a grease that used to "
-           "sit in a chest can end up on a soldier across the map. Enemy drop tables, map lots and goods "
-           "shops are all included. It works with every other option. Combine it with Shuffle consumable "
-           "effects to change both the item and where it is found."),
-    _o("random_weapon_drops", "--random-weapon-drops", group="lootdrops",
-       label="Move weapons to random enemies",
-       tip="Every weapon stays exactly as it is - same affinity, same upgrade level, same stats - and only "
-           "where it drops changes, so any enemy can drop any weapon. Enemy drop tables, map lots and weapon "
-           "shops are included. It works with every other option: combine it with Randomize weapon stats "
-           "and Random upgrade levels on loot to make every dropped weapon a different one."),
-    _o("random_ashes_drops", "--random-ashes-drops", group="lootdrops",
-       label="Move Ashes of War to random enemies",
-       tip="Keeps every Ash of War exactly as it is and only moves where it drops, so any enemy can drop any "
-           "ash. Enemy drop tables, map lots and the shops that sell ashes are included. It works with every "
-           "other option."),
-    _o("random_gem_skills", "--random-gem-skills", group="gems",
-       label="Shuffle skills",
-       tip="Gives every Ash of War another ash's skill (EquipParamGem.swordArtsParamId): Lion's Claw may "
-           "become Sky Shot. Donors are only drawn from ashes that can be mounted on the same weapon types, "
-           "so a skill never lands on a weapon that could not use it. This is the one to switch on for "
-           "'loot a different ash every time'."),
-    _o("random_gem_effects", "--random-gem-effects", group="gems",
-       label="Shuffle on-hit effects",
-       tip="Gives every Ash of War another ash's on-hit effects (spEffectId0-2): bleed, frostbite, a buff. "
-           "The three effects of one ash travel together, and donors come from ashes that fit the same "
-           "weapons. Only a few dozen ashes have effects, so this changes less than Shuffle skills."),
+    _o("random_gem_skills", "--random-gem-skills", group="gems", label="Shuffle skills"),
+    _o("random_gem_effects", "--random-gem-effects", group="gems", label="Shuffle on-hit effects"),
 
-    # --- enemies, drops, runes -------------------------------------------------------------
+    # --- armour and talismans --------------------------------------------------------------
+    _o("random_armor_fresh", "--random-armor-fresh", group="gear", label="Randomize armor stats"),
+    _o("armour_keep_sets", "--armor-keep-sets", neg=("--no-armor-keep-sets",), group="gear",
+       needs=("random_armor_fresh",), default=True, label="Keep armor sets together"),
+    _o("random_armor", "--random-armor", group="gear", label="Shuffle armor stats"),
+    _o("random_talismans", "--random-talismans", group="gear", label="Shuffle talismans"),
+
+    # --- enemies: health and runes ---------------------------------------------------------
+    _o("random_enemy_hp", "--random-enemy-hp", group="drops", label="Shuffle enemy HP"),
+    _o("hp_mode", "--hp-mode", kind="enum", default="shuffle", group="drops",
+       choices=("shuffle", "range", "bands", "balanced"), needs=("random_enemy_hp",), label="HP method"),
+    _o("hp_min", "--hp-min", kind="int", default=None, group="drops",
+       needs=("random_enemy_hp",), label="Lowest HP"),
+    _o("hp_max", "--hp-max", kind="int", default=None, group="drops",
+       needs=("random_enemy_hp",), label="Highest HP"),
+    _o("random_runes", "--random-runes", group="drops", label="Shuffle enemy runes"),
+    _o("rune_mode", "--rune-mode", kind="enum", default="shuffle", group="drops",
+       choices=("shuffle", "range", "bands"), needs=("random_runes",), label="Rune method"),
+    _o("rune_min", "--rune-min", kind="int", default=None, group="drops",
+       needs=("random_runes",), label="Fewest runes"),
+    _o("rune_max", "--rune-max", kind="int", default=None, group="drops",
+       needs=("random_runes",), label="Most runes"),
+    _o("boss_hp_scale", "--boss-hp-scale", kind="pair", default="1.0,1.0", group="drops",
+       label="Boss HP multiplier range"),
+    _o("boss_rune_scale", "--boss-rune-scale", kind="pair", default="1.0,1.0", group="drops",
+       label="Boss rune multiplier range"),
+    _o("couple_runes_to_hp", "--couple-runes-to-hp", group="drops", needs=("random_enemy_hp",),
+       label="Couple runes to HP"),
+    _o("boss_min_runes", "--boss-min-runes", kind="int", default=0, group="drops", metavar="N",
+       label="Boss rune threshold"),
+
+    # --- consumables and buffs -------------------------------------------------------------
+    _o("goods", "--goods", neg=("--no-goods",), default=False, group="goods",
+       label="Shuffle consumable effects"),
+    _o("mode", "--mode", kind="enum", default="shuffle", group="goods", choices=("shuffle", "random"),
+       needs=("goods",), label="Assignment"),
+    _o("include_flasks", "--include-flasks", group="goods", needs=("goods",),
+       label="Include the flasks"),
+    _o("include_remembrances", "--include-remembrances", group="goods", needs=("goods",),
+       label="Include remembrances"),
+    _o("goods_quantity", "--goods-quantity", group="goods", label="Shuffle stack sizes"),
+    _o("split_anim", "--split-anim", kind="enum", default="none", group="goods",
+       choices=("none", "same", "any"), needs=("goods",), metavar="same|any",
+       label="Use animation"),
+    _o("random_durations", "--random-durations", group="goods", label="Shuffle buff durations"),
+    _o("duration_mode", "--duration-mode", kind="enum", default="shuffle", group="goods",
+       choices=("shuffle", "range"), needs=("random_durations",), label="Duration method"),
+    _o("duration_min", "--duration-min", kind="int", default=None, group="goods",
+       needs=("random_durations",), label="Shortest buff (s)"),
+    _o("duration_max", "--duration-max", kind="int", default=None, group="goods",
+       needs=("random_durations",), label="Longest buff (s)"),
+
+    # --- spells ----------------------------------------------------------------------------
+    _o("spells", "--spells", neg=("--no-spells",), default=False, group="spells",
+       label="Shuffle spell effects"),
+    _o("spell_stats", "--spell-stats", group="spells", label="Randomize spell stats"),
+
+    # --- flasks and starting items ---------------------------------------------------------
     _o("random_flask_locations", "--random-flask-locations", group="world",
-       label="Move the two flasks",
-       tip="Hide the Flask of Crimson Tears and the Flask of Cerulean Tears at a random pickup, boss "
-           "reward, NPC gift or merchant, and put what was there at the first Site of Grace instead. "
-           "Chance drops and map fragments are never used."),
+       label="Move the two flasks"),
     _o("flask_where", "--flask-where", kind="enum", default="anywhere", group="world",
        needs=("random_flask_locations",), choices=("anywhere", "overworld", "early"),
-       label="Where the flasks may go",
-       tip="anywhere (default) lets the two flasks go to any real location: pickups, boss rewards, NPC "
-           "gifts and merchants. overworld keeps them out of dungeons, caves, catacombs, evergaols and "
-           "the late-game regions. early keeps them in the regions you can reach first - Limgrave, the "
-           "Weeping Peninsula, Stormveil, Murkwater, Agheel Lake, Liurnia - so they are never locked "
-           "behind the end of the game. It needs Move the two flasks."),
-    _o("start_bell", "--start-with-bell", group="world",
-       label="Start with the Spirit Calling Bell",
-       tip="Hand the bell out with the flasks at the very start. Useful with the Fog Gate Randomizer, where "
-           "Renna in Limgrave may be out of reach early."),
-    _o("start_lantern", "--start-with-lantern", group="world",
-       label="Start with the Lantern",
-       tip="Hand the Lantern out with the flasks at the start. In vanilla the nomadic merchants sell it in "
-           "Liurnia and the Weeping Peninsula, which a fog gate run may not reach early."),
-    _o("random_enemy_drops", "--random-enemy-drops", group="drops",
-       label="Randomize enemy drops",
-       tip="Reroll every enemy's drop table. By default the first roll always drops and three more rolls "
-           "each have a 50% chance, so a kill gives 1 to 4 different items and averages 2.5: killing things "
-           "is worth it, and a single enemy can drop several things at once. Set Rolls per enemy to 0 for "
-           "the vanilla shape. Key-item rows and one-time drops are left alone."),
-    _o("enemy_drop_rolls", "--enemy-drop-rolls", kind="int", default=4, group="drops",
-       needs=("random_enemy_drops",), metavar="N",
-       label="Rolls per enemy",
-       tip="How many independent drop rolls each enemy gets. 4 by default and the first is always "
-           "successful, so every kill gives at least one item; 0 keeps the vanilla shape (the first row "
-           "always drops and later rows keep their own chance). Each later roll drops at the chance below. "
-           "A lot never repeats an item it already rolled."),
-    _o("enemy_drop_chance", "--enemy-drop-chance", kind="int", default=50, group="drops",
-       needs=("random_enemy_drops",), metavar="P",
-       label="Chance per roll (%)",
-       tip="How likely each roll after the guaranteed first one is to drop something, in percent (1 to "
-           "100). 50 by default: with four rolls a kill averages 2.5 items. 100 makes every roll drop, so "
-           "a kill always gives exactly the number of rolls."),
-    _o("enemy_drop_kinds", "--enemy-drop-kinds", kind="groups", default="", group="drops",
-       needs=("random_enemy_drops",), items=("weapons", "armor", "talismans", "goods", "ashes"),
-       label="What enemies can drop",
-       tip="Which kinds of item a random enemy drop can be. Empty means all of them. Untick weapons and no "
-           "random drop will be a weapon. Key-item rows and one-time drops are left alone whatever this "
-           "says. It needs Randomize enemy drops."),
-    _o("random_loot_levels", "--random-loot-levels", group="loot",
-       label="Random upgrade levels on loot",
-       tip="Gives the weapons in enemy drop tables, chests, boss rewards and shops a random upgrade level: "
-           "0-25 for a normal weapon, 0-10 for a somber one, +0 for a unique weapon that cannot be "
-           "reinforced. Without this every weapon in the game is +0, exactly as in vanilla. Combine it "
-           "with several rolls per enemy and one kill can drop a different weapon at a different level."),
-    _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="loot",
-       choices=("even", "common", "legendary"), needs=("random_loot_levels",), label="Upgrade rarity",
-       tip="How the upgrade level is drawn, so that a +25 stays an event. common (default): 55% of drops "
-           "are +0..+3, 28% +4..+9, 12% +10..+15, 4% +16..+20 and 1% +21..+25. legendary: 70% +0..+2, "
-           "20% +3..+8, 7% +9..+14, 2.5% +15..+20, 0.5% +21..+25. even: every level equally likely (the "
-           "old behaviour). The same curve scales to a somber weapon's +10."),
-    _o("loot_boss_bonus", "--loot-boss-bonus", kind="enum", default="better", group="loot",
-       choices=("same", "better", "best"), needs=("random_loot_levels",),
-       label="Bosses roll better",
-       tip="Bosses roll their upgrade level from a better curve than ordinary enemies. same: every enemy "
-           "uses the chosen curve. better: bosses use the next curve up (even to common, common to "
-           "legendary). best: bosses always use the legendary curve. A boss is an enemy worth 5000 runes "
-           "or more in the unmodified game."),
-    _o("loot_max_level", "--loot-max-level", kind="int", default=None, group="loot",
-       needs=("random_loot_levels",), label="Max upgrade level",
-       tip="Highest upgrade level a dropped weapon can roll.\n\n"
-           "0 or empty means no cap: a weapon may reach its own ceiling (+25, or +10 for somber). "
-           "Example: 10 keeps every drop at +10 or lower."),
-    _o("zone_loot_levels", "--zone-loot-levels", group="loot", needs=("random_loot_levels",),
-       label="Zone-aware loot levels",
-       tip="Scales weapon upgrade levels by the area, so an early chest is not a +25 weapon: Limgrave / "
-           "Weeping Peninsula stay low, Liurnia / Caelid / Altus mid, Mountaintops / Haligtree / Farum "
-           "Azula high, the Land of Shadow at the full ceiling.\n\n"
-           "Enemy drops are not tied to a place, so only chests, boss rewards and shops scale. Needs "
-           "Random upgrade levels on loot."),
-    _o("unique_drops", "--unique-drops", group="drops", needs=("random_enemy_drops",),
-       label="Rare unique weapons",
-       tip="Off by default: with this off, no random drop is ever a unique weapon. Turn it on and every "
-           "item that actually drops rolls the rate below; a hit replaces the common draw with a unique "
-           "weapon that cannot be infused or reinforced. At Normal (3%) about one dropped item in "
-           "thirty-three is a unique."),
-    _o("unique_rate", "--unique-rate", kind="int", default=3, metavar="PERCENT", group="drops",
-       needs=("random_enemy_drops", "unique_drops"),
-       label="Unique weapon rate"),
-    _o("material_drops", "--material-drops", group="drops", needs=("random_enemy_drops",),
-       label="Upgrade material drops",
-       tip="Now and then an enemy drops smithing stones instead of the common draw: about one drop in "
-           "twelve, in a small stack. This roll happens before the unique roll, so a drop cannot be both. "
-           "It needs Randomize enemy drops."),
-    _o("random_enemy_hp", "--random-enemy-hp", group="drops",
-       label="Shuffle enemy HP",
-       tip="Randomize the hit points of every enemy that has any (NpcParam.hp). shuffle permutes the "
-           "existing values, so the world total is unchanged; range draws new ones between the two "
-           "limits, spread evenly over orders of magnitude."),
-    _o("hp_mode", "--hp-mode", kind="enum", default="shuffle", group="drops",
-       choices=("shuffle", "range", "bands", "balanced"), needs=("random_enemy_hp",), label="HP method",
-       tip="shuffle permutes the hit point values that exist. range draws a new value for every enemy "
-           "between the two limits. bands picks a band per enemy - 50% at 0.5 to 1.5x, 35% at 1.5 to "
-           "2.5x, 15% at 2.5 to 4x of its vanilla value - so most enemies stay near their old toughness "
-           "and a few become sponges. balanced keeps every enemy within 0.75 to 1.5x of its vanilla "
-           "value - no bullet sponges, no pushovers."),
-    _o("hp_min", "--hp-min", kind="int", default=None, group="drops",
-       needs=("random_enemy_hp",), label="Lowest HP",
-       tip="range method: lowest hit point value to draw. Empty uses the lowest that exists today."),
-    _o("hp_max", "--hp-max", kind="int", default=None, group="drops",
-       needs=("random_enemy_hp",), label="Highest HP",
-       tip="range method: highest hit point value to draw. Empty uses the highest that exists today."),
-    _o("random_runes", "--random-runes", group="drops",
-       label="Shuffle enemy runes",
-       tip="Randomize the runes each enemy gives (NpcParam.getSoul). shuffle permutes the amounts that "
-           "exist, so the world total is unchanged and a rat can be worth a dragon."),
-    _o("rune_mode", "--rune-mode", kind="enum", default="shuffle", group="drops",
-       choices=("shuffle", "range", "bands"), needs=("random_runes",), label="Rune method",
-       tip="shuffle permutes the existing amounts over the enemies. range draws a new amount for every "
-           "enemy between the two limits, spread evenly over orders of magnitude."),
-    _o("rune_min", "--rune-min", kind="int", default=None, group="drops",
-       needs=("random_runes",), label="Fewest runes",
-       tip="range method: lowest amount to draw. Empty uses the lowest that exists today."),
-    _o("rune_max", "--rune-max", kind="int", default=None, group="drops",
-       needs=("random_runes",), label="Most runes",
-       tip="range method: highest amount to draw. Empty uses the highest that exists today."),
-    _o("boss_hp_scale", "--boss-hp-scale", kind="pair", default="1.0,1.0", group="drops",
-       label="Boss HP multiplier range",
-       tip="Multiply every boss's HP by a factor drawn from this range (low,high); 1.0,1.0 is off. Use "
-           "it when Shuffle enemy HP can turn a boss into a pushover. Example: 1.5,2.0 makes bosses half "
-           "again to twice as tough as the (possibly randomized) value. A boss is an enemy worth 5000 runes "
-           "or more in the unmodified game."),
-    _o("boss_rune_scale", "--boss-rune-scale", kind="pair", default="1.0,1.0", group="drops",
-       label="Boss rune multiplier range",
-       tip="Multiply every boss's rune bounty by a factor drawn from this range (low,high); 1.0,1.0 is "
-           "off. Use it to keep a boss worth the fight after its runes were shuffled. Example: 1.5,2.0. A "
-           "boss is an enemy worth 5000 runes or more in the unmodified game."),
-    _o("couple_runes_to_hp", "--couple-runes-to-hp", group="drops", needs=("random_enemy_hp",),
-       label="Couple runes to HP",
-       tip="Recompute every enemy's rune bounty so it tracks its (randomized) HP: a tougher enemy gives "
-           "more runes, a pushover fewer, keeping each enemy's original worth-per-HP. Runs after the rune "
-           "shuffle, so it overrides it. Needs Shuffle enemy HP."),
-    _o("boss_min_runes", "--boss-min-runes", kind="int", default=0, group="drops", metavar="N",
-       label="Boss rune threshold",
-       tip="Also treat an enemy as a boss if its unmodified rune bounty is at least this. 0 (default) uses "
-           "the isSoulGetByBoss flag alone; a positive value adds high-rune enemies on top of it. Bosses are "
-           "what the boss multipliers and the loot boss-bonus act on."),
-    _o("random_durations", "--random-durations", group="goods",
-       label="Shuffle buff durations",
-       tip="Randomize how long buffs last (SpEffectParam.effectEndurance) for greases, meats, blessings "
-           "and buff spells. Timed effects under 5 seconds are treated as mechanics, not buffs, and are "
-           "left alone."),
-    _o("duration_mode", "--duration-mode", kind="enum", default="shuffle", group="goods",
-       choices=("shuffle", "range"), needs=("random_durations",), label="Duration method",
-       tip="shuffle permutes the durations that exist over the buffs. range draws a new duration for every "
-           "buff between the two limits, in seconds."),
-    _o("duration_min", "--duration-min", kind="int", default=None, group="goods",
-       needs=("random_durations",), label="Shortest buff (s)",
-       tip="range method: shortest duration in seconds. Empty uses the shortest that exists today."),
-    _o("duration_max", "--duration-max", kind="int", default=None, group="goods",
-       needs=("random_durations",), label="Longest buff (s)",
-       tip="range method: longest duration in seconds. Empty uses the longest that exists today."),
+       label="Where the flasks may go"),
+    _o("start_bell", "--start-with-bell", group="world", label="Start with the Spirit Calling Bell"),
+    _o("start_lantern", "--start-with-lantern", group="world", label="Start with the Lantern"),
 
     # --- advanced --------------------------------------------------------------------------
+    _o("dry_run", "--dry-run", group="advanced", advanced=True,
+       label="Preview only (write nothing)"),
+    _o("no_reports", "--no-reports", group="advanced", advanced=True,
+       label="Do not write the report files"),
     _o("brief_reports", "--brief-reports", group="advanced", advanced=True,
-       label="Short reports (headers only)",
-       tip="Write only the summary lines of each report and skip the per-row detail. drops.txt and hp.txt "
-           "are the long ones (about 500 KB each); with this on they shrink to a couple of kilobytes. The "
-           "full detail is still printed to the console and the log."),
+       label="Short reports (headers only)"),
+    _o("max_size", "--max-size", kind="int", default=None, group="advanced", advanced=True,
+       metavar="BYTES", label="Output size limit"),
+    _o("simulate", "--simulate", kind="int", default=None, group="advanced", advanced=True,
+       metavar="N", gui=False, label="Simulate N drops instead of writing"),
     _o("zstd_window", "--zstd-window", kind="int", default=16, group="advanced", advanced=True,
-       choices=(16, 17, 18, 19, 20, 21, 22), metavar="16..22",
-       label="zstd window log",
-       tip="Window size of the zstd output. 16 (64 KB) is the only value the game accepts; the others are "
-           "kept for experiments and can crash it."),
+       choices=(16, 17, 18, 19, 20, 21, 22), metavar="16..22", label="zstd window log"),
 )
+
 
 BY_KEY: dict[str, Opt] = {o.key: o for o in OPTIONS}
 BY_FLAG: dict[str, Opt] = {}
@@ -732,9 +453,9 @@ def validate(values: dict) -> dict:
 
     if out["enemy_drop_rolls"] is not None:
         if not 0 <= out["enemy_drop_rolls"] <= 32:
-            raise ValueError("Rolls per enemy must be between 0 and 32 (0 = one guaranteed drop)")
+            raise ValueError("Rolls per enemy must be between 0 and 32 (0 = one guaranteed item per kill)")
         if out["enemy_drop_rolls"] == 0:
-            out["enemy_drop_rolls"] = None       # 0 is the old "one guaranteed row" mode
+            out["enemy_drop_rolls"] = None       # 0 and an empty field mean the guaranteed mode
     if out["enemy_drop_chance"] is None:
         out["enemy_drop_chance"] = BY_KEY["enemy_drop_chance"].default
     if not 1 <= out["enemy_drop_chance"] <= 100:
@@ -943,6 +664,7 @@ def argv_from_values(values: dict) -> list[str]:
                       ("random_flask_locations", "--random-flask-locations"),
                       ("start_bell", "--start-with-bell"),
                       ("start_lantern", "--start-with-lantern"),
+                      ("random_dropped_weapons", "--random-dropped-weapons"),
                       ("random_enemy_drops", "--random-enemy-drops"),
                       ("unique_drops", "--unique-drops"),
                       ("material_drops", "--material-drops"),
@@ -1003,11 +725,12 @@ def argv_from_values(values: dict) -> list[str]:
 
     if values.get("random_enemy_drops"):
         rolls = values.get("enemy_drop_rolls")
-        # 0 (or an empty field) is the old "one guaranteed row" mode: pass it explicitly so the round
-        # trip does not silently turn it back into the table default of 3 rolls.
+        # 0 (or an empty field) is the guaranteed mode: pass it explicitly so the round trip does not
+        # silently turn it back into the table default of 3 rolls.
         a += ["--enemy-drop-rolls", "0" if rolls in (None, "") else str(rolls)]
         if rolls not in (None, "", 0, "0"):
-            a += ["--enemy-drop-chance", str(values.get("enemy_drop_chance") or 50)]
+            a += ["--enemy-drop-chance", str(values.get("enemy_drop_chance")
+                                         or BY_KEY["enemy_drop_chance"].default)]
     if values.get("random_enemy_drops"):
         o = BY_KEY["enemy_drop_kinds"]
         have = _groups_value(values, "enemy_drop_kinds")

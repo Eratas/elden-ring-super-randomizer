@@ -18,7 +18,9 @@ It asserts behaviour, not just "did not crash":
     without losing or duplicating a value (a permutation keeps the column's multiset);
   * --random-spells moves effects with no fixed point (a derangement) and lands every spell on one
     memory slot; the shop pass rerolls its weapon slots; an FMG survives a write -> read round trip;
-  * the enemy-drop passes change the lot rows and the HP pass changes NpcParam.hp;
+  * the enemy-drop passes change the lot rows (N dice at P%, 0 rolls = one sure item) and the HP pass
+    changes NpcParam.hp;
+  * a status whose text list lost its own line is repaired, so no passive is silent;
   * the same seed gives byte-identical output (reproducibility: a set/dict iterated in a random
     order before an RNG draw would break this on some interpreter);
   * the degenerate cases fail soft - bound mode with too few Ashes, a single-moveset pool, and a
@@ -317,6 +319,96 @@ def run() -> None:
     after = ed.L.get(ed.L.by_id[300000000], "lotItemId01")
     check(before != after or True, "enemy drops ran")   # a report was produced (checked below)
     check(isinstance(after, int), "enemy drops: lot row unreadable after randomize")
+
+    # --- enemy drops are dice, not a promise: N rows at P% each, and 0 rolls is the only guarantee ---
+    reg = build()
+    ed = enemy_drops.EnemyDrops(reg)
+    lines = ed.randomize(random.Random(1), rolls=2, chance=40)
+    lot = ed.run(300000000)
+    dice = [r for r in lot if ed.L.get(r, "lotItemId01") > 0]
+    check(len(dice) >= 2, f"enemy drops: {len(dice)} dice rows for rolls=2, expected at least 2")
+    for r in dice:
+        item, nothing = ed.L.get(r, "lotItemBasePoint01"), ed.L.get(r, "lotItemBasePoint02")
+        check(item == 400 and nothing == 600,
+              f"enemy drops: a die weighs {item}/{nothing}, expected 400/600 at chance=40")
+    check(not any(ed.L.get(r, "lotItemBasePoint01") == enemy_drops.CERTAIN
+                  and ed.L.get(r, "lotItemBasePoint02") == 0 for r in lot),
+          "enemy drops: a guaranteed slot survived a chance roll")
+    check(any("0 to 2 items" in line for line in lines),
+          "enemy drops: the report does not describe a 0 to N roll")
+
+    reg = build()
+    ed = enemy_drops.EnemyDrops(reg)
+    ed.randomize(random.Random(1), rolls=0)          # 0 (or an empty field) = one sure item a kill
+    sure = [r for r in ed.run(300000000) if ed.L.get(r, "lotItemId01") > 0]
+    check(bool(sure), "enemy drops: rolls=0 produced no drop at all")
+    for r in sure:
+        check(ed.L.get(r, "lotItemBasePoint01") == enemy_drops.CERTAIN
+              and ed.L.get(r, "lotItemBasePoint02") == 0,
+              "enemy drops: rolls=0 is not a certain single slot")
+
+    # --- randomized dropped weapons: drop slots hold fresh pool weapons ---
+    def _two_drop_world():
+        reg = build()
+        ed = enemy_drops.EnemyDrops(reg)
+        row = ed.run(ed.lots()[0])[0]
+        # the synthetic world drops one weapon (2000000); give the lot a second weapon, Greatsword
+        ed.L.set(row, "lotItemId02", 4000000)
+        ed.L.set(row, "lotItemCategory02", 2)
+        ed.L.set(row, "lotItemBasePoint02", 10)
+        return reg, ed
+
+    reg, ed = _two_drop_world()
+    rows = [r for k in ed.lots() for r in ed.run(k)]
+    pool_ids = {e[1] for e in ed.build_pool(rows, {enemy_drops.CATEGORY_WEAPON})}
+    check(pool_ids == {2000000, 4000000}, f"randomized weapons: pool is {pool_ids}")
+    lines = ed.randomize_dropped_weapons(random.Random(3))
+    changes = [ln for ln in lines[2:] if ln.split(" -> ")[0] != ln.split(" -> ")[1]]
+    check(changes, "randomized weapons: no slot actually changed to a different weapon")
+    for k in ed.lots():
+        for r in ed.run(k):
+            for i in range(1, enemy_drops.SLOTS + 1):
+                iid, cat, w = (ed.L.get(r, f"lotItemId0{i}"),
+                               ed.L.get(r, f"lotItemCategory0{i}"),
+                               ed.L.get(r, f"lotItemBasePoint0{i}"))
+                check(cat != 2 or iid in pool_ids or w <= 0,
+                      f"randomized weapons: weapon slot holds {iid}, not a pool id")
+    reg, ed = _two_drop_world()
+    a = ed.randomize_dropped_weapons(random.Random(3))
+    reg, ed = _two_drop_world()
+    b = ed.randomize_dropped_weapons(random.Random(3))
+    check(a == b, "randomized weapons: same seed not reproducible")
+    reg, ed = _two_drop_world()
+    out = ed.randomize_dropped_weapons(random.Random(3), kinds={3})
+    check(any("nothing changed" in ln for ln in out), "randomized weapons: kinds filter ignored")
+
+    # --- a status whose text list is missing its own line is repaired (the silent-passive case) ---
+    reg = build()
+    wp = weapons.Weapons(reg)
+    pools = wp.status_pools()
+    check(bool(pools["flat"]), "status pool: the synthetic regulation has no status id at all")
+    if pools["flat"]:
+        fam = sorted(pools["flat"])[0]
+        eid = pools["flat"][fam][0]
+        row = next(r for r in wp.W.rows if r.id % 100 == 0)
+        wp.W.set(row, weapons.ONHIT_FIELDS[0], eid)
+        for f in weapons.ONHIT_FIELDS[1:]:
+            wp.W.set(row, f, -1)
+        for f in weapons.MSG_SLOTS:
+            wp.W.set(row, f, -1)
+        wp._sync_status_texts(row)
+        check(pools["msg"][fam] in [wp.W.get(row, f) for f in weapons.MSG_SLOTS],
+              "weapon effects: a status on a row was left without its effect text")
+
+    # --- the effective size ceiling: a big input keeps its own size, an explicit limit still wins ---
+    big = object.__new__(erreg.Regulation)
+    big.source_size = 3_031_632
+    check(big.output_limit() == 3_031_632, "ceiling: an ERR-sized input is cut to 2,359,296")
+    check(big.output_limit(2_000_000) == 2_000_000, "ceiling: an explicit smaller limit is ignored")
+    small = object.__new__(erreg.Regulation)
+    small.source_size = 1_000_000
+    check(small.output_limit() == erreg.REGULATION_MAX_SIZE,
+          "ceiling: a small input must keep the vanilla limit")
 
     reg = build()
     out = enemy_drops.randomize_hp(reg, random.Random(1), "bands", None, None)
