@@ -684,12 +684,13 @@ TIPS: dict[str, str] = {
         "weapon itself, but a powerful weapon can end up behind a trivial enemy."
     ),
     "random_dropped_weapons": (
-        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, gifts) shows a random weapon.\n\nThe pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere, the pool every weapon slot draws from. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\nExample: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
+        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, gifts) shows a random weapon.\n\nThe pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere. Slots take distinct weapon rows where the world has them: two rows of one appearance are two instances (different stats), so the same appearance can be found in two loot spots with different stats; where the world has no other row, the repeat is forced. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\nExample: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
     ),
     "random_dropped_shop_weapons": (
         "Rerolls the weapon slots of every weapon shop (ShopLineupParam).\n\n"
         "The per-run reroll: the weapon each merchant slot sells is redrawn from the pool of weapons the "
-        "world has, so what you buy changes every run. Only weapon slots are touched; the shop's other "
+        "world has, so what you buy changes every run; where the world has different rows of one "
+        "appearance, sold weapons are distinct rows. Only weapon slots are touched; the shop's other "
         "slots are unchanged.\n\n"
         "Example: a weapon shop sells a different random weapon every run. Risk: none - the shop stock "
         "is the run's random draw, like every other option. Requires Randomize dropped weapons."

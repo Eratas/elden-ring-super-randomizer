@@ -69,6 +69,7 @@ class EnemyDrops:
         self.S = reg.param("ShopLineupParam", erreg.load_paramdef(HERE / "paramdef" / "ShopLineupParam.xml"))
         self.N = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
         self.G = reg.param("EquipParamGoods", erreg.load_paramdef(HERE / "paramdef" / "EquipParamGoods.xml"))
+        self.W = reg.param("EquipParamWeapon", erreg.load_paramdef(HERE / "paramdef" / "EquipParamWeapon.xml"))
         self.lot_names = erreg.load_names(HERE / "names" / "ItemLotParam_enemy.txt")
         self._names: dict[int, dict[int, str]] = {}
 
@@ -157,6 +158,13 @@ class EnemyDrops:
             if r is not None and self.S.get(r, "equipType") in CATEGORY_OF_SHOP_TYPE:
                 add(CATEGORY_OF_SHOP_TYPE[self.S.get(r, "equipType")], self.S.get(r, "equipId"), 1)
         return [(cat, iid, tuple(sorted(nums))) for (cat, iid), nums in seen.items()]
+
+    def world_weapons(self) -> list[int]:
+        """(one entry per row of EquipParamWeapon) the weapon rows the world can drop.
+        Rows of one appearance are different instances - different stats - so the reroll hands
+        out distinct rows per slot and the same appearance can be found twice with different
+        stats."""
+        return [r.id for r in self.W.rows]
 
     # ------------------------------------------------------------ rare drop pools
     def _named_bases(self, param: str, names_file: str, one_row_only: bool = False,
@@ -354,8 +362,11 @@ class EnemyDrops:
 
         The game awards the enemy lots when an enemy dies and the map lots at area events; this
         rewrites the weapon id of every weapon slot to a fresh draw from the pool - the weapons the
-        input hands out somewhere.  It changes what you find when you pick up a drop, not where
-        loot drops and not what a weapon is; rows with a one-time flag stay as they are.
+        input hands out somewhere.  Slots take distinct world weapon rows where the world has
+        them: two rows of one appearance are two instances (different stats), so the same
+        appearance can be found in two loot spots with different stats; where the world has no
+        other row, the repeat is forced.  It changes what you find when you pick up a drop, not
+        where loot drops and not what a weapon is; rows with a one-time flag stay as they are.
         `shops` additionally rerolls the weapon slots of the weapon shops (ShopLineupParam): the
         per-run reroll of what merchants sell (--random-dropped-shop-weapons)."""
         L = self.L
@@ -373,32 +384,40 @@ class EnemyDrops:
                  if L.get(r, f"lotItemCategory0{i}") == CATEGORY_WEAPON
                  and L.get(r, f"lotItemId0{i}") > 0
                  and L.get(r, f"lotItemBasePoint0{i}") > 0]
-        if len(pool) < 2 or not slots:
+        world = self.world_weapons()
+        if len(pool) < 2 or not slots or not world:
             return [f"# randomize dropped weapons: {len(pool)} pool weapons, {len(slots)} weapon slots, nothing changed"]
         lines = [f"# randomize dropped weapons: rerolled {len(slots)} slot(s) over the {len(pool)}-weapon pool",
                  "# lot row  [enemy or map lot]  old weapon -> new weapon"]
+        used = {L.get(r, f"lotItemId0{i}") for r, i in slots}
         for r, i in slots:
             lname = self.lot_names.get(r.id) or "?"
             old = L.get(r, f"lotItemId0{i}")
-            new = rng.choice(pool)
+            fresh = [w for w in world if w not in used]
+            new = rng.choice(fresh) if fresh else rng.choice(world)
+            used.add(new)
             L.set(r, f"lotItemId0{i}", new)
             lines.append(f"{r.id:>10}  {lname:<40}  {self.item_name(old, CATEGORY_WEAPON)} -> "
                          f"{self.item_name(new, CATEGORY_WEAPON)}")
         if shops and pool:
-            lines.extend(self._reroll_shop_weapons(rng, pool))
+            lines.extend(self._reroll_shop_weapons(rng, world))
         return lines
 
-    def _reroll_shop_weapons(self, rng: random.Random, pool: list[int]) -> list[str]:
-        """Shop slots of weapons (ShopLineupParam): per-run reroll of what merchants sell, one random
-        pool weapon per row."""
+    def _reroll_shop_weapons(self, rng: random.Random, world: list[int]) -> list[str]:
+        """Shop slots of weapons (ShopLineupParam): per-run reroll of what merchants sell, one
+        distinct world weapon row per slot (the same distinctness rule as the lot reroll)."""
         names = erreg.load_names(HERE / "names" / "ShopLineupParam.txt")
         lines = []
+        used = set()
         for r in self.S.rows:
             if self.S.get(r, "equipType") != SHOP_TYPE_OF_CATEGORY[CATEGORY_WEAPON] \
                     or self.S.get(r, "equipId") <= 0:
                 continue
             old = self.S.get(r, "equipId")
-            new = rng.choice(pool)
+            used.add(old)
+            fresh = [w for w in world if w not in used]
+            new = rng.choice(fresh) if fresh else rng.choice(world)
+            used.add(new)
             self.S.set(r, "equipId", new)
             lines.append(f"{r.id:>10}  {names.get(r.id, '?'):<40}  "
                          f"{self.item_name(old, CATEGORY_WEAPON)} -> {self.item_name(new, CATEGORY_WEAPON)}")

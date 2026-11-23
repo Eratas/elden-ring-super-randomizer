@@ -362,17 +362,25 @@ def run() -> None:
     rows = [r for k in ed.lots() for r in ed.run(k)]
     pool_ids = {e[1] for e in ed.build_pool(rows, {enemy_drops.CATEGORY_WEAPON})}
     check(pool_ids == {2000000, 4000000}, f"randomized weapons: pool is {pool_ids}")
-    lines = ed.randomize_dropped_weapons(random.Random(3))
-    changes = [ln for ln in lines[2:] if ln.split(" -> ")[0] != ln.split(" -> ")[1]]
-    check(changes, "randomized weapons: no slot actually changed to a different weapon")
+    world = ed.world_weapons()
+    check(len(world) > 2, "randomized weapons: the synthetic world has no distinct weapon rows to draw from")
+    old = {(r.id, i): ed.L.get(r, f"lotItemId0{i}") for k in ed.lots() for r in ed.run(k)
+           for i in range(1, enemy_drops.SLOTS + 1)}
+    ed.randomize_dropped_weapons(random.Random(3))
+    seen: set[int] = set()
     for k in ed.lots():
         for r in ed.run(k):
             for i in range(1, enemy_drops.SLOTS + 1):
                 iid, cat, w = (ed.L.get(r, f"lotItemId0{i}"),
                                ed.L.get(r, f"lotItemCategory0{i}"),
                                ed.L.get(r, f"lotItemBasePoint0{i}"))
-                check(cat != 2 or iid in pool_ids or w <= 0,
-                      f"randomized weapons: weapon slot holds {iid}, not a pool id")
+                if cat != 2 or w <= 0:
+                    continue
+                check(iid in world, f"randomized weapons: weapon slot holds {iid}, not a world weapon row")
+                check(iid != old[(r.id, i)], f"randomized weapons: slot {r.id}.{i} kept its old weapon {iid}")
+                check(iid not in seen, f"randomized weapons: the same weapon row {iid} appears twice")
+                seen.add(iid)
+    check(seen, "randomized weapons: no weapon slot was rerolled")
     reg, ed = _two_drop_world()
     a = ed.randomize_dropped_weapons(random.Random(3))
     reg, ed = _two_drop_world()
@@ -392,8 +400,8 @@ def run() -> None:
     M.set(mrow, "lotItemNum01", 1)
     out = ed.randomize_dropped_weapons(random.Random(5))
     check(any("10010" in ln for ln in out), "randomized weapons: no report line for the map-lot weapon")
-    check(M.get(mrow, "lotItemId01") in pool_ids,
-          "randomized weapons: map-lot slot holds an id that is not in the pool")
+    check(M.get(mrow, "lotItemId01") in ed.world_weapons(),
+          "randomized weapons: map-lot slot holds an id that is not a world weapon row")
     check(ed.L.get(ed.L.by_id[300000000], "lotItemId01") > 0,
           "randomized weapons: enemy-drop pass lost its slot after the map-lot extension")
 
@@ -516,9 +524,10 @@ def run() -> None:
     S = reg._params["ShopLineupParam"]
     row = S.by_id[500000]
     before = S.get(row, "equipId")
-    # seed 1: the shop row's reroll draw differs from the row's starting 2000000 (seed 4 draws it again)
+    world = ed.world_weapons()
+    # the shop reroll draws from the world rows minus the old ids, so the row changes
     out = ed.randomize_dropped_weapons(random.Random(1), shops=True)
-    check(S.get(row, "equipId") in pool_ids, "randomize dropped weapons: shop slot holds an id that is not in the pool")
+    check(S.get(row, "equipId") in world, "randomize dropped weapons: shop slot holds an id that is not a world weapon row")
     check(any("500000" in ln for ln in out), "randomize dropped weapons: no shop-slot line in the report")
     check(S.get(row, "equipId") != before, "randomize dropped weapons: the shop slot was not rerolled")
     reg, ed = _two_drop_world()
