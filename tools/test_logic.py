@@ -1567,6 +1567,46 @@ def run_self_test() -> tuple[int, int]:
     return _CHECKS, len(_FAILS)
 
 
+def test_install_runtime() -> None:
+    """The optional DLL installer: copies once, keeps the ini, and fails cleanly."""
+    import install_runtime
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source = root / "source"
+        target = root / "dll" / "offline"
+        source.mkdir(parents=True)
+        target.mkdir(parents=True)
+        dll = source / install_runtime.DLL_NAME
+        dll.write_bytes(b"not a real dll, but byte-exact copying is what we test")
+        lines = install_runtime.install(source=dll, dll_dir=target)
+        check((target / install_runtime.DLL_NAME).read_bytes() == dll.read_bytes(),
+              "install_runtime: the DLL was not copied byte-for-byte")
+        check((target / install_runtime.INI_NAME).is_file(),
+              "install_runtime: the sample ini was not installed")
+        check(any("installed" in line for line in lines), "install_runtime: no confirmation line")
+        ini_text = b"; user edited this\n[general]\nenabled = 0\n"
+        (target / install_runtime.INI_NAME).write_bytes(ini_text)
+        lines = install_runtime.install(source=dll, dll_dir=target)
+        check((target / install_runtime.INI_NAME).read_bytes() == ini_text,
+              "install_runtime: an existing ini was overwritten")
+        check(any("already up to date" in line for line in lines),
+              "install_runtime: a repeat install was not recognised as up to date")
+        try:
+            install_runtime.install(source=root / "missing.dll", dll_dir=target)
+        except ValueError:
+            pass
+        else:
+            check(False, "install_runtime: a missing DLL did not raise a user-facing error")
+        # An explicit missing folder is reported as an error, never silently created.
+        try:
+            install_runtime.install(source=dll, dll_dir=target / "does-not-exist")
+        except ValueError as e:
+            check("does not exist" in str(e), "install_runtime: a bad target gave the wrong error")
+        else:
+            check(False, "install_runtime: a missing target folder was accepted")
+
+
 def main() -> int:
     args = sys.argv[1:]
     fuzz_path = os.environ.get("ER_REGULATION_BIN")
@@ -1576,7 +1616,7 @@ def main() -> int:
             fuzz_path = args[i + 1]
 
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
-                               test_dropshuffle_protection):
+                               test_dropshuffle_protection, test_install_runtime):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

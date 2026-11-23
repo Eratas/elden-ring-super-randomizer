@@ -357,6 +357,10 @@ def build_argparse(prog: str | None = None, description: str = "", epilog: str =
     # reaches values_from_args() and never appears in the window (which is generated from OPTIONS).
     import version
     ap.add_argument("--version", action="version", version=f"%(prog)s {version.__version__}")
+    # A maintenance action, not a randomizer option: like --version it is argparse-only, so it never
+    # reaches values_from_args() and never appears in the window (which is generated from OPTIONS).
+    ap.add_argument("--install-runtime", action="store_true",
+                    help="Copy the built loot-variants DLL into the Mod Engine dll/offline folder and exit.")
     return ap
 
 

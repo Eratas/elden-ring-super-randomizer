@@ -297,7 +297,7 @@ def run() -> None:
     check(standard_entry.gem_class[0] == -1,
           "--loot-variants: affinity 0 of the synthetic weapon has gemMountType=1 and must get no Ash")
     lines = v.manifest()
-    check(lines[0] == loot_variants.MAGIC + " 1", "--loot-variants: bad manifest header")
+    check(lines[0] == loot_variants.MAGIC + " 2", "--loot-variants: bad manifest header")
     check("defaults 50 legendary 1 1" in lines, "--loot-variants: the run's curve is not in the manifest")
     fp = loot_variants.fingerprint(b"abc")
     check(fp.split()[0] == "3" and len(fp.split()[1]) == 16,
@@ -312,6 +312,21 @@ def run() -> None:
     check(len([ln for ln in lines if ln.startswith("gems ")]) == len(v.class_gems),
           "--loot-variants: gem pool count mismatch")
     check(len(v.lines()) >= 4, "--loot-variants: empty human report")
+
+    # --- armour: same piece, different reinforcement level on every pickup ---
+    armor_lines = [ln for ln in lines if ln.startswith("armor ")]
+    check(len(armor_lines) == len(v.armor), "--loot-variants: manifest armour count mismatch")
+    check(len(armor_lines) == 6, "--loot-variants: the synthetic regulation has no armour entries")
+    check(all(len(ln.split()) == 3 for ln in armor_lines),
+          "--loot-variants: an armour line does not have a base and a ceiling")
+    check(all(int(ln.split()[2]) == 10 for ln in armor_lines),
+          "--loot-variants: a reinforceable armour piece is not +10")
+    for ln in armor_lines:
+        base = int(ln.split()[1])
+        check(base < 0x1000000, "--loot-variants: an armour id does not fit the give-struct id layout")
+        check(base in reg.param("EquipParamProtector", erreg.load_paramdef(
+            Path("tools/paramdef/EquipParamProtector.xml"))).by_id,
+              "--loot-variants: an armour entry has no backing param row")
 
     # --- moveset modes: each produces a report and changes the tables ---
     for mode in ("affinity", "weapon", "bound"):

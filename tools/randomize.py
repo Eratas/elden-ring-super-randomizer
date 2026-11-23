@@ -406,6 +406,14 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                                 epilog="Every option is documented in options.py; the GUI is generated from the "
                                        "same table, so `randomize.py --help` and the hover text always agree.")
     args = ap.parse_args(argv)
+    if getattr(args, "install_runtime", False):
+        import install_runtime
+        try:
+            for line in install_runtime.install():
+                print(line)
+        except (ValueError, OSError) as e:
+            fail(f"--install-runtime: {e}")
+        return 0
     try:
         v = options.validate(options.values_from_args(args))
     except ValueError as e:
@@ -759,9 +767,10 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         # Bind the manifest to the bytes actually written, not to the in-memory table: a stale manifest
         # paired with a different regulation would hand out ids whose affinity rows do not exist.
         manifest_bytes = variants.write(manifest, bind=loot_variants.fingerprint(out.read_bytes()))
-        note = (f"# loot variants: {manifest} ({manifest_bytes} bytes, {len(variants.entries)} weapons); "
-                "install mods/loot-variants/dist/loot_variants.dll in the mod's dll/offline folder "
-                "to reroll affinity, level and Ash on every pickup")
+        note = (f"# loot variants: {manifest} ({manifest_bytes} bytes, {len(variants.entries)} weapons, "
+                f"{len(variants.armor)} armour pieces); install the optional DLL with "
+                "--install-runtime (or the GUI's Install DLL button) to reroll affinity, level and Ash "
+                "on every weapon pickup and the reinforcement level on every armour pickup")
         print(note)
         vlines.append(note)
     # the patched text archives are content, not a report: they are always written

@@ -229,6 +229,9 @@ void apply_ini(const std::wstring& ini, loot_variants::Options& options) {
     if (ini_int(ini, L"roll", L"level", value)) {
         options.reroll_level = value != 0;
     }
+    if (ini_int(ini, L"armor", L"enabled", value)) {
+        options.reroll_armor = value != 0;
+    }
     if (ini_int(ini, L"roll", L"ash_chance", value)) {
         options.ash_chance = value < 0 ? 0 : (value > 100 ? 100 : value);
     }
@@ -445,7 +448,7 @@ private:
 
 // --------------------------------------------------------------------------- the detour
 void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
-    if (items != nullptr && !g_manifest.weapons.empty()) {
+    if (items != nullptr && (!g_manifest.weapons.empty() || !g_manifest.armor.empty())) {
         thread_local loot_variants::Rng rng(g_seed ^ static_cast<std::uint64_t>(GetCurrentThreadId()));
         std::uint32_t count = items->item_struct_count;
         if (count > kGiveCapacity) {
@@ -553,9 +556,10 @@ DWORD WINAPI init_thread(LPVOID) {
     {
         char summary[320] = {};
         std::snprintf(summary, sizeof(summary),
-                      "loot_variants: manifest %s: %zu weapons, %zu ash pools, %zu bad lines",
-                      narrow(manifest_path).c_str(), g_manifest.weapons.size(), g_manifest.gems.size(),
-                      g_manifest.bad_lines);
+                      "loot_variants: manifest %s: %zu weapons, %zu armour pieces, %zu ash pools, "
+                      "%zu bad lines",
+                      narrow(manifest_path).c_str(), g_manifest.weapons.size(), g_manifest.armor.size(),
+                      g_manifest.gems.size(), g_manifest.bad_lines);
         log_line(summary);
     }
 

@@ -24,17 +24,24 @@ regulation (every weapon still gets a random level, and every infusable weapon a
 
 ## Install (Mod Engine 3 / Reforged offline)
 
-1. Build: `pwsh -NoProfile -File build.ps1 -Install`
-   (or `build.ps1` and copy `dist\loot_variants.dll` yourself).
-2. Run the randomizer with `--loot-variants`.  It writes `loot_variants.txt` **next to the new
+The DLL is **optional**: the randomizer writes a complete regulation whether or not it is installed.
+
+1. Build: `pwsh -NoProfile -File build.ps1`.  The tests run first, then the DLL is written to both
+   `mods\loot-variants\dist\` and the program's own `dist\` folder (next to
+   `EldenRingSuperRandomizer.exe`).  `build.ps1 -Install` also copies it straight to
+   `C:\Games\ERR\dll\offline`.
+2. Install it with the program: `randomize.py --install-runtime`, or the **Install DLL** button in
+   the GUI's action bar.  Both find the DLL in `dist\`, detect `C:\Games\ERR\dll\offline`, copy the
+   sample ini if you have none, and never overwrite an ini you already have.  For another layout,
+   `python tools\install_runtime.py --dll-dir <mod>\dll\offline` (or `--check` to only look).
+3. Run the randomizer with `--loot-variants`.  It writes `loot_variants.txt` **next to the new
    `regulation.bin`** — i.e. in your mod folder, which is the file ME3 mounts.
-3. The DLL goes in the same place as the other offline natives, e.g.
-   `C:\Games\ERR\dll\offline\loot_variants.dll`.  The manifest does **not** need copying: the mod
-   searches its own folder, every parent folder and the `<mod>` folder for `loot_variants.txt`.
-4. Launch as usual (`ReforgedLauncher.exe --offline`).  Check `loot_variants.log` next to the DLL.
+4. **Copy `regulation.bin` and `loot_variants.txt` together.**  The manifest's `bind` fingerprint is
+   checked against the regulation at startup; a manifest from another run leaves the mod inert.
+5. Launch as usual (`ReforgedLauncher.exe --offline`).  Check `loot_variants.log` next to the DLL.
 
 The log's last line should read `active, 4 call site(s), ...`.  If it says `inert`, the reason is on
-the line before it: no manifest, unsupported game version, or `enabled = 0` in the ini.
+the line before it: no manifest, a stale bind, an unsupported game version, or `enabled = 0`.
 
 ## Files
 
@@ -45,7 +52,8 @@ mods/loot-variants/
   src/variant_logic.h    manifest parser + roll logic, free of Windows headers
   src/loot_variants.cpp  PE scan, call-site patch, detour, ini and logging
   src/test_variants.cpp  host-side tests for the parse and the roll
-  dist/                  build output (gitignored)
+  dist/                  build output (gitignored); also copied to <repo>\dist\
+tools/install_runtime.py  the --install-runtime flag and GUI button (no game data touched)
 ```
 
 ## The roll
@@ -62,8 +70,16 @@ rolled_level`:
   gems whose `canMountWep` bit fits the row's weapon type **and** whose `configurableWepAttr` bit is
   set for that affinity.  Those are the same two flags the smithing table checks, so the skill
   always animates; `--random-movesets` keeps the latter flag in sync with shuffled animations.
-* Ammo, armour, talismans, goods, Ashes themselves and any weapon not in the manifest pass through
-  untouched.  So do cut rows with an affinity outside 0–12.
+* **Armour** has no affinity rows, so the *piece* cannot change: rerolling the row would change the
+  model.  Instead the give id's category bit (`0x10000000`) selects these entries and the runtime
+  draws a new reinforcement level **+0..+10** for the same `EquipParamProtector` row.  Damage
+  negation and resistances scale through `ReinforceParamProtector`, so five copies of the same helmet
+  keep the same look and get five different stat blocks.  The give id is
+  `0x10000000 | level << 24 | base` — the layout whose `level << 24` field is stored in each
+  `ReinforceParamProtector` row.  Pieces that cannot be reinforced are omitted.  Set `[armor]
+  enabled = 0` in the ini to leave armour alone.
+* Ammo, talismans, goods, Ashes themselves and any weapon or armour piece not in the manifest pass
+  through untouched.  So do cut rows with an affinity outside 0–12.
 
 ## How the hook works
 
@@ -89,9 +105,10 @@ allocation and never throws.
 
 `build.ps1` compiles and runs `dist\test_variants.exe`, which checks the manifest parser (including
 malformed lines and rejected versions), the tier arithmetic against `loot.py`'s `_tier_range`, and
-the roll itself (affinity membership, level ceiling, Ash pools, chance 0/100 and pass-through).
+the roll itself (affinity membership, level ceiling, Ash pools, chance 0/100, armour level/base
+preservation and pass-through).
 
-Pass a real manifest to validate the exact file a run wrote and roll every weapon in it:
+Pass a real manifest to validate the exact file a run wrote and roll every weapon and armour piece in it:
 
 ```
 dist\test_variants.exe <mod folder>\loot_variants.txt

@@ -31,6 +31,7 @@ from tkinter import filedialog, messagebox, ttk
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import backup  # noqa: E402
 import i18n  # noqa: E402
+import install_runtime  # noqa: E402
 import oodle  # noqa: E402
 import options  # noqa: E402
 import phases  # noqa: E402
@@ -356,6 +357,13 @@ class App:
         self.revert_btn.pack(side="left", padx=(0, 8), pady=5)
         Tooltip(self.revert_btn, self.t("ui:tip_revert", "Restore the most recent backup: put your original "
                                                          "regulation.bin and msg archives back where they were."))
+
+        self.install_btn = ttk.Button(actions, text=self.t("ui:install_dll", "Install DLL"), style="TButton",
+                                      command=self._install_dll)
+        self.install_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.install_btn, self.t("ui:tip_install_dll", "Copy the optional loot-variants DLL into the "
+                                                                "Mod Engine dll/offline folder so pickups can be "
+                                                                "rerolled at runtime. Writes no game data."))
 
         self.run_btn = ttk.Button(actions, text=self.t("ui:randomize", "Randomize"), style="Run.TButton",
                                   command=lambda: self._run("run"))
@@ -1287,6 +1295,33 @@ class App:
         messagebox.showinfo(self.t("ui:backup_done", "Backup complete"),
                             self.t("ui:backup_done_body", "Original files copied to:\n{0}").format(bdir),
                             parent=self.root)
+
+    def _install_dll(self) -> None:
+        """Copy the optional native mod to the Mod Engine dll/offline folder, no run involved."""
+        target = install_runtime.find_target()
+        if target is None:
+            chosen = filedialog.askdirectory(
+                title=self.t("ui:install_dll_pick", "Mod Engine dll/offline folder"), parent=self.root)
+            if not chosen:
+                return
+            target = Path(chosen)
+        if not messagebox.askokcancel(
+                self.t("ui:install_dll", "Install DLL"),
+                self.t("ui:install_dll_body", "Install the loot-variants DLL in:\n{0}\n\n"
+                                              "No regulation or save file is changed.").format(target),
+                parent=self.root):
+            return
+        try:
+            lines = install_runtime.install(dll_dir=target)
+        except (ValueError, OSError) as error:
+            messagebox.showerror(self.t("ui:install_failed", "Install failed"), str(error), parent=self.root)
+            return
+        for line in lines:
+            self._log(line, True)
+        messagebox.showinfo(self.t("ui:install_done", "DLL installed"),
+                            self.t("ui:install_done_body", "The optional loot mod is installed.\n\n"
+                                                           "Generate a regulation with --loot-variants and copy "
+                                                           "loot_variants.txt next to it."), parent=self.root)
 
     def _revert(self) -> None:
         """Restore the most recent backup, after a confirmation."""

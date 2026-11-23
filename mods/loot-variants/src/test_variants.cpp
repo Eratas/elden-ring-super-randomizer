@@ -136,6 +136,68 @@ void test_bind_and_tokens() {
     CHECK(tokens.gems[0].empty());
 }
 
+void test_armor() {
+    const std::string text =
+        "MADLOVE-LOOT-VARIANTS 2\n"
+        "weapon 1000000 25 1 0 - - - - - - - - - - - -\n"
+        "armor 40000 10\n"
+        "armor 50000 0\n"
+        "armor 20000000 10\n";          // > 0x00FFFFFF: malformed, must be rejected
+    loot_variants::Manifest m;
+    std::string error;
+    CHECK(loot_variants::parse_manifest(text, m, error));
+    CHECK_EQ(m.bad_lines, 1);
+    CHECK_EQ(m.armor.size(), 2);
+
+    loot_variants::Options options;
+    options.level_curve = loot_variants::kCurveEven;
+    loot_variants::Rng rng(4242);
+    bool seen[11] = {};
+    for (int i = 0; i < 2000; ++i) {
+        const loot_variants::Rolled rolled = loot_variants::roll_item(
+            loot_variants::kArmorBit | 40000, m, options, rng);
+        CHECK((rolled.item_id & loot_variants::kArmorBit) != 0);
+        CHECK_EQ(rolled.item_id & loot_variants::kArmorIdMask, 40000);
+        const std::uint32_t level = (rolled.item_id >> 24) & 0x0F;
+        CHECK(level <= 10);
+        CHECK_EQ(rolled.ash, loot_variants::kNoAsh);
+        seen[level] = true;
+    }
+    for (int level = 0; level <= 10; ++level) {
+        CHECK(seen[level]);
+    }
+
+    // An incoming +N armour id keeps its piece; the level is replaced, never added to.
+    const loot_variants::Rolled from_upgraded = loot_variants::roll_item(
+        loot_variants::kArmorBit | (7u << 24) | 40000, m, options, rng);
+    CHECK_EQ(from_upgraded.item_id & loot_variants::kArmorIdMask, 40000);
+    CHECK(((from_upgraded.item_id >> 24) & 0x0F) <= 10);
+
+    // A piece that cannot be reinforced keeps its exact id, as does an unknown base.
+    CHECK_EQ(loot_variants::roll_item(loot_variants::kArmorBit | 50000, m, options, rng).item_id,
+             loot_variants::kArmorBit | 50000u);
+    CHECK_EQ(loot_variants::roll_item(loot_variants::kArmorBit | 99999, m, options, rng).item_id,
+             loot_variants::kArmorBit | 99999u);
+    // Weapons, goods and accessory categories are untouched by the armour branch.
+    CHECK_EQ(loot_variants::roll_item(3000005, m, options, rng).item_id, 3000005);
+    CHECK_EQ(loot_variants::roll_item(0x40000000u | 10000, m, options, rng).item_id,
+             0x40000000u | 10000u);
+
+    // ini opt-out.
+    loot_variants::Options off = options;
+    off.reroll_armor = false;
+    CHECK_EQ(loot_variants::roll_item(loot_variants::kArmorBit | 40000, m, off, rng).item_id,
+             loot_variants::kArmorBit | 40000u);
+
+    // A v1 manifest has no armour lines: an old manifest cannot reroll armour.
+    loot_variants::Manifest old;
+    CHECK(loot_variants::parse_manifest(
+        "MADLOVE-LOOT-VARIANTS 1\nweapon 1000000 25 1 0 - - - - - - - - - - - -\n", old, error));
+    CHECK(old.armor.empty());
+    CHECK_EQ(loot_variants::roll_item(loot_variants::kArmorBit | 40000, old, options, rng).item_id,
+             loot_variants::kArmorBit | 40000u);
+}
+
 void test_tiers() {
     using namespace loot_variants::detail;
     std::uint32_t lo = 0;
@@ -324,7 +386,9 @@ void test_real_manifest(const char* path) {
     }
     CHECK_EQ(m.bad_lines, 0);
     CHECK(m.weapons.size() > 100);
-    std::printf("manifest: %zu weapons, %zu ash pools, ash %d%%, curve %d, bind=%d\n", m.weapons.size(),
+    CHECK(m.armor.size() > 100);
+    std::printf("manifest: %zu weapons, %zu armour, %zu ash pools, ash %d%%, curve %d, bind=%d\n",
+                m.weapons.size(), m.armor.size(),
                 m.gems.size(), m.defaults.ash_chance, m.defaults.level_curve, m.has_bind ? 1 : 0);
     // The randomizer writes both files together; check the fingerprint against that regulation.
     // Derive the sibling path without <filesystem> so the test stays a single-header console program.
@@ -378,6 +442,7 @@ int main(int argc, char** argv) {
     } else {
         test_parser();
         test_bind_and_tokens();
+        test_armor();
         test_tiers();
         test_roll();
     }

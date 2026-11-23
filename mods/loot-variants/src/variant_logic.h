@@ -25,6 +25,12 @@ constexpr std::uint32_t kNoAsh = 0xFFFFFFFFu;      // "no Ash mounted": the fiel
 constexpr std::uint32_t kAshFlag = 0x80000000u;    // the game's "this item has an Ash" bit
 constexpr std::uint32_t kAffinities = 13;          // Standard, Heavy .. Occult
 constexpr std::uint32_t kMaxLevel = 25;
+// The give-struct id layout: bit 31 = Ash present, bits 28-30 = item category (1 = armour),
+// bits 24-27 = reinforcement level, bits 0-23 = the EquipParamProtector row id.  The level field is
+// the one ReinforceParamProtector stores for +N (its rows hold N << 24 at offset 44).
+constexpr std::uint32_t kArmorBit = 0x10000000u;
+constexpr std::uint32_t kArmorIdMask = 0x00FFFFFFu;
+constexpr std::uint32_t kArmorMaxLevel = 10;
 constexpr int kCurveEven = 0;
 constexpr int kCurveCommon = 1;
 constexpr int kCurveLegendary = 2;
@@ -41,12 +47,14 @@ struct Weapon {
 struct Options {
     bool reroll_affinity = true;
     bool reroll_level = true;
+    bool reroll_armor = true;     // ini [armor] enabled = 0 turns this off without a rebuild
     int ash_chance = 50;          // percent
     int level_curve = kCurveCommon;
 };
 
 struct Manifest {
     std::map<std::uint32_t, Weapon> weapons;
+    std::map<std::uint32_t, std::uint32_t> armor;   // base id -> +N ceiling
     std::map<int, std::vector<std::uint32_t>> gems;
     Options defaults;
     bool has_bind = false;             // an old manifest has no bind line: warn, but still usable
@@ -167,7 +175,7 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
         }
         if (tok[0] == "MADLOVE-LOOT-VARIANTS") {
             std::uint32_t version = 0;
-            if (tok.size() < 2 || !detail::to_u32(tok[1], version) || version != 1) {
+            if (tok.size() < 2 || !detail::to_u32(tok[1], version) || version < 1 || version > 2) {
                 error = "unsupported manifest version on line " + std::to_string(line_no);
                 return false;
             }
@@ -230,6 +238,18 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
                 continue;
             }
             out.weapons[w.base] = w;
+            continue;
+        }
+        if (tok[0] == "armor") {
+            // armor <base> <max level>: one reinforcement track, no affinity rows
+            std::uint32_t base = 0;
+            std::uint32_t top = 0;
+            if (tok.size() != 3 || !detail::to_u32(tok[1], base) || !detail::to_u32(tok[2], top) ||
+                top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0) {
+                ++out.bad_lines;
+                continue;
+            }
+            out.armor[base] = top;
             continue;
         }
         if (tok[0] == "gems") {
@@ -370,6 +390,23 @@ inline std::uint32_t popcount(std::uint32_t v) {
 inline Rolled roll_item(std::uint32_t item_id, const Manifest& manifest, const Options& options, Rng& rng) {
     Rolled out;
     out.item_id = item_id;
+
+    // Armour first: its id has the category bit set, so it can never collide with a weapon row.
+    if (options.reroll_armor && (item_id & kArmorBit) != 0) {
+        const std::uint32_t base = item_id & kArmorIdMask;
+        const auto piece = manifest.armor.find(base);
+        if (piece != manifest.armor.end()) {
+            std::uint32_t level = (item_id >> 24) & 0x0Fu;
+            if (options.reroll_level && piece->second > 0) {
+                level = detail::roll_level(piece->second, options.level_curve, rng);
+            } else if (level > piece->second) {
+                level = piece->second;
+            }
+            out.item_id = kArmorBit | (level << 24) | base;
+        }
+        return out;                  // armour has no affinity and cannot mount an Ash
+    }
+
     const std::uint32_t base = item_id - item_id % 10000;
     const auto found = manifest.weapons.find(base);
     if (found == manifest.weapons.end()) {

@@ -8,11 +8,12 @@ effects, and the upgrade level is applied through ReinforceParamWeapon, so the g
 (`mods/loot-variants`) intercepts the game's item-give call and rewrites that id per pickup, then
 attaches a random Ash of War that the row can actually use.
 
-This pass writes the manifest that makes those choices safe.  Four record kinds:
+This pass writes the manifest that makes those choices safe.  Five record kinds:
 
     bind     <regulation size> <fnv1a64>
     defaults <ash chance %> <level curve> <reroll affinity 0|1> <reroll level 0|1>
     weapon   <base> <max level> <affinity mask> <gem class for affinity 0> ... <gem class for 12>
+    armor    <base> <max level>
     gems     <class> <gem id> <gem id> ...
 
 `bind` is a cheap consistency tag over the exact bytes of the regulation this manifest was made
@@ -35,6 +36,12 @@ animations (weapons.py `_restrict_ash_affinities`), so the pool follows the move
 A weapon where nothing can change (one affinity, no upgrades, no Ash) is left out of the manifest, so
 the mod keeps unique quest weapons exactly as the table has them.
 
+Armour has no affinity rows: the same helmet can only be +0..+10.  Those levels are real stats (damage
+negation and resistances scale through ReinforceParamProtector), so the runtime mod rerolls just the
+level while keeping the piece - and therefore the appearance - identical.  Only pieces that can be
+reinforced are listed; the give id is `0x10000000 | level << 24 | base`, the layout the game uses for
+upgraded armour (and the same `level << 24` field ReinforceParamProtector stores).
+
 The mod is optional.  Without it the regulation is still a complete run and this option only writes
 the manifest; with it, `loot_variants.txt` has to sit next to `loot_variants.dll` or next to
 regulation.bin.
@@ -52,7 +59,7 @@ HERE = Path(__file__).resolve().parent
 MANIFEST_NAME = "loot_variants.txt"
 REPORT_NAME = "variants.txt"
 MAGIC = "MADLOVE-LOOT-VARIANTS"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2                  # v2 adds `armor` lines; v1 manifests stay readable
 NO_ASH = -1
 AFFINITIES = 13                     # Standard, Heavy .. Occult: the only ids the game resolves
 ASH_CHANCE = 50                     # default of the runtime mod; the ini can override it
@@ -119,6 +126,24 @@ class Variants:
         self._class_of: dict[tuple[int, ...], int] = {}
         self.class_gems: list[tuple[int, ...]] = []
         self.entries = self._build()
+        self.armor = self._build_armor()
+
+    # ------------------------------------------------------------ the armour
+    def _build_armor(self) -> dict[int, int]:
+        """base id -> highest reinforcement level, for named pieces the smith can actually upgrade.
+
+        Armour ids are all below 0x1000000 and every row uses reinforceTypeId 0, whose
+        ReinforceParamProtector table runs +0..+10.  The 45 rows with materialSetId -1 are cut or
+        unreinforceable placeholders and stay exactly as dropped.
+        """
+        import gear
+        P = gear.Armour(self.reg).P
+        out: dict[int, int] = {}
+        for row in P.rows:
+            if P.get(row, "weight") <= 0 or P.get(row, "materialSetId") == -1:
+                continue
+            out[row.id] = 10
+        return out
 
     # ------------------------------------------------------------ the Ash pool
     def _gems(self) -> list[Gem]:
@@ -202,6 +227,9 @@ class Variants:
             cells = " ".join(str(e.gem_class[a]) if (e.affinity_mask >> a) & 1 else "-"
                              for a in range(AFFINITIES))
             out.append(f"weapon {e.base} {e.max_level} {e.affinity_mask} {cells}")
+        out.append("# armor <base> <max level> (same piece, different reinforcement)")
+        for base, top in sorted(self.armor.items()):
+            out.append(f"armor {base} {top}")
         out.append("# gems <class> <gem id> ...")
         for i, ids in enumerate(self.class_gems):
             out.append(f"gems {i} " + " ".join(str(g) for g in ids))
@@ -220,9 +248,10 @@ class Variants:
         choices = sum(len(self.class_gems[c]) for e in self.entries for c in e.gem_class if c != NO_ASH)
         return [f"# loot variants: {len(self.entries)} weapons the runtime mod rerolls "
                 f"({rollable} with more than one affinity), {ash_rows} rows with an Ash pool "
-                f"({choices} weapon/Ash pairs in {len(self.class_gems)} distinct pools)",
+                f"({choices} weapon/Ash pairs in {len(self.class_gems)} distinct pools); "
+                f"{len(self.armor)} armour pieces reroll their +0..+10 level",
                 f"# ash chance {ASH_CHANCE}%, level curve {self.curve}, ids stay inside "
-                f"base + affinity*100 + level",
+                f"base + affinity*100 + level (weapons) / category+level+base (armour)",
                 "# base      weapon                                   levels  affinities  ashes",
                 *[f"{e.base:>9}  {self.name(e.base):<40} 0-{e.max_level:<4} {e.affinities:>2}          "
                   f"{e.ash_rows:>2}" for e in self.entries]]
