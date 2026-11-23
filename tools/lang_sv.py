@@ -20,4 +20,6 @@ T = {'ui:tip_command': 'Kommandoraden som det här fönstret kör. Klicka för a
     'opt:goods_name_gaps:label': 'Varning om varor utan namn',
     'opt:goods_name_gaps:tip': "Listar de användbara varorna som inte har en post i tools/names/EquipParamGoods.txt.\n\nVerktyget läser varonamnet från textfilerna som spelet levererar med datfilerna; där en id inte har en post visar verktygets rapporter id:t där namnet skulle vara - '?'-stil namn som spelet själv använder för oupptäckta objekt. Passet ändrar inget; det varnar bara och listar id:n, ikonerna och sorteringsordningen för de påverkade varorna.\n\nExempel: ett objekt som faller i spelet men har ingen namngivande post finns i varningen med dess id. Risk: ingen. Namnfilen är data: att lägga till en id-post där är sättet att ge objektet ett namn.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': 'Slumpade vapen i vapenbutikernas lager',
+    'opt:random_dropped_shop_weapons:tip': 'Redovisar om vapenslottnorna i vapenbutikerna: varje slot säljer ett nytt slumpmässigt vapen varje gång.\n\nBara vapenslotna påverkas; shopens övriga slot är otyckt. Exempel: en vapenbutik säljer ett annat slumpmässigt vapen varje gång. Risk: ingen.'
 }

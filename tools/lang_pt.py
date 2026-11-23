@@ -20,4 +20,6 @@ T = {'ui:tip_command': 'A linha de comando que esta janela vai executar. Clique 
     'opt:goods_name_gaps:label': 'Avisa sobre bens sem nome',
     'opt:goods_name_gaps:tip': "Lista os bens utilizáveis que não têm entrada em tools/names/EquipParamGoods.txt.\n\nA ferramenta lê os nomes dos bens dos arquivos de texto que o jogo envia com os arquivos de dados; onde um id não tem entrada, os relatórios da ferramenta mostram o id onde estaria o nome - os nomes estilo '?' que o próprio jogo usa para itens não descobertos. O passo não muda nada; só avisa, listando os ids, ícones e ordem de classificação dos bens afetados.\n\nExemplo: um item que cai no jogo mas não tem entrada de nome aparece no aviso com o id. Risco: nenhum. O arquivo de nomes são dados: adicionar uma entrada com o id é a forma de dar um nome ao item.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': 'Armas aleatórias no estoque das lojas de armas',
+    'opt:random_dropped_shop_weapons:tip': 'Recalcula os slots de arma das lojas de armas: cada slot vende uma arma aleatória diferente por execução.\n\nSó slots de arma são afetados; o resto do estoque das lojas fica. Exemplo: uma loja de armas vende uma arma aleatória diferente por execução. Risco: nenhum.'
 }

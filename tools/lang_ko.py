@@ -20,4 +20,6 @@ T = {'ui:tip_command': '이 창이 실행할 명령줄입니다. 클릭하면 �
     'opt:goods_name_gaps:label': '이름 없는 소비 아이텅 경고',
     'opt:goods_name_gaps:tip': "tools/names/EquipParamGoods.txt에 없는 이름의 소비 아이텅을 나열합니다.\n\n이 도구는 게임이 데이터 파일과 함께 제공하는 텍스트 파일에서 소비 아이텅 이름을 읽습니다. ID에 해당 항목이 없으면 도구의 보고서에서 이름 대신 ID를 표시하며 - 게임 자체가 미발견 아이템에 사용하는 '?' 스타일 이름입니다. 이 경로는 아무것도 변경하지 않고 경고합니다. 경고 목록에는 영향받는 소비 아이텅의 ID, 아이콘, 정렬 순서가 나열됩니다.\n\n예: 게임에서 떨어지지만 이름 항목이 없는 아이템은 경고에 ID로 나타납니다. 위험: 없습니다. 이름 파일은 데이터입니다: ID 항목을 추가하는 것이 아이템에 이름을 붙이는 방법입니다.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': '무기 가게 재고 무기 랜덤화',
+    'opt:random_dropped_shop_weapons:tip': '각 무기 가게(ShopLineupParam)의 무기 슬롯을 새 추첨으로 다시 씁니다: 가게가 판매하는 무기가 매번 다른 무작위 무기가 됩니다.\n\n무기 슬롯만 바뀌고 가게의 다른 슬롯은 그대로입니다. 예: 무기 가게는 매번 다른 무작위 무기를 판매합니다. 위험: 특별한 것은 없습니다.'
 }

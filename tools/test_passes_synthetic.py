@@ -511,6 +511,22 @@ def run() -> None:
     # --- shops: every weapon slot rerolls from the named weapon pool ---
     check(len(shops.randomize(build(), random.Random(1))) > 1, "--random-shops: empty report")
 
+    # --- randomized dropped weapons with shops: the shop slots reroll too ---
+    reg, ed = _two_drop_world()
+    S = reg._params["ShopLineupParam"]
+    row = S.by_id[500000]
+    before = S.get(row, "equipId")
+    # seed 1: the shop row's reroll draw differs from the row's starting 2000000 (seed 4 draws it again)
+    out = ed.randomize_dropped_weapons(random.Random(1), shops=True)
+    check(S.get(row, "equipId") in pool_ids, "randomize dropped weapons: shop slot holds an id that is not in the pool")
+    check(any("500000" in ln for ln in out), "randomize dropped weapons: no shop-slot line in the report")
+    check(S.get(row, "equipId") != before, "randomize dropped weapons: the shop slot was not rerolled")
+    reg, ed = _two_drop_world()
+    a = ed.randomize_dropped_weapons(random.Random(4), shops=True)
+    reg, ed = _two_drop_world()
+    b = ed.randomize_dropped_weapons(random.Random(4), shops=True)
+    check(a == b, "randomize dropped weapons: shop reroll is not reproducible")
+
     # --- talkmsg: an FMG survives a write -> read round trip ---
     entries = {100000: "Longsword", 100001: "Lordsworn's Straight Sword", 200000: " padded "}
     check(talkmsg.read_fmg(talkmsg.write_fmg(entries)) == entries,

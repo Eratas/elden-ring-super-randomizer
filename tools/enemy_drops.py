@@ -32,7 +32,13 @@ import re
 from pathlib import Path
 
 import erreg
-from flasks import CATEGORY_NAMES, CATEGORY_OF_SHOP_TYPE, CATEGORY_WORD, load_locations
+from flasks import (
+    CATEGORY_NAMES,
+    CATEGORY_OF_SHOP_TYPE,
+    CATEGORY_WORD,
+    SHOP_TYPE_OF_CATEGORY,
+    load_locations,
+)
 
 HERE = Path(__file__).resolve().parent
 SLOTS = 8
@@ -341,14 +347,17 @@ class EnemyDrops:
         lines.insert(2, summary)
         return lines
 
-    def randomize_dropped_weapons(self, rng: random.Random, kinds: set[int] | None = None) -> list[str]:
+    def randomize_dropped_weapons(self, rng: random.Random, kinds: set[int] | None = None,
+                                  shops: bool = False) -> list[str]:
         """Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards,
         gifts) holds a random weapon from the pool.
 
         The game awards the enemy lots when an enemy dies and the map lots at area events; this
         rewrites the weapon id of every weapon slot to a fresh draw from the pool - the weapons the
         input hands out somewhere.  It changes what you find when you pick up a drop, not where
-        loot drops and not what a weapon is; rows with a one-time flag stay as they are."""
+        loot drops and not what a weapon is; rows with a one-time flag stay as they are.
+        `shops` additionally rerolls the weapon slots of the weapon shops (ShopLineupParam): the
+        per-run reroll of what merchants sell (--random-dropped-shop-weapons)."""
         L = self.L
         rows: dict[int, object] = {}
         for k in self.lots():
@@ -375,6 +384,24 @@ class EnemyDrops:
             L.set(r, f"lotItemId0{i}", new)
             lines.append(f"{r.id:>10}  {lname:<40}  {self.item_name(old, CATEGORY_WEAPON)} -> "
                          f"{self.item_name(new, CATEGORY_WEAPON)}")
+        if shops and pool:
+            lines.extend(self._reroll_shop_weapons(rng, pool))
+        return lines
+
+    def _reroll_shop_weapons(self, rng: random.Random, pool: list[int]) -> list[str]:
+        """Shop slots of weapons (ShopLineupParam): per-run reroll of what merchants sell, one random
+        pool weapon per row."""
+        names = erreg.load_names(HERE / "names" / "ShopLineupParam.txt")
+        lines = []
+        for r in self.S.rows:
+            if self.S.get(r, "equipType") != SHOP_TYPE_OF_CATEGORY[CATEGORY_WEAPON] \
+                    or self.S.get(r, "equipId") <= 0:
+                continue
+            old = self.S.get(r, "equipId")
+            new = rng.choice(pool)
+            self.S.set(r, "equipId", new)
+            lines.append(f"{r.id:>10}  {names.get(r.id, '?'):<40}  "
+                         f"{self.item_name(old, CATEGORY_WEAPON)} -> {self.item_name(new, CATEGORY_WEAPON)}")
         return lines
 
 

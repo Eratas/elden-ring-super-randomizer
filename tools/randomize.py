@@ -522,7 +522,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             qlines = goods.randomize(reg, names, rng)
             print("\n".join(l for l in qlines if l.startswith("#")))
         glines: list[str] = []                             # read-only warning about goods without names
-        if v["goods_name_gaps"]:
+        if v["goods_name_gaps"]:                            # ... done above the Goods phase
             say(phases.NAMES_GAPS)
             glines = names_gaps.goods_gaps(reg)
             print("\n".join(l for l in glines if l.startswith("#")))
@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["random_dropped_weapons"]:
             say(phases.DROPPED_WEAPONS)
             dw_lines += enemy_drops.EnemyDrops(reg).randomize_dropped_weapons(
-                rng, _kinds(v["enemy_drop_kinds"]))
+                rng, _kinds(v["enemy_drop_kinds"]), shops=v["random_dropped_shop_weapons"])
             print("\n".join(l for l in dw_lines if l.startswith("#")))
 
         if v["random_shop_stock"]:

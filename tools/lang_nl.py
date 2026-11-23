@@ -20,4 +20,6 @@ T = {'ui:tip_command': 'De opdrachtregel die dit venster uitvoert. Klik om te ko
     'opt:goods_name_gaps:label': 'Waarschuwing over goederen zonder namen',
     'opt:goods_name_gaps:tip': "Genoteert de bruikbare goederen zonder een vermelding in tools/names/EquipParamGoods.txt.\n\nDe tool leest goederennamen uit de tekstbestanden die het spel samen met de databestanden meebrengt; waar een id geen vermelding heeft, toont het hulpmiddel de id in plaats van de naam - de '?'-stijl namen die het spel zelf gebruikt voor onbekende items. De pas verandert niets; het waarschuwt slechts en genoteert de ids, iconen en sorteervolgorde van de getroffen goederen.\n\nVoorbeeld: een item dat in het spel valt maar geen naamvermelding heeft, verschijnt in de waarschuwing met zijn id. Risico: geen. Het namenbestand is data: een id-vermelding eraan toevoegen is de manier om het item een naam te geven.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': 'Wapens in het winkelassortiment willekeurig',
+    'opt:random_dropped_shop_weapons:tip': 'Trekt de wapenslots van de wapenshops opnieuw op: elke shop-slot verkoopt elke keer een ander willekeurig wapen.\n\nAlleen wapenslots zijn betrokken; de övriga slots van de wapenshops blijven onveranderd. Voorbeeld: een wapenshop verkoopt elke keer een ander willekeurig wapen. Risico: niks.'
 }

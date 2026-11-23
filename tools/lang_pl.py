@@ -20,4 +20,6 @@ T = {'ui:tip_command': 'Linia poleceń, którą wykona to okno. Kliknij, aby sko
     'opt:goods_name_gaps:label': 'Ostrzeżenie o towarach bez nazw',
     'opt:goods_name_gaps:tip': "Wymienia używalne towary bez wpisu w tools/names/EquipParamGoods.txt.\n\nNarzędzie czyta nazwy towarów z plików tekstowych, które gra dostarcza ze swoimi plikami danych; gdzie id nie ma wpisu, raporty narzędzia pokazują id w miejscu nazwy - nazwy w stylu '?' używane przez samą grę dla nieodkrytych przedmiotów. Przechodzenie nie zmienia niczego; tylko ostrzega, wymieniając id, ikony i kolejność sortowania dotkniętych towarów.\n\nPrzykład: przedmiot, który wypada w grze, ale nie ma wpisu nazwy, pojawia się w ostrzeżeniu z jego id. Ryzyko: brak. Plik nazw jest danymi: dodanie wpisu z id jest sposobem na nadanie temu przedmiotowi nazwy.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': 'Bronie w sklepie losowe',
+    'opt:random_dropped_shop_weapons:tip': 'Przepisuje przedmioty w sklepach z bronią (ShopLineupParam): każdy slot sprzedaje inną losową broń za każdym razem.\n\nTylko sloty z bronią zmieniają się, randy inne sloty sklepów są bez zmian. Przykład: sklep z bronią sprzedaje inną losową broń za każdym razem. Ryzyko: brak skutków.'
 }

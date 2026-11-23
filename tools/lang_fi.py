@@ -20,4 +20,6 @@ T = {'ui:tip_command': 'Komentorivi, jonka tämä ikkuna suorittaa. Napsauta kop
     'opt:goods_name_gaps:label': 'Varoitus tavaroista ilman nimeä',
     'opt:goods_name_gaps:tip': "Luettelee käytettävissä olevat tavarat, joilla ei ole merkintää tools/names/EquipParamGoods.txt-tiedostoon.\n\nTyökalu lukee tavaran nimet tekstitiedoista, jotka peli toimittaa datatiedostojen mukana; jos ID:llä ei ole merkintää, työkalun raportit näyttävät ID:n nimen tilalle - pelin itsensä käyttämät '?'-tyyliset nimet tunnistamattomille esineille. Osa muuttamattoman; se vain varoittaa ja luettelee kyseisten tavaroiden ID:t, ikonit ja järjestys-tiedot.\n\nEsimerkki: pelissä putoava esine ilman nimimerkintää näkyy varoituksessa omalla ID-lläänsä. Riski: ei mitään. Nimistötiedosto on dataa: ID-merkintä sen lisääminen on keino antaa esineelle nimi.",
     'phase:goods name gaps': 'goods name gaps',
+    'opt:random_dropped_shop_weapons:label': 'Aseet shop-varastoissa kierretään',
+    'opt:random_dropped_shop_weapons:tip': 'Nostaa aseiden shop-rivit (ShopLineupParam) uudelleen: jokainen shop-slot tarjoaa erilaisen satunnaisen aseen joka ajo.\n\nVain ase-rivit muuttuvat; muut shopin rivit säilyvät. Esimerkki: asevarasto tarjoaa erilaisen satunnaisen aseen joka ajo. Riski: mitään.'
 }
