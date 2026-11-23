@@ -23,6 +23,7 @@
 #include "variant_logic.h"
 
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <atomic>
 #include <cstdint>
@@ -160,6 +161,25 @@ std::wstring find_manifest(const std::wstring& dir, const std::wstring& configur
     return {};
 }
 
+// The `bind` line fingerprints the regulation the manifest was generated from.  The randomizer writes
+// both files into the same folder, so start there and fall back to the usual mod layouts.
+std::wstring find_regulation(const std::wstring& manifest_path) {
+    const std::size_t slash = manifest_path.find_last_of(L"\\/");
+    std::wstring dir = slash == std::wstring::npos ? L"." : manifest_path.substr(0, slash);
+    for (int i = 0; i < 4; ++i) {
+        const std::wstring candidate = join(dir, L"regulation.bin");
+        if (file_exists(candidate)) {
+            return candidate;
+        }
+        const std::wstring in_mod = join(join(dir, L"mod"), L"regulation.bin");
+        if (file_exists(in_mod)) {
+            return in_mod;
+        }
+        dir = join(dir, L"..");
+    }
+    return {};
+}
+
 std::string narrow(const std::wstring& text) {
     std::string out;
     out.reserve(text.size());
@@ -191,10 +211,11 @@ bool ini_int(const std::wstring& ini, const wchar_t* section, const wchar_t* key
     if (!ini_value(ini, section, key, text) || text.empty()) {
         return false;
     }
+    errno = 0;
     wchar_t* end = nullptr;
     const long value = std::wcstol(text.c_str(), &end, 10);
-    if (end == text.c_str()) {
-        return false;
+    if (errno == ERANGE || end == text.c_str() || *end != L'\0') {
+        return false;                         // "50abc" and overflowing seeds keep the manifest default
     }
     out = static_cast<int>(value);
     return true;
@@ -376,6 +397,52 @@ bool patch_call(std::uint8_t* call, std::uint8_t* relay) {
     return true;
 }
 
+// An E8 displacement is four bytes at an unaligned address.  Suspending every other thread while the
+// sites are patched removes the tiny window in which a thread could read a torn displacement and jump
+// somewhere invalid.  Nothing in patch_call needs a user-mode lock, so this cannot deadlock.
+class ThreadFreeze {
+public:
+    ThreadFreeze() {
+        HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snapshot == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        const DWORD self = GetCurrentThreadId();
+        const DWORD process = GetCurrentProcessId();
+        for (BOOL more = Thread32First(snapshot, &entry); more;
+             more = Thread32Next(snapshot, &entry)) {
+            if (entry.th32OwnerProcessID != process || entry.th32ThreadID == self) {
+                continue;
+            }
+            HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID);
+            if (thread == nullptr) {
+                continue;
+            }
+            if (SuspendThread(thread) == static_cast<DWORD>(-1)) {
+                CloseHandle(thread);
+                continue;
+            }
+            suspended_.push_back(thread);
+        }
+        CloseHandle(snapshot);
+    }
+
+    ~ThreadFreeze() {
+        for (HANDLE thread : suspended_) {
+            ResumeThread(thread);
+            CloseHandle(thread);
+        }
+    }
+
+    ThreadFreeze(const ThreadFreeze&) = delete;
+    ThreadFreeze& operator=(const ThreadFreeze&) = delete;
+
+private:
+    std::vector<HANDLE> suspended_;
+};
+
 // --------------------------------------------------------------------------- the detour
 void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
     if (items != nullptr && !g_manifest.weapons.empty()) {
@@ -463,6 +530,22 @@ DWORD WINAPI init_thread(LPVOID) {
         log_line("loot_variants: " + narrow(manifest_path) + ": " + error + " - inert");
         return 0;
     }
+    if (!g_manifest.has_bind) {
+        log_line("loot_variants: this manifest has no bind line (older randomizer?); cannot check "
+                 "that it matches the regulation");
+    } else {
+        const std::wstring regulation = find_regulation(manifest_path);
+        bool regulation_ok = false;
+        const std::string bytes = regulation.empty() ? std::string() : read_file(regulation, regulation_ok);
+        if (!regulation_ok ||
+            !loot_variants::verify_bind(g_manifest,
+                                        reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                                        bytes.size())) {
+            log_line("loot_variants: the manifest was generated for a different regulation.bin "
+                     "(copy the new loot_variants.txt with the new regulation.bin) - inert");
+            return 0;
+        }
+    }
     g_options = g_manifest.defaults;
     if (have_ini) {
         apply_ini(ini, g_options);
@@ -540,12 +623,17 @@ DWORD WINAPI init_thread(LPVOID) {
     const std::uint64_t destination = reinterpret_cast<std::uint64_t>(&detour);
     std::memcpy(relay + sizeof(stub), &destination, sizeof(destination));
     FlushInstructionCache(GetCurrentProcess(), relay, 14);
+    DWORD relay_protection = 0;
+    VirtualProtect(relay, 64, PAGE_EXECUTE_READ, &relay_protection);
 
     g_original = target;
     std::size_t patched = 0;
-    for (std::uint8_t* call : calls) {
-        if (patch_call(call, relay)) {
-            ++patched;
+    {
+        ThreadFreeze freeze;
+        for (std::uint8_t* call : calls) {
+            if (patch_call(call, relay)) {
+                ++patched;
+            }
         }
     }
     if (patched == 0) {

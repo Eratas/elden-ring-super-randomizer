@@ -18,7 +18,8 @@ PRESETS: tuple[dict, ...] = (
         "label": "Borderlands loot",
         "tip": "Weapons become loot boxes: any enemy drops any weapon, at a random affinity and a random "
                "upgrade level, with randomized stats. Three rolls per enemy at 100%, so a kill drops three "
-               "things.",
+               "things. With the loot-variants runtime DLL installed, every pickup rolls its own affinity, "
+               "level and Ash of War, so five copies of one sword are five different swords.",
         "values": {
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": False, "random_default_ash": True,
@@ -31,6 +32,7 @@ PRESETS: tuple[dict, ...] = (
             "random_runes": False, "random_enemy_hp": False, "random_durations": False,
             "random_flask_locations": False, "random_armor": False, "random_armor_fresh": False,
             "random_talismans": False, "random_gem_skills": False, "random_gem_effects": False,
+            "loot_variants": True,
         },
     },
     {

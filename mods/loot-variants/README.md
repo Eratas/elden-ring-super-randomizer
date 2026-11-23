@@ -75,9 +75,15 @@ edits the `ItemGiveStruct` in place and calls the original function.  No functio
 so this composes with mods that hook the give function itself.  If a game update moves the function
 but keeps the AOBs, the arithmetic scan still finds all callers.
 
-Everything is fail-soft: a missing manifest, a version mismatch, no AOB hit, no relay or a failed
-`VirtualProtect` leaves the game untouched and logs why.  The detour itself does no allocation and
-never throws.
+The manifest carries a `bind` fingerprint of the exact `regulation.bin` it was generated from.  At
+startup the DLL hashes the regulation next to the manifest and stays inert on a mismatch, so a
+manifest copied from a different run (for example one with `--somber-infusable`) cannot hand out ids
+whose affinity rows do not exist.  Copy both files together.  Other threads are suspended while the
+four call sites are patched so no caller can read a torn displacement.
+
+Everything is fail-soft: a missing manifest, a stale fingerprint, a version mismatch, no AOB hit, no
+relay or a failed `VirtualProtect` leaves the game untouched and logs why.  The detour itself does no
+allocation and never throws.
 
 ## Verification
 
@@ -90,6 +96,10 @@ Pass a real manifest to validate the exact file a run wrote and roll every weapo
 ```
 dist\test_variants.exe <mod folder>\loot_variants.txt
 ```
+
+The tier *selection* uses `roll < cumulative weight` while `loot.py` uses `roll <= ...`; that is a
+one-in-ten-thousand boundary difference and it matches the documented weights slightly more closely.
+The tier *ranges* themselves are identical, which is the part that decides which levels can appear.
 
 **In-game behaviour is UNVERIFIED** in this environment: there is no headless way to grant an item
 in Elden Ring.  The installed game's AOBs were checked statically, including the four call sites and

@@ -299,6 +299,12 @@ def run() -> None:
     lines = v.manifest()
     check(lines[0] == loot_variants.MAGIC + " 1", "--loot-variants: bad manifest header")
     check("defaults 50 legendary 1 1" in lines, "--loot-variants: the run's curve is not in the manifest")
+    fp = loot_variants.fingerprint(b"abc")
+    check(fp.split()[0] == "3" and len(fp.split()[1]) == 16,
+          f"--loot-variants: bad bind fingerprint {fp!r}")
+    check(fp != loot_variants.fingerprint(b"abd"), "--loot-variants: the bind fingerprint ignores bytes")
+    check(f"bind {fp}" in v.manifest(bind=fp), "--loot-variants: the bind line is missing")
+    check(not any(ln.startswith("bind ") for ln in lines), "--loot-variants: an unbound manifest has a bind line")
     weapon_lines = [ln for ln in lines if ln.startswith("weapon ")]
     check(len(weapon_lines) == len(v.entries), "--loot-variants: manifest weapon count mismatch")
     check(all(len(ln.split()) == 4 + loot_variants.AFFINITIES for ln in weapon_lines),

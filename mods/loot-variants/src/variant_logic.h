@@ -9,10 +9,12 @@
 // launching the game.
 #pragma once
 
+#include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <climits>
 #include <map>
 #include <string>
 #include <vector>
@@ -47,6 +49,9 @@ struct Manifest {
     std::map<std::uint32_t, Weapon> weapons;
     std::map<int, std::vector<std::uint32_t>> gems;
     Options defaults;
+    bool has_bind = false;             // an old manifest has no bind line: warn, but still usable
+    std::uint32_t bind_size = 0;
+    std::uint64_t bind_hash = 0;
     std::size_t bad_lines = 0;
 };
 
@@ -75,13 +80,17 @@ struct Rolled {
 // --------------------------------------------------------------------------- parsing
 namespace detail {
 
+// On Windows `unsigned long` is 32 bits, so strtoul silently saturates on overflow and accepts a
+// leading '-'.  strtoull into a 64-bit value with ERANGE checked makes the test host and the DLL
+// agree: an oversized token is rejected, never turned into 0xFFFFFFFF (which would look like kNoAsh).
 inline bool to_u32(const std::string& token, std::uint32_t& out) {
-    if (token.empty()) {
+    if (token.empty() || token[0] == '-') {
         return false;
     }
+    errno = 0;
     char* end = nullptr;
-    const unsigned long value = std::strtoul(token.c_str(), &end, 10);
-    if (end == token.c_str() || *end != '\0' || value > 0xFFFFFFFFul) {
+    const unsigned long long value = std::strtoull(token.c_str(), &end, 10);
+    if (errno == ERANGE || end == token.c_str() || *end != '\0' || value > 0xFFFFFFFFull) {
         return false;
     }
     out = static_cast<std::uint32_t>(value);
@@ -92,12 +101,28 @@ inline bool to_int(const std::string& token, int& out) {
     if (token.empty()) {
         return false;
     }
+    errno = 0;
     char* end = nullptr;
     const long value = std::strtol(token.c_str(), &end, 10);
-    if (end == token.c_str() || *end != '\0') {
+    if (errno == ERANGE || end == token.c_str() || *end != '\0' || value < INT_MIN || value > INT_MAX) {
         return false;
     }
     out = static_cast<int>(value);
+    return true;
+}
+
+inline bool is_hex16(const std::string& token) {
+    if (token.size() != 16) {
+        return false;
+    }
+    for (char ch : token) {
+        const bool digit = ch >= '0' && ch <= '9';
+        const bool lower = ch >= 'a' && ch <= 'f';
+        const bool upper = ch >= 'A' && ch <= 'F';
+        if (!digit && !lower && !upper) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -147,6 +172,23 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
                 return false;
             }
             saw_header = true;
+            continue;
+        }
+        if (tok[0] == "bind") {
+            // bind <regulation size> <16 hex digits of FNV-1a>: a stale manifest must not be used
+            if (tok.size() != 3 || !detail::to_u32(tok[1], out.bind_size) ||
+                !detail::is_hex16(tok[2])) {
+                ++out.bad_lines;
+                continue;
+            }
+            errno = 0;
+            char* end = nullptr;
+            out.bind_hash = std::strtoull(tok[2].c_str(), &end, 16);
+            if (errno == ERANGE || end != tok[2].c_str() + tok[2].size()) {
+                ++out.bad_lines;
+                continue;
+            }
+            out.has_bind = true;
             continue;
         }
         if (tok[0] == "defaults") {
@@ -201,6 +243,8 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
                 std::uint32_t id = 0;
                 if (detail::to_u32(tok[t], id)) {
                     ids.push_back(id);
+                } else {
+                    ++out.bad_lines;              // a bad gem id must show up in the log
                 }
             }
             continue;
@@ -216,6 +260,24 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
         return false;
     }
     return true;
+}
+
+// --------------------------------------------------------------------- regulation binding
+inline std::uint64_t fnv1a64(const std::uint8_t* data, std::size_t size) {
+    std::uint64_t hash = 0xCBF29CE484222325ull;
+    for (std::size_t i = 0; i < size; ++i) {
+        hash = (hash ^ static_cast<std::uint64_t>(data[i])) * 0x100000001B3ull;
+    }
+    return hash;
+}
+
+// A manifest from another run can describe affinity rows the current regulation does not have.
+// `has_bind == false` means an older tool wrote the manifest; the caller logs a warning and proceeds.
+inline bool verify_bind(const Manifest& manifest, const std::uint8_t* data, std::size_t size) {
+    if (!manifest.has_bind) {
+        return true;
+    }
+    return manifest.bind_size == size && manifest.bind_hash == fnv1a64(data, size);
 }
 
 // --------------------------------------------------------------------------- the roll

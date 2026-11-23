@@ -98,6 +98,44 @@ void test_parser() {
     CHECK(!loot_variants::parse_manifest("MADLOVE-LOOT-VARIANTS 1\n", rejected, error));
 }
 
+void test_bind_and_tokens() {
+    const std::uint8_t bytes[] = {'a', 'b', 'c'};
+    const std::uint64_t hash = loot_variants::fnv1a64(bytes, sizeof(bytes));
+    char bind_line[80] = {};
+    std::snprintf(bind_line, sizeof(bind_line), "bind 3 %016llx",
+                  static_cast<unsigned long long>(hash));
+    const std::string text = std::string("MADLOVE-LOOT-VARIANTS 1\n") + bind_line + "\n" +
+                             "defaults 50 common 1 1\n" +
+                             "weapon 1000000 25 1 0 - - - - - - - - - - - -\n" +
+                             "gems 0 10000\n";
+    loot_variants::Manifest m;
+    std::string error;
+    CHECK(loot_variants::parse_manifest(text, m, error));
+    CHECK(m.has_bind);
+    CHECK_EQ(m.bind_size, 3);
+    CHECK_EQ(m.bind_hash, hash);
+    CHECK(loot_variants::verify_bind(m, bytes, sizeof(bytes)));
+    CHECK(!loot_variants::verify_bind(m, bytes, 2));
+    const std::uint8_t changed[] = {'a', 'b', 'd'};
+    CHECK(!loot_variants::verify_bind(m, changed, sizeof(changed)));
+
+    loot_variants::Manifest unbound;
+    CHECK(loot_variants::parse_manifest(
+        "MADLOVE-LOOT-VARIANTS 1\nweapon 1000000 25 1 0 - - - - - - - - - - - -\n", unbound, error));
+    CHECK(!unbound.has_bind);
+    CHECK(loot_variants::verify_bind(unbound, nullptr, 0));   // older manifests still work
+
+    // strtoul saturation on Windows used to turn both of these into 0xFFFFFFFF, which looks like
+    // kNoAsh and silently drops the Ash.  On any platform they are malformed and must be rejected.
+    const std::string bad = std::string("MADLOVE-LOOT-VARIANTS 1\n") +
+                            "weapon 1000000 25 1 0 - - - - - - - - - - - -\n" +
+                            "gems 0 99999999999999 -1\n";
+    loot_variants::Manifest tokens;
+    CHECK(loot_variants::parse_manifest(bad, tokens, error));
+    CHECK_EQ(tokens.bad_lines, 2);
+    CHECK(tokens.gems[0].empty());
+}
+
 void test_tiers() {
     using namespace loot_variants::detail;
     std::uint32_t lo = 0;
@@ -286,8 +324,21 @@ void test_real_manifest(const char* path) {
     }
     CHECK_EQ(m.bad_lines, 0);
     CHECK(m.weapons.size() > 100);
-    std::printf("manifest: %zu weapons, %zu ash pools, ash %d%%, curve %d\n", m.weapons.size(),
-                m.gems.size(), m.defaults.ash_chance, m.defaults.level_curve);
+    std::printf("manifest: %zu weapons, %zu ash pools, ash %d%%, curve %d, bind=%d\n", m.weapons.size(),
+                m.gems.size(), m.defaults.ash_chance, m.defaults.level_curve, m.has_bind ? 1 : 0);
+    // The randomizer writes both files together; check the fingerprint against that regulation.
+    // Derive the sibling path without <filesystem> so the test stays a single-header console program.
+    const std::string p(path);
+    const std::string::size_type slash = p.find_last_of("\\/");
+    const std::string regulation_path =
+        (slash == std::string::npos ? std::string() : p.substr(0, slash + 1)) + "regulation.bin";
+    std::ifstream regulation(regulation_path, std::ios::binary);
+    if (m.has_bind && regulation) {
+        const std::string bytes((std::istreambuf_iterator<char>(regulation)),
+                                std::istreambuf_iterator<char>());
+        CHECK(loot_variants::verify_bind(m, reinterpret_cast<const std::uint8_t*>(bytes.data()),
+                                         bytes.size()));
+    }
 
     loot_variants::Options options = m.defaults;
     options.ash_chance = 100;                     // exercise every pool
@@ -326,6 +377,7 @@ int main(int argc, char** argv) {
         test_real_manifest(argv[1]);
     } else {
         test_parser();
+        test_bind_and_tokens();
         test_tiers();
         test_roll();
     }

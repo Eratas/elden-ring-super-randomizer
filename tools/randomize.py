@@ -756,7 +756,9 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
     # runtime mod has nothing to roll from.  It lands next to regulation.bin, where the DLL looks for it.
     if variants is not None:
         manifest = out.parent / loot_variants.MANIFEST_NAME
-        manifest_bytes = variants.write(manifest)
+        # Bind the manifest to the bytes actually written, not to the in-memory table: a stale manifest
+        # paired with a different regulation would hand out ids whose affinity rows do not exist.
+        manifest_bytes = variants.write(manifest, bind=loot_variants.fingerprint(out.read_bytes()))
         note = (f"# loot variants: {manifest} ({manifest_bytes} bytes, {len(variants.entries)} weapons); "
                 "install mods/loot-variants/dist/loot_variants.dll in the mod's dll/offline folder "
                 "to reroll affinity, level and Ash on every pickup")
