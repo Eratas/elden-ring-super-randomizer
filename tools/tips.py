@@ -684,7 +684,7 @@ TIPS: dict[str, str] = {
         "weapon itself, but a powerful weapon can end up behind a trivial enemy."
     ),
     "random_dropped_weapons": (
-        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, gifts) shows a random weapon.\n\nThe pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere, one per enemy lot slot. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\nExample: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
+        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, gifts) shows a random weapon.\n\nThe pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere, the pool every weapon slot draws from. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\nExample: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
     ),
     "random_dropped_shop_weapons": (
         "Rerolls the weapon slots of every weapon shop (ShopLineupParam).\n\n"
@@ -692,7 +692,7 @@ TIPS: dict[str, str] = {
         "world has, so what you buy changes every run. Only weapon slots are touched; the shop's other "
         "slots are unchanged.\n\n"
         "Example: a weapon shop sells a different random weapon every run. Risk: none - the shop stock "
-        "is the run's random draw, like every other option."
+        "is the run's random draw, like every other option. Requires Randomize dropped weapons."
     ),
     "random_armor_drops": (
         "Moves armor to other enemies without changing the armor.\n\n"

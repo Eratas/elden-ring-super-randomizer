@@ -129,7 +129,7 @@ OPTIONS: tuple[Opt, ...] = (
     _o("random_dropped_weapons", "--random-dropped-weapons", group="loot",
        label="Randomize dropped weapons"),
     _o("random_dropped_shop_weapons", "--random-dropped-shop-weapons", group="loot",
-       label="Reroll weapons in shop stock"),
+       needs=("random_dropped_weapons",), label="Reroll weapons in shop stock"),
     _o("random_loot_levels", "--random-loot-levels", group="loot",
        label="Random upgrade levels on loot"),
     _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="loot",
