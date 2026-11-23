@@ -695,6 +695,18 @@ TIPS: dict[str, str] = {
         "Example: a weapon shop sells a different random weapon every run. Risk: none - the shop stock "
         "is the run's random draw, like every other option. Requires Randomize dropped weapons."
     ),
+    "loot_variants": (
+        "Rerolls a weapon on every pickup, so five copies of one sword are five different swords.\n\n"
+        "A weapon id is its base, an affinity and an upgrade level. This writes a small manifest for "
+        "the optional runtime mod in mods/loot-variants: which affinity rows exist, the weapon's own "
+        "upgrade ceiling and which Ashes of War fit each row. The DLL draws a fresh affinity, level "
+        "and Ash each time the game hands you that weapon, in drops, chests, boss rewards and shops. "
+        "The model, icon and moveset stay recognisable; the stats, scaling, status build-up and skill "
+        "change. No param rows are cloned, so the regulation keeps its size.\n\n"
+        "Example: looting the same sword five times gives five different rolls. Risk: it needs the DLL "
+        "installed, and it replaces the static level roll for these weapons; without the DLL the "
+        "regulation is still a complete run."
+    ),
     "random_armor_drops": (
         "Moves armor to other enemies without changing the armor.\n\n"
         "Every piece keeps its numbers and only the place it drops changes, so a chest piece from one "

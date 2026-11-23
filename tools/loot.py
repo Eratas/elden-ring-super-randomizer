@@ -51,6 +51,39 @@ TOP_SHARE = 0.80                    # at or above this share of the ceiling a dr
 LEGENDARY_SHARE = 0.90              # at or above this share it is announced as a legendary drop
 
 
+def ceilings(W: erreg.Param) -> dict[int, int]:
+    """base id -> the highest upgrade level that weapon can take.
+
+    One row means a somber weapon (+10), one row with `materialSetId == -1` a unique weapon that
+    cannot be reinforced at all (+0), and more than one row a standard weapon (+25).  The rule lives
+    here once: --random-loot-levels rolls against it and the runtime loot-variants manifest records it.
+    """
+    variants: dict[int, int] = {}
+    for r in W.rows:
+        variants[r.id - r.id % 10000] = variants.get(r.id - r.id % 10000, 0) + 1
+    out: dict[int, int] = {}
+    for base, count in variants.items():
+        row = W.by_id.get(base)
+        if row is None:
+            continue
+        if count > 1:
+            out[base] = STANDARD_MAX
+        elif W.get(row, "materialSetId") == -1:
+            out[base] = 0                        # unique weapon: cannot be reinforced
+        else:
+            out[base] = SOMBER_MAX               # somber weapon
+    return out
+
+
+def weapon_ceilings(reg: erreg.Regulation) -> dict[int, int]:
+    """`ceilings()` for the weapon table as it is now.
+
+    Call it before a pass adds affinity rows: --somber-infusable gives a +10 somber weapon twelve
+    more rows, and a ceiling read afterwards would mistake it for a +25 standard weapon."""
+    return ceilings(reg.param("EquipParamWeapon",
+                              erreg.load_paramdef(HERE / "paramdef" / "EquipParamWeapon.xml")))
+
+
 class Loot:
     def __init__(self, reg: erreg.Regulation, boss_min_runes: int = 0) -> None:
         self.reg = reg
@@ -63,20 +96,7 @@ class Loot:
                            erreg.load_paramdef(HERE / "paramdef" / "ShopLineupParam.xml"))
         N = reg.param("NpcParam", erreg.load_paramdef(HERE / "paramdef" / "NpcParam.xml"))
         self.weapon_names = erreg.load_names(HERE / "names" / "EquipParamWeapon.txt")
-        self._ceilings: dict[int, int] = {}
-        variants: dict[int, int] = {}
-        for r in self.W.rows:
-            variants[r.id - r.id % 10000] = variants.get(r.id - r.id % 10000, 0) + 1
-        for base, count in variants.items():
-            row = self.W.by_id.get(base)
-            if row is None:
-                continue
-            if count > 1:
-                self._ceilings[base] = STANDARD_MAX
-            elif self.W.get(row, "materialSetId") == -1:
-                self._ceilings[base] = 0            # unique weapon: cannot be reinforced
-            else:
-                self._ceilings[base] = SOMBER_MAX   # somber weapon
+        self._ceilings = ceilings(self.W)
         # which enemy drop lots belong to a boss-tier enemy (isSoulGetByBoss, optionally widened)
         boss = bosses.boss_ids(N, boss_min_runes)
         self.lot_boss: dict[int, bool] = {}

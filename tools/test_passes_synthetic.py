@@ -44,6 +44,8 @@ import erreg  # noqa: E402
 import gear  # noqa: E402
 import gems  # noqa: E402
 import goods  # noqa: E402
+import loot  # noqa: E402
+import loot_variants  # noqa: E402
 import shops  # noqa: E402
 import spells  # noqa: E402
 import talkmsg  # noqa: E402
@@ -269,6 +271,41 @@ def run() -> None:
     W = reg._params["EquipParamWeapon"]
     check(_variants(W, 7000000) == 13, f"--somber-infusable: Falchion has {_variants(W, 7000000)} rows, want 13")
     check(any("7000000" in ln for ln in out), "--somber-infusable: no report line for the synthesised weapon")
+
+    # --- loot variants: the runtime manifest must survive the weapon pass ---
+    reg = build()
+    ceilings = loot.weapon_ceilings(reg)          # pristine: before --somber-infusable adds rows
+    wp = weapons.Weapons(reg)
+    for base in (2000000, 7000000, 6000000):
+        wp.names.setdefault(base, f"Weapon {base}")
+    wp.gem_names = {r.id: f"Ash of War: Test {i}"
+                    for i, r in enumerate(reg._params["EquipParamGem"].rows)}
+    wp.somber_infusable()
+    v = loot_variants.Variants(reg, wp, ceilings=ceilings, curve="legendary")
+    bases = {e.base for e in v.entries}
+    check(7000000 in bases, "--loot-variants: the infusable somber weapon has no manifest entry")
+    check(2000000 in bases, "--loot-variants: the standard weapon has no manifest entry")
+    check(6000000 not in bases, "--loot-variants: an unreinforceable single-affinity weapon with no Ash "
+                                "should keep its exact id")
+    somber_entry = next(e for e in v.entries if e.base == 7000000)
+    check(somber_entry.max_level == 10 and somber_entry.affinities == 13,
+          f"--loot-variants: a somber weapon made infusable rolled as +{somber_entry.max_level} "
+          f"with {somber_entry.affinities} affinities, want +10 and 13")
+    standard_entry = next(e for e in v.entries if e.base == 2000000)
+    check(standard_entry.max_level == 25, "--loot-variants: a standard weapon lost its +25 ceiling")
+    check(any(c != -1 for c in standard_entry.gem_class), "--loot-variants: no Ash pool for a fusible row")
+    check(standard_entry.gem_class[0] == -1,
+          "--loot-variants: affinity 0 of the synthetic weapon has gemMountType=1 and must get no Ash")
+    lines = v.manifest()
+    check(lines[0] == loot_variants.MAGIC + " 1", "--loot-variants: bad manifest header")
+    check("defaults 50 legendary 1 1" in lines, "--loot-variants: the run's curve is not in the manifest")
+    weapon_lines = [ln for ln in lines if ln.startswith("weapon ")]
+    check(len(weapon_lines) == len(v.entries), "--loot-variants: manifest weapon count mismatch")
+    check(all(len(ln.split()) == 4 + loot_variants.AFFINITIES for ln in weapon_lines),
+          "--loot-variants: a weapon line does not have one gem class per affinity")
+    check(len([ln for ln in lines if ln.startswith("gems ")]) == len(v.class_gems),
+          "--loot-variants: gem pool count mismatch")
+    check(len(v.lines()) >= 4, "--loot-variants: empty human report")
 
     # --- moveset modes: each produces a report and changes the tables ---
     for mode in ("affinity", "weapon", "bound"):

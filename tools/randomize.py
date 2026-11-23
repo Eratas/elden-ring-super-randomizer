@@ -18,6 +18,7 @@ values another pass is about to change):
     drops      what an enemy drops (ItemLotParam_enemy)
     dropped_weapons  enemy drop slots hold fresh random weapons (ItemLotParam_enemy)
     weapons    somber affinities, movesets, default skills, per-row stats (EquipParamWeapon ...)
+    variants   per-pickup affinity/level/Ash manifest for the runtime DLL (no param rows added)
     ashes      skills and on-hit effects of Ashes of War (EquipParamGem)
     armour     armour stats (EquipParamProtector), talisman rows (EquipParamAccessory)
     levels     upgrade levels of the weapons in drop tables, chests and shops
@@ -45,6 +46,7 @@ import gear  # noqa: E402
 import gems  # noqa: E402
 import goods  # noqa: E402
 import loot  # noqa: E402
+import loot_variants  # noqa: E402
 import names_gaps  # noqa: E402
 import oodle  # noqa: E402
 import options  # noqa: E402
@@ -537,6 +539,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         report = "\n".join(lines)
         print(report)
 
+        variants: loot_variants.Variants | None = None
         rlines: list[str] = []
         if v["random_runes"]:
             say(phases.ENEMY_RUNES)
@@ -573,12 +576,16 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             shop_lines = []
 
         wlines: list[str] = []
-        # The level ceilings are read from the pristine weapon table, so this is built before the weapon pass
-        # adds the somber affinity rows.
+        vlines: list[str] = []
+        # The level ceilings and the loot-variant manifest both read the *pristine* weapon table:
+        # --somber-infusable adds twelve affinity rows to a +10 weapon, which must not turn it into a
+        # +25 one in either pass.
         loot_levels = loot.Loot(reg, v.get("boss_min_runes") or 0) if v["random_loot_levels"] else None
+        variant_ceilings = loot.weapon_ceilings(reg) if v["loot_variants"] else None
+        wp: weapons.Weapons | None = None
         if (v["somber_infusable"] or v["random_movesets"] or v["random_default_ash"] or v["random_stats"]
                 or v["random_weapon_onhit_shuffle"] or v["random_weapon_holder_shuffle"]
-                or v["random_weapon_status_roll"] or v["random_loot_effects"]):
+                or v["random_weapon_status_roll"] or v["random_loot_effects"] or v["loot_variants"]):
             say(phases.WEAPONS)
             wp = weapons.Weapons(reg)
             wlines.append(f"# seed={seed}")
@@ -602,6 +609,14 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 wlines += [""] + wp.random_status_effects(rng, loot_only=bool(v["random_loot_effects"]))
             wlines += [""] + wp.clean_dead_effects()
             print("\n".join(l for l in wlines if l.startswith("#")))
+            if v["loot_variants"]:
+                # Read the final rows (including any new affinity rows and shuffled movesets), but the
+                # ceilings from the pristine snapshot above.  Adds no param rows and no new phase.
+                variants = loot_variants.Variants(
+                    reg, wp, ceilings=variant_ceilings,
+                    curve=v["loot_rarity"] if v["random_loot_levels"] else "common")
+                vlines = variants.lines()
+                print("\n".join(l for l in vlines if l.startswith("#")))
 
         glines: list[str] = []
         if v["random_gem_skills"] or v["random_gem_effects"]:
@@ -737,6 +752,16 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         fail(str(e))
     limit = reg.output_limit(v["max_size"] or erreg.REGULATION_MAX_SIZE)
     print(f"# wrote {out} ({codec}, {size} bytes, limit {limit}; {limit - size} bytes to spare)")
+    # The manifest is content, not a report: --no-reports must not suppress it, because without it the
+    # runtime mod has nothing to roll from.  It lands next to regulation.bin, where the DLL looks for it.
+    if variants is not None:
+        manifest = out.parent / loot_variants.MANIFEST_NAME
+        manifest_bytes = variants.write(manifest)
+        note = (f"# loot variants: {manifest} ({manifest_bytes} bytes, {len(variants.entries)} weapons); "
+                "install mods/loot-variants/dist/loot_variants.dll in the mod's dll/offline folder "
+                "to reroll affinity, level and Ash on every pickup")
+        print(note)
+        vlines.append(note)
     # the patched text archives are content, not a report: they are always written
     if wnames is not None:
         for src, texts, anchor in wnames.patches:
@@ -763,6 +788,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         dump("mapping.txt", report.splitlines(), full=True)
         if wlines:
             dump("weapons.txt", wlines)
+        if vlines:
+            dump("variants.txt", vlines)
         if slines:
             dump("spells.txt", slines)
         if elines:
@@ -791,6 +818,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
           + ("" if v["no_reports"] else
              f", mapping: {out.with_name('mapping.txt')}"
              + (f", weapons: {out.with_name('weapons.txt')}" if wlines else "")
+             + (f", loot variants: {out.with_name('variants.txt')}" if vlines else "")
              + (f", gear: {out.with_name('gear.txt')}" if alines else "")
              + (f", ashes: {out.with_name('ashes.txt')}" if glines else "")
              + (f", stack sizes: {out.with_name('goods.txt')}" if qlines else "")
