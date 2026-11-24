@@ -199,8 +199,29 @@ def restore(backup: Path) -> list[Path]:
 def backup_info(backup: Path) -> dict:
     """A short summary a rollback picker can show: folder name, file count, total bytes."""
     manifest = json.loads((Path(backup) / MANIFEST).read_text(encoding="utf-8"))
+    if not isinstance(manifest, list) or any(not isinstance(e, dict) for e in manifest):
+        raise ValueError(f"{MANIFEST} has an unexpected shape")
     return {"name": Path(backup).name, "files": len(manifest),
             "bytes": sum(int(e.get("size", 0)) for e in manifest)}
+
+
+def backup_entries() -> list[dict]:
+    """Every usable restore point, newest first, with the fields a picker needs.
+
+    A corrupt, incomplete or unreadable backup is skipped instead of aborting the whole list: the
+    user can still roll back to an older good one.
+    """
+    out: list[dict] = []
+    for path in list_backups():
+        try:
+            if verify_backup(path):
+                continue
+            info = backup_info(path)
+        except (OSError, ValueError, TypeError, AttributeError, KeyError):
+            continue
+        info["path"] = path
+        out.append(info)
+    return out
 
 
 def verify_backup(backup: Path) -> list[str]:

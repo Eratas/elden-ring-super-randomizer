@@ -132,6 +132,8 @@ OPTIONS: tuple[Opt, ...] = (
        needs=("random_dropped_weapons",), label="Reroll weapons in shop stock"),
     _o("loot_variants", "--loot-variants", group="loot",
        label="Different stats on every pickup"),
+    _o("ash_chance", "--ash-chance", kind="int", default=50, metavar="PCT", group="loot",
+       needs=("loot_variants",), label="Chance of a random Ash"),
     _o("random_loot_levels", "--random-loot-levels", group="loot",
        label="Random upgrade levels on loot"),
     _o("loot_rarity", "--loot-rarity", kind="enum", default="common", group="loot",
@@ -474,6 +476,8 @@ def validate(values: dict) -> dict:
             out["enemy_drop_rolls"] = None       # 0 and an empty field mean the guaranteed mode
     if out.get("armor_variants") is not None and not 0 <= out["armor_variants"] <= 8:
         raise ValueError("Stat variants per armor piece must be between 0 and 8")
+    if out.get("ash_chance") is not None and not 0 <= out["ash_chance"] <= 100:
+        raise ValueError("Chance of a random Ash must be between 0 and 100 (percent)")
     if out["enemy_drop_chance"] is None:
         out["enemy_drop_chance"] = BY_KEY["enemy_drop_chance"].default
     if not 1 <= out["enemy_drop_chance"] <= 100:
@@ -713,6 +717,10 @@ def argv_from_values(values: dict) -> list[str]:
         a.append("--zone-loot-levels")
     if values.get("random_armor_fresh") and not values.get("armour_keep_sets", True):
         a.append("--no-armor-keep-sets")
+    ash = values.get("ash_chance")
+    if values.get("loot_variants") and ash is not None and ash != "" \
+            and ash != BY_KEY["ash_chance"].default:
+        a += ["--ash-chance", str(ash)]
     if values.get("armor_variants"):
         a += ["--armor-variants", str(values["armor_variants"])]
         o = BY_KEY["armor_variant_stats"]

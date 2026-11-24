@@ -307,6 +307,9 @@ def run() -> None:
     check(fp != loot_variants.fingerprint(b"abd"), "--loot-variants: the bind fingerprint ignores bytes")
     check(f"bind {fp}" in v.manifest(bind=fp), "--loot-variants: the bind line is missing")
     check(not any(ln.startswith("bind ") for ln in lines), "--loot-variants: an unbound manifest has a bind line")
+    custom = loot_variants.Variants(reg, ceilings=ceilings, curve="legendary", ash_chance=100)
+    check(any(ln.startswith("defaults 100 legendary ") for ln in custom.manifest()),
+          "--loot-variants: the chosen Ash chance did not reach the manifest")
     weapon_lines = [ln for ln in lines if ln.startswith("weapon ")]
     check(len(weapon_lines) == len(v.entries), "--loot-variants: manifest weapon count mismatch")
     check(all(len(ln.split()) == 4 + loot_variants.AFFINITIES for ln in weapon_lines),

@@ -708,6 +708,15 @@ TIPS: dict[str, str] = {
         "installed, and it replaces the static level roll for these weapons; without the DLL the "
         "regulation is still a complete run."
     ),
+    "ash_chance": (
+        "Sets how often a rerolled weapon pickup also mounts an Ash of War.\n\n"
+        "The runtime mod already draws a fresh affinity and upgrade level for every weapon. This "
+        "option adds a random Ash from the pool that fits that row and affinity: the same two mount "
+        "flags the smithing table checks, so the skill always animates. Zero turns Ash mounting off; "
+        "100 mounts one on every pickup.\n\n"
+        "Example: 50 means about half of your sword pickups carry an Ash. Risk: the setting lives in "
+        "the manifest, so the ini can still override it on a per-machine basis."
+    ),
     "armor_variants": (
         "Gives each armour piece extra stat blocks with the same look, so picks differ by more than level.\n\n"
         "The pass clones a few EquipParamProtector rows, changes only the selected stat columns, and "

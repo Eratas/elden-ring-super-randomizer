@@ -748,7 +748,7 @@ _ARGV_NEEDS = {"random_prices": {"price_mode": "shuffle"}, "random_runes": {"run
                "moveset_variety": {"moveset_mode": "bound"},
                "enemy_drop_chance": {"enemy_drop_rolls": 3},
                 "armor_variants": {"loot_variants": True},
-                "armor_variant_stats": {"loot_variants": True, "armor_variants": 2}}
+                "armor_variant_stats": {"loot_variants": True, "armor_variants": 2, "ash_chance": 25}}
 _ARGV_INT = {"zstd_window": 18, "max_size": 2_000_000, "armor_variants": 2}     # the defaults are not "a different value"
 
 
@@ -793,6 +793,8 @@ def _argv_normalize(o, value):
         return picked or set(o.items)
     if o.key == "loot_max_level":
         return value or None
+    if o.key == "ash_chance":
+        return 50 if value in (None, "") else value   # an empty field is the documented default
     return value
 
 
@@ -891,7 +893,7 @@ _ARGV_FUZZ_INTS = {"zstd_window": [16, 18, 22], "max_size": [None, 2_000_000, 2_
                    "rune_min": [None, 1, 100], "rune_max": [None, 500, 99999],
                    "hp_min": [None, 1, 100], "hp_max": [None, 500, 99999],
                    "duration_min": [None, 5, 30], "duration_max": [None, 60, 600],
-                   "moveset_variety": [1, 2, 3, 4], "armor_variants": [0, 1, 2, 7],
+                   "moveset_variety": [1, 2, 3, 4], "armor_variants": [0, 1, 2, 7], "ash_chance": [None, "", 0, 10, 50, 100],
                    "stamina_rate": [(0.8, 1.2), (0.5, 1.0), (1.0, 2.0)],
                    "boss_hp_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)],
                    "boss_rune_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)]}
@@ -1596,6 +1598,21 @@ def test_backup_full_msg() -> None:
         check(backup.verify_backup(made) == [], f"a fresh backup failed verification: {backup.verify_backup(made)}")
         info = backup.backup_info(made)
         check(info["files"] == 4, f"backup_info says {info['files']} files, expected 4")
+        entries = backup.backup_entries()
+        check(len(entries) == 1 and entries[0]["path"] == made,
+              "backup_entries did not list the new restore point")
+        check(entries[0]["files"] == 4, "backup_entries reported the wrong file count")
+        original_manifest = (made / backup.MANIFEST).read_text(encoding="utf-8")
+        (made / backup.MANIFEST).write_text("not json", encoding="utf-8")
+        check(backup.backup_entries() == [], "backup_entries did not skip a corrupt restore point")
+        (made / backup.MANIFEST).write_text('{"a": 1}', encoding="utf-8")
+        check(backup.backup_entries() == [], "backup_entries did not skip a wrong-shaped manifest")
+        (made / backup.MANIFEST).write_text(original_manifest, encoding="utf-8")
+        first_copied = made / "00_regulation.bin"
+        saved_bytes = first_copied.read_bytes()
+        first_copied.unlink()
+        check(backup.backup_entries() == [], "backup_entries listed an incomplete restore point")
+        first_copied.write_bytes(saved_bytes)
         first = next((made / e["name"] for e in json.loads(
             (made / backup.MANIFEST).read_text(encoding="utf-8")) if "menu" in e["name"]), None)
         check(first is not None, "the menu archive was not backed up")
@@ -1642,6 +1659,31 @@ def test_install_runtime() -> None:
               "install_runtime: an existing ini was overwritten")
         check(any("already up to date" in line for line in lines),
               "install_runtime: a repeat install was not recognised as up to date")
+        import discover
+        saved_default, saved_discover = install_runtime.DEFAULT_TARGET, install_runtime._discovered_targets
+        saved_folders, saved_dirs = discover.err_folders, discover.game_dirs
+        try:
+            mod_root = root / "DiscoveredMod"
+            (mod_root / "mod").mkdir(parents=True)
+            (mod_root / "mod" / "regulation.bin").write_bytes(b"REG")
+            (mod_root / "dll" / "offline").mkdir(parents=True)
+            discover.err_folders = lambda: [mod_root]
+            discover.game_dirs = lambda: []
+            found = install_runtime._discovered_targets()
+            check(mod_root / "dll" / "offline" in found,
+                  "install_runtime: a real mod root from discover was not turned into a target")
+            (mod_root / "mod" / "regulation.bin").unlink()
+            check(mod_root / "dll" / "offline" not in install_runtime._discovered_targets(),
+                  "install_runtime: a folder without mod/regulation.bin was accepted")
+            install_runtime.DEFAULT_TARGET = root / "no-such-mod" / "dll" / "offline"
+            install_runtime._discovered_targets = lambda: [target]
+            check(install_runtime.find_target() == target,
+                  "install_runtime: a mod folder discovered from the game path was ignored")
+        finally:
+            install_runtime.DEFAULT_TARGET = saved_default
+            install_runtime._discovered_targets = saved_discover
+            discover.err_folders = saved_folders
+            discover.game_dirs = saved_dirs
         try:
             install_runtime.install(source=root / "missing.dll", dll_dir=target)
         except ValueError:
@@ -1655,6 +1697,34 @@ def test_install_runtime() -> None:
             check("does not exist" in str(e), "install_runtime: a bad target gave the wrong error")
         else:
             check(False, "install_runtime: a missing target folder was accepted")
+
+
+def test_ash_chance_empty() -> None:
+    """Clearing the Ash-chance field must not emit '--ash-chance None' into the command preview."""
+    values = options.validate(dict(_argv_dict(), loot_variants=True, ash_chance=""))
+    check(values["ash_chance"] is None, "an empty Ash chance did not validate to None")
+    argv = options.argv_from_values(values)
+    check("--ash-chance" not in argv, f"an empty Ash chance produced an unusable argv: {argv}")
+    back = options.validate(options.values_from_args(_ARGV_PARSER.parse_args(argv)))
+    check(back["ash_chance"] == 50, "an empty Ash chance did not fall back to the default")
+
+
+def test_aob_verifier() -> None:
+    """The verifier must understand both wildcard widths or it reports false failures after a patch."""
+    import verify_aobs
+
+    needle, mask = verify_aobs.parse("48 8B ?? ???? 75 2E")
+    check(len(needle) == 7 and len(mask) == 7, f"AOB parse produced {len(needle)} bytes, expected 7")
+    check(mask == bytes([1, 1, 0, 0, 0, 1, 1]), "AOB parse mixed up wildcard widths")
+    blob = b"\x90\x48\x8b\x01\x02\x03\x75\x2e\x90"
+    check(verify_aobs.scan(blob, "48 8B ?? ???? 75 2E") == [1], "AOB scan missed a known pattern")
+    # A wildcard-leading pattern must still match at the very start of the buffer.
+    check(verify_aobs.scan(blob, "?? 48 8B 02") == [], "AOB scan invented a wildcard-leading hit")
+    check(verify_aobs.scan(b"\x90\x48\x8b\x01", "?? 48 8B 01") == [0],
+          "AOB scan missed a wildcard-leading pattern at offset 0")
+    # E8 at offset 0 with disp +0x10 resolves to 0 + 5 + 16 = 21.
+    check(verify_aobs.call_target(b"\xE8\x10\x00\x00\x00", 0, 0) == 21,
+          "AOB verifier computed the wrong call target")
 
 
 def test_rarity_label_tables() -> None:
@@ -1753,7 +1823,8 @@ def main() -> int:
 
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
                                test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
-                               test_presets, test_release_package, test_rarity_label_tables):
+                               test_presets, test_release_package, test_rarity_label_tables,
+                               test_aob_verifier, test_ash_chance_empty):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

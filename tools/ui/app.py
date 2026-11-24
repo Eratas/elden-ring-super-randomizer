@@ -1386,6 +1386,55 @@ class App:
                                 len(restored), latest),
                             parent=self.root)
 
+    def _choose_backup(self) -> Path | None:
+        """Pick a restore point from a list instead of hunting through folders in Explorer."""
+        import backup
+        entries = backup.backup_entries()
+        if not entries:
+            return None
+        window = tk.Toplevel(self.root)
+        window.title(self.t("ui:rollback_pick", "Choose a backup folder"))
+        window.transient(self.root)
+        window.resizable(False, True)
+        frame = ttk.Frame(window, padding=(PAD, PAD))
+        frame.pack(fill="both", expand=True)
+        columns = (("date", "ui:backup_col_date", "Date / folder", 190),
+                   ("files", "ui:backup_col_files", "Files", 60),
+                   ("size", "ui:backup_col_size", "Size", 90))
+        tree = ttk.Treeview(frame, columns=[c[0] for c in columns], show="headings",
+                            selectmode="browse", height=12)
+        for key, i18n_key, fallback, width in columns:
+            tree.heading(key, text=self.t(i18n_key, fallback))
+            tree.column(key, width=width, anchor="w")
+        for entry in entries:
+            tree.insert("", "end", iid=str(entry["path"]),
+                        values=(entry["name"], entry["files"], f"{entry['bytes'] / 1048576:.1f} MB"))
+        scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        scroll.grid(row=0, column=1, sticky="ns")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        chosen: dict[str, Path | None] = {"path": None}
+
+        def accept() -> None:
+            selected = tree.selection()
+            chosen["path"] = Path(selected[0]) if selected else None
+            window.destroy()
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=1, column=0, columnspan=2, sticky="e", pady=(PAD, 0))
+        ttk.Button(buttons, text=self.t("ui:backup_cancel", "Cancel"),
+                   command=window.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(buttons, text=self.t("ui:backup_choose", "Restore"),
+                   command=accept).pack(side="right")
+        tree.bind("<Double-1>", lambda _event: accept())
+        window.bind("<Escape>", lambda _event: window.destroy())
+        window.grab_set()
+        tree.focus_set()
+        self.root.wait_window(window)
+        return chosen["path"]
+
     def _rollback(self) -> None:
         """Restore a *chosen* backup, including every msg file it holds."""
         if self.running:
@@ -1397,12 +1446,9 @@ class App:
                                 self.t("ui:rollback_none_body", "There is no saved backup to roll back to."),
                                 parent=self.root)
             return
-        chosen = filedialog.askdirectory(
-            title=self.t("ui:rollback_pick", "Choose a backup folder"),
-            initialdir=str(backup.backup_root()), parent=self.root)
-        if not chosen:
+        folder = self._choose_backup()
+        if folder is None:
             return
-        folder = Path(chosen)
         if not (folder / backup.MANIFEST).is_file():
             messagebox.showerror(self.t("ui:rollback_bad", "Not a backup"),
                                  self.t("ui:rollback_bad_body", "No manifest.json in:\n{0}").format(folder),

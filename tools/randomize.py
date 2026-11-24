@@ -657,7 +657,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             variants = loot_variants.Variants(
                 reg, wp, ceilings=variant_ceilings,
                 curve=v["loot_rarity"] if v["random_loot_levels"] else "common",
-                armor_variants=armor_variant_map)
+                armor_variants=armor_variant_map, ash_chance=v["ash_chance"])
             vlines = variants.lines()
             print("\n".join(l for l in vlines if l.startswith("#")))
 

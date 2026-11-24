@@ -50,28 +50,39 @@ def find_dll(source: str | Path | None = None) -> Path | None:
     return next((p for p in candidates if p.is_file()), None)
 
 
+def _discovered_targets() -> list[Path]:
+    """Mod roots found from the game's own location: Steam libraries, registry and usual folders."""
+    try:
+        import discover
+    except (OSError, ImportError):
+        return []
+    roots: list[Path] = []
+    for finder in (discover.err_folders, discover.game_dirs):
+        try:
+            roots.extend(finder())
+        except OSError:
+            continue
+    out: list[Path] = []
+    for root in roots:
+        # A real Mod Engine root has mod/regulation.bin; keep the old guard so a folder that merely
+        # happens to contain dll/offline cannot collect the native mod.
+        if not (root / "mod" / "regulation.bin").is_file():
+            continue
+        for candidate in (root / "dll" / "offline", root.parent / "dll" / "offline"):
+            if candidate.is_dir() and candidate not in out:
+                out.append(candidate)
+    return out
+
+
 def find_target(dll_dir: str | Path | None = None) -> Path | None:
-    """The Mod Engine `dll\\offline` folder: explicit, env, the known ERR layout, then a scan."""
+    """The Mod Engine `dll\\offline` folder: explicit, env, then discovered from the game path."""
     if dll_dir:
         return Path(dll_dir).expanduser()
     env = os.environ.get("LOOT_VARIANTS_DLL_DIR")
     if env:
         return Path(env)
-    if DEFAULT_TARGET.is_dir():
-        return DEFAULT_TARGET
-    # C:\Games\ERR itself can be a mod root, as can any sibling folder under C:\Games.
-    for parent in (DEFAULT_TARGET.parents[1], DEFAULT_TARGET.parents[2]):
-        if not parent.is_dir():
-            continue
-        try:
-            children = sorted(parent.iterdir())
-        except OSError:
-            continue
-        for child in (parent, *children):
-            target = child / "dll" / "offline"
-            if target.is_dir() and (child / "mod" / "regulation.bin").is_file():
-                return target
-    return None
+    candidates = [DEFAULT_TARGET, *_discovered_targets()]
+    return next((p for p in candidates if p.is_dir()), None)
 
 
 def _digest(path: Path) -> str:

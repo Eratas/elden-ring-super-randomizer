@@ -112,7 +112,8 @@ class Entry:
 class Variants:
     def __init__(self, reg: erreg.Regulation, wp: weapons.Weapons | None = None,
                  ceilings: dict[int, int] | None = None, curve: str = "common",
-                 armor_variants: dict[int, tuple[int, ...]] | None = None) -> None:
+                 armor_variants: dict[int, tuple[int, ...]] | None = None,
+                 ash_chance: int = ASH_CHANCE) -> None:
         self.reg = reg
         self.W = reg.param("EquipParamWeapon",
                            erreg.load_paramdef(HERE / "paramdef" / "EquipParamWeapon.xml"))
@@ -124,6 +125,7 @@ class Variants:
         # before the weapon pass and passes them in; a standalone run has no pass to worry about.
         self.ceilings = ceilings if ceilings is not None else loot.ceilings(self.W)
         self.curve = curve if curve in CURVES else "common"
+        self.ash_chance = max(0, min(100, int(ash_chance or ASH_CHANCE)))
         self.gems = self._gems()
         self._class_of: dict[tuple[int, ...], int] = {}
         self.class_gems: list[tuple[int, ...]] = []
@@ -254,7 +256,7 @@ class Variants:
             out += ["# bind <regulation size> <fnv1a64>: refuse a manifest from another run",
                     f"bind {bind}"]
         out += ["# defaults <ash chance %> <level curve> <reroll affinity> <reroll level>",
-                f"defaults {ASH_CHANCE} {self.curve} 1 1",
+                f"defaults {self.ash_chance} {self.curve} 1 1",
                 "# weapon <base> <max level> <affinity mask> <gem class for affinity 0..12>"]
         for e in self.entries:
             cells = " ".join(str(e.gem_class[a]) if (e.affinity_mask >> a) & 1 else "-"
@@ -283,7 +285,7 @@ class Variants:
                 f"({rollable} with more than one affinity), {ash_rows} rows with an Ash pool "
                 f"({choices} weapon/Ash pairs in {len(self.class_gems)} distinct pools); "
                 f"{len(self.armor)} armour pieces reroll their +0..+10 level",
-                f"# ash chance {ASH_CHANCE}%, level curve {self.curve}, ids stay inside "
+                f"# ash chance {self.ash_chance}%, level curve {self.curve}, ids stay inside "
                 f"base + affinity*100 + level (weapons) / category+level+base (armour)",
                 "# base      weapon                                   levels  affinities  ashes",
                 *[f"{e.base:>9}  {self.name(e.base):<40} 0-{e.max_level:<4} {e.affinities:>2}          "

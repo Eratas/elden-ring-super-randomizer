@@ -111,6 +111,16 @@ Everything is fail-soft: a missing manifest, a stale fingerprint, a version mism
 relay or a failed `VirtualProtect` leaves the game untouched and logs why.  The detour itself does no
 allocation and never throws.
 
+### After a game update
+
+Run `python tools\verify_aobs.py` (optionally `--exe <path>`) against the new `eldenring.exe`. It checks
+all five patterns, including that the two give-call patterns still resolve to the **same** target, and
+prints file offsets for any hit. A `FAIL` on a give pattern means that call site is skipped; the DLL
+logs `inert` only if **both** give patterns fail. A `FAIL` on one of the other three patterns only
+disables optional auto-equip. Copy the new offsets/pattern into `src/loot_variants.cpp`, rebuild with
+`build.ps1 -Install`, then run the verifier and the host tests again before playing. Offsets are file
+offsets; the DLL works in memory, so only the pattern and the call offset inside it need updating.
+
 ## Verification
 
 `build.ps1` compiles and runs `dist\test_variants.exe`, which checks the manifest parser (including
