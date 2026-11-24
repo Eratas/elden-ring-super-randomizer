@@ -1769,17 +1769,18 @@ def test_release_package() -> None:
     root = Path(tempfile.mkdtemp(prefix="release-test-"))
     dist = root / "dist"
     (dist / "msg" / "engus").mkdir(parents=True)
-    for name in (pack_release.EXE, pack_release.DLL, pack_release.INI, "README.md"):
+    for name in (pack_release.EXE, pack_release.DLL, pack_release.INI):
         (dist / name).write_bytes(b"payload")
     (dist / "msg" / "engus" / "item_dlc02.msgbnd.dcx").write_bytes(b"msg")
     (dist / "settings.json").write_text("{}", encoding="utf-8")
     (dist / "self_test_result.txt").write_text("PASS", encoding="utf-8")
     (dist / "randomized").mkdir()
     (dist / "randomized" / "regulation.bin").write_bytes(b"save")
+    (dist / "README.md").write_bytes(b"stale")   # must be ignored: docs ship from the repo root
     try:
-        pack_release.ensure_docs(dist)      # the real packer stages the root docs into dist
         files = pack_release.collect_release_files(dist)
-        names = {p.as_posix() for p in files}
+        docs = pack_release.doc_sources()
+        names = {p.as_posix() for p in files} | {d.name for d in docs}
         check("EldenRingSuperRandomizer.exe" in names, "the release omits the executable")
         check("loot_variants.dll" in names, "the release omits the optional DLL")
         check("msg/engus/item_dlc02.msgbnd.dcx" in names, "the release omits the msg archives")
@@ -1787,10 +1788,12 @@ def test_release_package() -> None:
               f"the release leaks developer files: {names}")
         target = root / "release.zip"
         size, count = pack_release.make_release(dist, target)
-        check(size > 0 and count == len(files), f"the release zip has {count} entries, expected {len(files)}")
+        check(size > 0 and count == len(names), f"the release zip has {count} entries, expected {len(names)}")
         with zipfile.ZipFile(target) as zf:
             check(set(zf.namelist()) == names, "the zip entries differ from the whitelist")
             check(zf.read("loot_variants.dll") == b"payload", "the DLL was not stored byte-for-byte")
+            check(zf.read("README.md") == (pack_release.ROOT / "README.md").read_bytes(),
+                  "the zip shipped a stale dist README instead of the root one")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

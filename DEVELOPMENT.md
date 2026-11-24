@@ -162,3 +162,96 @@ Ashes, a single moveset, a regulation with no timed buffs) failing soft.
   build order: `mods/loot-variants/build.ps1` → `build_exe.bat` → `python tools/pack_release.py`.
 * `mods/loot-variants/` — the optional native mod: `build.ps1` builds the DLL and host tests, `src/`
   holds the PE hook, manifest parser and roll logic. The DLL is shipped in `dist/` for releases.
+
+## Runtime mod: loot-variants
+
+`regulation.bin` is one table shared by the whole game, so a static rewrite cannot give two copies of
+the same sword different stats. The optional DLL is the only path to **per-pickup** variety. The static
+tool writes `loot_variants.txt` next to the regulation; the DLL reads it and rerolls the give id at the
+moment the game grants the item. Without the DLL the regulation is still a complete random run — the
+manifest is simply unused.
+
+Three switches stay separate and compose:
+
+| Switch | What it changes |
+|---|---|
+| `--random-weapon-drops` | **where** weapon rows are found (placement shuffle) |
+| `--random-dropped-weapons` | **which** weapon row a drop shows (a fresh draw per run) |
+| `--loot-variants` | **what that weapon rolls like on each pickup** (runtime, needs this DLL) |
+
+Build with `pwsh -NoProfile -File mods/loot-variants/build.ps1`: host tests run first, then the DLL is
+written to `mods/loot-variants/dist/` and the program's `dist/`. Add `-Install` to copy it straight to
+`C:\Games\ERR\dll\offline`. From the shipped program, `randomize.py --install-runtime` or the window's
+**Install DLL** button finds the DLL in `dist/` and copies the sample ini without overwriting an
+existing one; `python tools/install_runtime.py --dll-dir <dir>` handles another layout and `--check`
+only looks.
+
+**The roll.** For each granted weapon, `base + affinity*100 + level` becomes
+`base + rolled_affinity*100 + rolled_level`. Affinity comes from the rows the manifest says exist for
+that weapon (up to 13) — that is what changes attack power, scaling and status build-up. Level is drawn
+from `0..ceiling` using the `even`/`common`/`legendary` curves, where the ceiling is the weapon's
+*vanilla* one (+25 standard, +10 somber, +0 unique), not the inflated row count after
+`--somber-infusable`. An Ash is mounted with probability `ash_chance` (manifest default 50%) from gems
+whose `canMountWep` bit fits the row's weapon type **and** whose `configurableWepAttr` bit is set for
+that affinity — the same two flags the smithing table checks, so the skill animates. Armour has no
+affinity rows, so the runtime draws a reinforcement level +0..+10 for the same row with give id
+`0x10000000 | level << 24 | base`; `--armor-variants N` adds up to N cloned rows that keep the model
+and change only the columns selected by `--armor-variant-stats`, each with a `ProtectorName` entry.
+Ammo, goods, Ashes, cut rows outside affinity 0..12 and anything absent from the manifest pass through
+untouched. `[auto_equip] enabled = 1` calls the game's equip function after the grant (off by default);
+`[general] dry_run = 1` logs `would roll ...` without changing anything.
+
+**The hook.** Both give-call AOBs used by the item randomizer are resolved (verified on 1.16.1:
+both target RVA `0x5618b0`). Every `E8 rel32` in the executable sections that targets it — four on
+1.16.1 — is found by arithmetic and repointed at a 14-byte relay allocated within ±2 GB of the game
+module. The relay jumps to a detour that edits the `ItemGiveStruct` in place and calls the original; no
+prologue is moved, so it composes with other give-function hooks. Other threads are suspended while
+the four call sites are patched so no caller reads a torn displacement. The manifest carries a `bind`
+fingerprint (FNV-1a over the written `regulation.bin`); a mismatch leaves the DLL inert, so a manifest
+from a different run cannot hand out ids whose rows do not exist. Everything is fail-soft: missing
+manifest, stale fingerprint, version mismatch, no AOB hit, no relay or a failed `VirtualProtect`
+leaves the game untouched and logs why. The detour itself does no allocation and never throws. The
+log's last line should read `active, N call site(s), ...`; `inert` and the line before it give the
+reason.
+
+**After a game update**, run `python tools\verify_aobs.py` (optionally `--exe <path>`). It checks all
+five patterns, including that both give patterns still resolve to the same target, and prints file
+offsets for hits. A `FAIL` on a give pattern means that call site is skipped; the DLL is inert only if
+**both** give patterns fail. A failure on one of the other three patterns only disables auto-equip.
+Copy the new pattern and call offset into `src/loot_variants.cpp`, rebuild with `build.ps1 -Install`,
+then re-run the verifier and the host tests. Offsets are file offsets; the DLL works in memory, so
+only the pattern and the call offset inside it need updating. Version gate: the DLL accepts manifest
+format v1/v2 only — a future v3 writer needs a DLL update.
+
+**Verification.** `build.ps1` runs `dist\test_variants.exe`, which checks the manifest parser (malformed
+lines, rejected versions), tier arithmetic against `loot.py::_tier_range`, and the roll itself
+(affinity membership, level ceiling, Ash pools, chance 0/100, armour level/base preservation,
+pass-through). Pass a real manifest as an argument to validate that exact run and roll every item in
+it. Tier *selection* uses `roll < cumulative weight` while `loot.py` uses `roll <= ...` — a
+one-in-ten-thousand boundary difference that matches the documented weights more closely; the tier
+*ranges* are identical.
+
+**Known limits.** AOBs are verified on 1.16.1 (86,973,008-byte `eldenring.exe`). The static level
+options still decide what is written into the lot; the reroll draws from the weapon's own ceiling, so
+zone caps and boss bonuses no longer describe the *rerolled* level (`[roll] level = 0` keeps static
+levels and rerolls only affinity and Ash). `--random-gem-skills` shuffles a skill after the manifest is
+written, so a shuffled skill's animation can mismatch the moveset. The call sites are patched shortly
+after startup; items granted in the first 300 ms miss the reroll. **In-game behaviour is UNVERIFIED**
+in this environment: no headless way to grant an item exists, so the live detour, auto-equip, armour
+clone ids and rarity-label rendering need a human play session (`dry_run = 1` first).
+
+## Optional mod: fp-regen
+
+`mods/fp-regen/` is a standalone Rust `cdylib` spec (not built by the main release, not shipped in the
+zip) that adds a slow, always-on **1 FP/second** regenerator for Mod Engine 3 / Reforged offline. It
+uses the [`eldenring` crate](https://docs.rs/eldenring) (v0.14.0) with the `DllMain` + `CSTaskImp`
+pattern instead of hardcoded 1.17.x offsets. `pwsh -NoProfile -File mods/fp-regen/build.ps1` installs
+Rust (GNU) + MinGW if missing, builds, and copies the DLL to `C:\Games\ERR\dll\offline\fp_regen.dll`;
+tune `REGEN_PER_SEC` at the top of `src/lib.rs`. Prefer a maintained mod when you just want the
+feature: NativeTweaks ([Nexus 11339](https://www.nexusmods.com/eldenring/mods/11339)) or Auto Regen
+([Nexus 10548](https://www.nexusmods.com/eldenring/mods/10548)); both are offline-only. Caveats: the
+tick writes one `u32` from the game's per-frame task (lower the rate if the HUD stutters), the crate
+must be pinned to a version supporting 1.17.x, disable for PvP, and the tick no-ops until the player
+pointer is ready. Runtime rather than `regulation.bin` because vanilla FP does not regenerate and a
+resident `SpEffect` cannot be verified without in-game testing; it never touches the regulation, so
+it composes with randomizer output.

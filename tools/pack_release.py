@@ -4,13 +4,14 @@
 dist/ is also the program's live workspace: settings.json, randomized/, backups/ and test results
 live there.  Copying the folder wholesale would ship the developer's input paths and saves.  This
 module picks only what a player needs: the exe, the shipped msg archives, the optional loot-variants
-DLL and sample ini, and the two docs.  The DLL is built by mods/loot-variants/build.ps1 and placed in
-dist/ by that script; if it is missing the zip is still made, but the tool says so loudly.
+DLL and sample ini.  The docs (README and the two generated Nexus descriptions) are read straight
+from the repo root, so dist/ never keeps a stale copy.  The DLL is built by
+mods/loot-variants/build.ps1 and placed in dist/ by that script; if it is missing the zip is still
+made, but the tool says so loudly.
 """
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -27,7 +28,7 @@ def collect_release_files(dist: Path) -> list[Path]:
     """Paths relative to dist/, sorted; only files that actually exist."""
     dist = Path(dist)
     out: list[Path] = []
-    for name in (EXE, DLL, INI, *DOCS):
+    for name in (EXE, DLL, INI):
         if (dist / name).is_file():
             out.append(Path(name))
     msg = dist / "msg"
@@ -36,22 +37,22 @@ def collect_release_files(dist: Path) -> list[Path]:
     return sorted(set(out))
 
 
-def ensure_docs(dist: Path) -> None:
-    """The docs live at the repo root; stage them into dist so the zip carries them."""
-    for name in DOCS:
-        if not (dist / name).is_file() and (ROOT / name).is_file():
-            shutil.copy2(ROOT / name, dist / name)
+def doc_sources() -> list[Path]:
+    """The docs ship straight from the repo root, never staged into the live dist/ workspace."""
+    return [ROOT / name for name in DOCS if (ROOT / name).is_file()]
 
 
 def make_release(dist: Path, target: Path) -> tuple[int, int]:
     """Write the zip; returns (bytes written, file count)."""
-    ensure_docs(dist)
     files = collect_release_files(dist)
+    docs = doc_sources()
     target.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for rel in files:
             zf.write(Path(dist) / rel, rel.as_posix())
-    return target.stat().st_size, len(files)
+        for source in docs:
+            zf.write(source, source.name)
+    return target.stat().st_size, len(files) + len(docs)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,10 +65,10 @@ def main(argv: list[str] | None = None) -> int:
     import version
 
     dist = Path(args.dist)
-    ensure_docs(dist)
     files = collect_release_files(dist)
+    docs = doc_sources()
     if args.check:
-        for rel in files:
+        for rel in sorted([*files, *(Path(d.name) for d in docs)]):
             print(rel.as_posix())
         return 0
     if not any(p.name == EXE for p in files):

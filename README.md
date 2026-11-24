@@ -10,15 +10,14 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.10** — **small polish, no new mechanics.** Reset now restores every pair
-> option to its real default (stamina multiplier 0.8 to 1.2 instead of 0 to 2.0), the hover tip
-> says so in every language, and `python tools\gui.py --self-test-headless` runs the built-in checks
-> without a message box, so scripts and CI get a clean exit code. Full notes in the
-> [Changelog](#changelog).
+> **What's new in v1.0.11** — **one README.** The outdated copies under `dist/`, `mods/loot-variants/`
+> and `mods/fp-regen/` are gone; this file is the single source of truth, and the native-mod internals
+> (the roll, the hook, the post-update AOB check) now live in [DEVELOPMENT.md](DEVELOPMENT.md). No
+> behaviour changed. Full notes in the [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.10**, last updated **2026-11-24**.
+every setting. Current version: **1.0.11**, last updated **2026-11-24**.
 
 ```
 Files and output
@@ -144,7 +143,9 @@ so **per-pickup variety needs a runtime mod**. This tool ships both halves:
 * without the DLL the regulation is still a complete random run — the manifest is simply unused.
 
 `--install-runtime` (or the window's **Install DLL** button) copies the DLL into the Mod Engine folder.
-That is the Borderlands-style layer; the static file alone cannot do it.
+That is the Borderlands-style layer; the static file alone cannot do it. For the roll rules, the
+`E8` call-site hook, and the AOB check to run after a game update, see
+[DEVELOPMENT.md — Runtime mod](DEVELOPMENT.md#runtime-mod-loot-variants).
 
 ---
 
@@ -701,6 +702,12 @@ game's own `oo2core_6_win64.dll` that the user already has.
 
 ## Changelog
 
+**1.0.11** — 2026-11-24 — **docs consolidation.** One README: the stale copy in `dist/` and the
+two native-mod specs under `mods/` are removed, and their unique technical content (the loot roll,
+the `E8` call-site hook, the post-update AOB check, and the optional FP-regen mod) is merged into
+[DEVELOPMENT.md](DEVELOPMENT.md). The release zip still ships one current README, generated from
+this file; no behaviour changed.
+
 **1.0.10** — 2026-11-24 — **polish.** Reset reads pair defaults from the option table, so the
 stamina multiplier goes back to 0.8–1.2; its tip now states that in all 13 languages.
 `gui.py --self-test-headless` skips the modal message box and writes the result file with a
@@ -767,7 +774,8 @@ gate (F, E9, I, UP, E402, W, B, C4, SIM) guard all of it.
 ## Development
 
 Source layout, the option table, the gate and the checks that keep it honest: see
-[DEVELOPMENT.md](DEVELOPMENT.md).
+[DEVELOPMENT.md](DEVELOPMENT.md). It also carries the native-mod internals — the loot roll and hook,
+the post-update AOB check, and the optional FP-regen mod — so this stays a single README.
 
 The short version:
 
