@@ -358,6 +358,12 @@ class App:
         Tooltip(self.revert_btn, self.t("ui:tip_revert", "Restore the most recent backup: put your original "
                                                          "regulation.bin and msg archives back where they were."))
 
+        self.rollback_btn = ttk.Button(actions, text=self.t("ui:rollback", "Rollback"), style="TButton",
+                                       command=self._rollback)
+        self.rollback_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.rollback_btn, self.t("ui:tip_rollback", "Pick any saved backup and restore every file in "
+                                                              "it - regulation.bin and the whole msg folder."))
+
         self.install_btn = ttk.Button(actions, text=self.t("ui:install_dll", "Install DLL"), style="TButton",
                                       command=self._install_dll)
         self.install_btn.pack(side="left", padx=(0, 8), pady=5)
@@ -1282,9 +1288,18 @@ class App:
     def _backup_now(self) -> None:
         """Copy the input files into a timestamped backup, without running anything."""
         import backup
-        v = self.values()
-        files = backup.collect_files(Path(v["input"]), list(v["archives"] or ()))
-        bdir = backup.make_backup(files)
+        # Use the same validation and archive discovery a real run uses.  The raw widget values are
+        # StringVars for path rows, so passing them straight to collect_files used to back up only
+        # regulation.bin (and split the ";"-joined archive string into characters).
+        v = options.validate(self.values())
+        files = backup.collect_files(Path(v["input"]),
+                                     backup.detected_archives(Path(v["input"]), v["archives"] or ()))
+        try:
+            bdir = backup.make_backup(files)
+        except OSError as error:
+            messagebox.showerror(self.t("ui:backup_failed", "Backup failed"), str(error),
+                                 parent=self.root)
+            return
         if bdir is None:
             messagebox.showwarning(self.t("ui:backup_none", "Nothing to back up"),
                                    self.t("ui:backup_none_body", "The input file was not found, so there is "
@@ -1354,6 +1369,59 @@ class App:
                             self.t("ui:revert_done_body", "{0} file(s) restored from:\n{1}").format(
                                 len(restored), latest),
                             parent=self.root)
+
+    def _rollback(self) -> None:
+        """Restore a *chosen* backup, including every msg file it holds."""
+        import backup
+        backups = backup.list_backups()
+        if not backups:
+            messagebox.showinfo(self.t("ui:rollback_none", "No backup yet"),
+                                self.t("ui:rollback_none_body", "There is no saved backup to roll back to."),
+                                parent=self.root)
+            return
+        chosen = filedialog.askdirectory(
+            title=self.t("ui:rollback_pick", "Choose a backup folder"),
+            initialdir=str(backup.backup_root()), parent=self.root)
+        if not chosen:
+            return
+        folder = Path(chosen)
+        if not (folder / backup.MANIFEST).is_file():
+            messagebox.showerror(self.t("ui:rollback_bad", "Not a backup"),
+                                 self.t("ui:rollback_bad_body", "No manifest.json in:\n{0}").format(folder),
+                                 parent=self.root)
+            return
+        problems = backup.verify_backup(folder)
+        if problems:
+            messagebox.showerror(self.t("ui:rollback_bad", "Not a backup"),
+                                 self.t("ui:rollback_bad_body", "This backup is incomplete:\n{0}")
+                                 .format("\n".join(problems[:8])), parent=self.root)
+            return
+        try:
+            info = backup.backup_info(folder)
+        except (OSError, ValueError):
+            info = {"files": len(backups), "bytes": 0}
+        if not messagebox.askyesno(
+                self.t("ui:rollback_title", "Roll back to this backup?"),
+                self.t("ui:rollback_body", "Restore {0} file(s) from\n{1}\n\n"
+                                          "Every file goes back where it came from, overwriting what is "
+                                          "there now.").format(info["files"], folder),
+                parent=self.root):
+            return
+        try:
+            restored = backup.restore(folder)
+        except (OSError, ValueError) as error:
+            messagebox.showerror(self.t("ui:rollback_failed", "Rollback failed"), str(error),
+                                 parent=self.root)
+            return
+        if not restored:
+            messagebox.showerror(self.t("ui:rollback_failed", "Rollback failed"),
+                                 self.t("ui:rollback_failed_body", "No file could be restored from:\n{0}")
+                                 .format(folder), parent=self.root)
+            return
+        self._log(f"# rollback: {len(restored)} file(s) restored from {folder}", True)
+        messagebox.showinfo(self.t("ui:rollback_done", "Rolled back"),
+                            self.t("ui:rollback_done_body", "{0} file(s) restored from:\n{1}").format(
+                                len(restored), folder), parent=self.root)
 
     def _finish(self) -> None:
         self.running = False

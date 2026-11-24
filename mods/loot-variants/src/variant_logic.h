@@ -15,8 +15,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <climits>
+#include <functional>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace loot_variants {
@@ -52,9 +54,14 @@ struct Options {
     int level_curve = kCurveCommon;
 };
 
+struct Armor {
+    std::uint32_t max_level = 0;
+    int slot = -1;                         // give-path equipment slot (12..15), -1 = no auto-equip
+};
+
 struct Manifest {
     std::map<std::uint32_t, Weapon> weapons;
-    std::map<std::uint32_t, std::uint32_t> armor;   // base id -> +N ceiling
+    std::map<std::uint32_t, Armor> armor;          // base id -> +N ceiling and equipment slot
     std::map<int, std::vector<std::uint32_t>> gems;
     Options defaults;
     bool has_bind = false;             // an old manifest has no bind line: warn, but still usable
@@ -241,15 +248,20 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
             continue;
         }
         if (tok[0] == "armor") {
-            // armor <base> <max level>: one reinforcement track, no affinity rows
+            // armor <base> <max level> [slot]: one reinforcement track, no affinity rows.  The
+            // slot field is optional so a manifest from before auto-equip still parses.
             std::uint32_t base = 0;
             std::uint32_t top = 0;
-            if (tok.size() != 3 || !detail::to_u32(tok[1], base) || !detail::to_u32(tok[2], top) ||
-                top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0) {
+            int slot = -1;
+            const bool has_slot = tok.size() == 4;
+            if ((tok.size() != 3 && tok.size() != 4) || !detail::to_u32(tok[1], base) ||
+                !detail::to_u32(tok[2], top) || top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0 ||
+                (has_slot && !detail::to_int(tok[3], slot)) ||
+                (slot != -1 && slot != 12 && slot != 13 && slot != 14 && slot != 15)) {
                 ++out.bad_lines;
                 continue;
             }
-            out.armor[base] = top;
+            out.armor[base] = Armor{top, slot};
             continue;
         }
         if (tok[0] == "gems") {
@@ -397,10 +409,10 @@ inline Rolled roll_item(std::uint32_t item_id, const Manifest& manifest, const O
         const auto piece = manifest.armor.find(base);
         if (piece != manifest.armor.end()) {
             std::uint32_t level = (item_id >> 24) & 0x0Fu;
-            if (options.reroll_level && piece->second > 0) {
-                level = detail::roll_level(piece->second, options.level_curve, rng);
-            } else if (level > piece->second) {
-                level = piece->second;
+            if (options.reroll_level && piece->second.max_level > 0) {
+                level = detail::roll_level(piece->second.max_level, options.level_curve, rng);
+            } else if (level > piece->second.max_level) {
+                level = piece->second.max_level;
             }
             out.item_id = kArmorBit | (level << 24) | base;
         }
@@ -452,9 +464,37 @@ inline Rolled roll_item(std::uint32_t item_id, const Manifest& manifest, const O
     const int cls = w.gem_class[affinity];
     if (cls >= 0 && options.ash_chance > 0 &&
         static_cast<int>(rng.below(100)) < options.ash_chance) {
-        const auto pool = manifest.gems.find(cls);
-        if (pool != manifest.gems.end() && !pool->second.empty()) {
-            out.ash = kAshFlag | pool->second[rng.below(static_cast<std::uint32_t>(pool->second.size()))];
+        // The manifest is immutable once the detour is live, so caching the resolved pool pointer is
+        // safe.  thread_local keeps the hot path lock-free; a miss stores an empty pool as well so a
+        // row with no usable Ash is not looked up twice.
+        struct PoolKey {
+            const Manifest* manifest = nullptr;
+            std::uint32_t base = 0;
+            std::uint32_t affinity = 0;
+            bool operator==(const PoolKey& o) const {
+                return manifest == o.manifest && base == o.base && affinity == o.affinity;
+            }
+        };
+        struct PoolKeyHash {
+            std::size_t operator()(const PoolKey& k) const noexcept {
+                return std::hash<const void*>()(k.manifest) ^
+                       (static_cast<std::size_t>(k.base) << 8) ^ k.affinity;
+            }
+        };
+        struct Pool {
+            bool resolved = false;
+            const std::vector<std::uint32_t>* ids = nullptr;
+        };
+        static thread_local std::unordered_map<PoolKey, Pool, PoolKeyHash> cache;
+        const PoolKey key{&manifest, base, affinity};
+        Pool& entry = cache[key];
+        if (!entry.resolved) {
+            const auto pool = manifest.gems.find(cls);
+            entry.ids = pool == manifest.gems.end() || pool->second.empty() ? nullptr : &pool->second;
+            entry.resolved = true;
+        }
+        if (entry.ids != nullptr) {
+            out.ash = kAshFlag | (*entry.ids)[rng.below(static_cast<std::uint32_t>(entry.ids->size()))];
         }
     }
     return out;

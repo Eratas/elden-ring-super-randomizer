@@ -317,12 +317,14 @@ def run() -> None:
     armor_lines = [ln for ln in lines if ln.startswith("armor ")]
     check(len(armor_lines) == len(v.armor), "--loot-variants: manifest armour count mismatch")
     check(len(armor_lines) == 6, "--loot-variants: the synthetic regulation has no armour entries")
-    check(all(len(ln.split()) == 3 for ln in armor_lines),
-          "--loot-variants: an armour line does not have a base and a ceiling")
+    check(all(len(ln.split()) == 4 for ln in armor_lines),
+          "--loot-variants: an armour line does not have base, ceiling and slot")
     check(all(int(ln.split()[2]) == 10 for ln in armor_lines),
           "--loot-variants: a reinforceable armour piece is not +10")
     for ln in armor_lines:
         base = int(ln.split()[1])
+        check(int(ln.split()[3]) in (-1, 12, 13, 14, 15),
+              "--loot-variants: an armour auto-equip slot is outside the game's 12..15 range")
         check(base < 0x1000000, "--loot-variants: an armour id does not fit the give-struct id layout")
         check(base in reg.param("EquipParamProtector", erreg.load_paramdef(
             Path("tools/paramdef/EquipParamProtector.xml"))).by_id,

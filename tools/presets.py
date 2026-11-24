@@ -36,6 +36,29 @@ PRESETS: tuple[dict, ...] = (
         },
     },
     {
+        "key": "borderlands_armory",
+        "label": "Borderlands armory",
+        "tip": "The gear version of Borderlands loot: enemies drop armour and talismans, every piece gets "
+               "fresh stats, and the loot-variants DLL rolls a new reinforcement level for every copy "
+               "you pick up. Weapons keep their vanilla placements so the armour is the star. Goods, "
+               "spells and prices are untouched.",
+        "values": {
+            "goods": False, "spells": False, "random_prices": False,
+            "somber_infusable": False, "random_movesets": False, "random_default_ash": False,
+            "random_stats": False,
+            "random_enemy_drops": True, "enemy_drop_rolls": 2, "enemy_drop_chance": 100,
+            "enemy_drop_kinds": "armor,talismans", "unique_drops": False, "material_drops": False,
+            "random_weapon_drops": False, "random_goods_drops": False, "random_armor_drops": True,
+            "armour_drop_sets": False, "random_talisman_drops": True, "random_ashes_drops": False,
+            "random_armor": True, "random_armor_fresh": True, "armor_keep_sets": False,
+            "random_talismans": True,
+            "random_loot_levels": False, "random_runes": False, "random_enemy_hp": False,
+            "random_durations": False, "random_flask_locations": False,
+            "random_gem_skills": False, "random_gem_effects": False,
+            "loot_variants": True,
+        },
+    },
+    {
         "key": "classic",
         "label": "Classic randomizer",
         "tip": "The traditional set: what consumables and spells do, and what shops charge. Weapons keep "

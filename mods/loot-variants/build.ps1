@@ -12,6 +12,7 @@
 param(
     [switch]$Install,
     [switch]$TestOnly,
+    [switch]$Bench,
     [string]$DllDir = "C:\Games\ERR\dll\offline"
 )
 $ErrorActionPreference = "Stop"
@@ -52,6 +53,14 @@ if ($LASTEXITCODE -ne 0) { throw "tests failed" }
 if ($TestOnly) {
     Write-Host "`nOK (tests only)"
     exit 0
+}
+
+if ($Bench) {
+    Write-Host "`n==> building the 1M-roll benchmark"
+    & $gxx @flags "-I" $src (Join-Path $src "bench_variants.cpp") "-o" (Join-Path $dist "bench_variants.exe")
+    if ($LASTEXITCODE -ne 0) { throw "benchmark build failed" }
+    & (Join-Path $dist "bench_variants.exe")
+    if ($LASTEXITCODE -ne 0) { throw "benchmark failed" }
 }
 
 # 3. The DLL.

@@ -57,6 +57,23 @@ using GiveItemFunction = void (*)(std::uint64_t, ItemGiveStruct*, void*);
 
 constexpr std::size_t kGiveCapacity = 10;
 
+// Auto-equip uses the game's own equip function.  Layout from the reference randomizer's
+// item_randomiser_globals.h; offsets from elden-x @ 363961da (pinned by that project's CMakeLists.txt).
+struct EquipItemStruct {
+    unsigned char unused0[8]{};
+    std::uint32_t equipment_slot = 0;
+    unsigned char unused1[76]{};
+    std::uint32_t inventory_slot = 0;
+};
+static_assert(sizeof(EquipItemStruct) == 92);
+using GetInventoryIdFunction = int (*)(void*, int*);
+using EquipItemFunction = void (*)(EquipItemStruct*);
+using GetRuntimeClassName = const char* (*)(const void*);
+GetInventoryIdFunction g_get_inventory_id = nullptr;
+EquipItemFunction g_equip_item = nullptr;
+void** g_world_chr_man_slot = nullptr;
+std::atomic<bool> g_auto_equip{false};
+
 // --------------------------------------------------------------------------- globals
 HINSTANCE g_self = nullptr;
 loot_variants::Manifest g_manifest;
@@ -66,6 +83,7 @@ std::uint64_t g_seed = 0;
 std::mutex g_log_mutex;
 std::ofstream g_log;
 bool g_log_on = false;
+std::atomic<bool> g_dry_run{false};    // [general] dry_run = 1: log rolls, change nothing
 std::atomic<std::uint32_t> g_rolls_logged{0};
 std::atomic<std::uint64_t> g_roll_count{0};
 
@@ -241,6 +259,9 @@ void apply_ini(const std::wstring& ini, loot_variants::Options& options) {
                             : curve == L"legendary" ? loot_variants::kCurveLegendary
                                                     : loot_variants::kCurveCommon;
     }
+    if (ini_int(ini, L"general", L"dry_run", value)) {
+        g_dry_run.store(value != 0);
+    }
 }
 
 // --------------------------------------------------------------------------- AOB scan
@@ -332,6 +353,110 @@ std::vector<Section> exec_sections(std::uint8_t* base) {
         }
     }
     return out;
+}
+
+// --------------------------------------------------------------------------- auto-equip (optional)
+std::uint8_t* rel32_target(std::uint8_t* insn) {
+    const auto disp = *reinterpret_cast<const std::int32_t*>(insn + 1);
+    return insn + 5 + disp;
+}
+
+// elden-x finds FD4 singletons by scanning for this sequence and asking the game for each runtime
+// class's name.  We only need WorldChrMan, whose slot is then re-read on every grant (the singleton
+// itself is stable, the player pointer is not).
+bool find_world_chr_man(std::uint8_t* module) {
+    Pattern pattern;
+    if (!parse_pattern("48 8b ?? ???????? 48 85 ?? 75 2e 48 8d 0d ???????? e8 ???????? "
+                       "4c 8b c8 4c 8d 05 ???????? ba ?? ?? 00 00 48 8d 0d ???????? e8 ????????",
+                       pattern)) {
+        return false;
+    }
+    for (const Section& section : exec_sections(module)) {
+      std::uint8_t* cursor = section.begin;
+      std::size_t left = section.size;
+      while (left >= pattern.bytes.size()) {
+        std::uint8_t* hit = scan(cursor, left, pattern);
+        if (hit == nullptr) {
+            break;
+        }
+        void** slot = *reinterpret_cast<void***>(hit + 7 +
+                       *reinterpret_cast<const std::int32_t*>(hit + 3));
+        const void* runtime_class = hit + 19 +
+                                    *reinterpret_cast<const std::int32_t*>(hit + 15);
+        auto name_fn = reinterpret_cast<GetRuntimeClassName>(
+            hit + 24 + *reinterpret_cast<const std::int32_t*>(hit + 20));
+        // All three pointers come from in-module rel32 arithmetic; no allocation, no state changes.
+        const char* name = name_fn != nullptr ? name_fn(runtime_class) : nullptr;
+        if (slot != nullptr && name != nullptr && std::strcmp(name, "WorldChrMan") == 0) {
+            g_world_chr_man_slot = slot;
+            return true;
+        }
+        cursor = hit + 1;
+        left = section.size - static_cast<std::size_t>(cursor - section.begin);
+      }
+    }
+    return false;
+}
+
+bool find_auto_equip_functions(std::uint8_t* module) {
+    Pattern inventory_pattern;
+    Pattern equip_pattern;
+    if (!parse_pattern("48 8d 8f 58 01 00 00 e8 ???????? 8b d8 85 c0 78 6a", inventory_pattern) ||
+        !parse_pattern("57 48 83 ec 20 48 8b f9 48 83 c1 10 e8 ???????? 8b 4f 08 "
+                       "48 8d 57 10 e8 ???????? e8 ???????? 44 8b 47 58", equip_pattern)) {
+        return false;
+    }
+    for (const Section& s : exec_sections(module)) {
+        auto* inv = scan(s.begin, s.size, inventory_pattern);
+        if (inv != nullptr) {
+            g_get_inventory_id = reinterpret_cast<GetInventoryIdFunction>(rel32_target(inv + 7));
+        }
+        auto* eq = scan(s.begin, s.size, equip_pattern);
+        if (eq != nullptr) {
+            g_equip_item = reinterpret_cast<EquipItemFunction>(eq);
+        }
+    }
+    return g_get_inventory_id != nullptr && g_equip_item != nullptr;
+}
+
+void auto_equip(std::uint32_t item_id, int slot) {
+    if (!g_auto_equip.load(std::memory_order_relaxed) || g_get_inventory_id == nullptr ||
+        g_equip_item == nullptr || g_world_chr_man_slot == nullptr || slot < 12 || slot > 15) {
+        return;
+    }
+    void* world = *g_world_chr_man_slot;
+    if (world == nullptr) {
+        return;                       // player has not loaded yet
+    }
+    auto* base = static_cast<std::uint8_t*>(world);
+    // verified elden-x offsets: WorldChrMan::main_player 0x1E508, PlayerIns::game_data 0x580,
+    // PlayerGameData::equip_game_data 0x2B0, EquipGameData::equip_inventory_data 0x158.
+    auto* player = *reinterpret_cast<std::uint8_t**>(base + 0x1E508);
+    if (player == nullptr) {
+        return;
+    }
+    auto* game_data = *reinterpret_cast<std::uint8_t**>(player + 0x580);
+    if (game_data == nullptr) {
+        return;
+    }
+    void* inventory = game_data + 0x2B0 + 0x158;
+    int query = static_cast<int>(item_id);
+    // No SEH here (MinGW cannot compile MS __try): every pointer above was validated, and the two
+    // function addresses come from AOBs verified in the installed executable.
+    const int inventory_slot = g_get_inventory_id(inventory, &query);
+    if (inventory_slot < 0) {
+        return;
+    }
+    EquipItemStruct request{};
+    request.equipment_slot = static_cast<std::uint32_t>(slot);
+    request.inventory_slot = static_cast<std::uint32_t>(inventory_slot);
+    g_equip_item(&request);
+    if (g_log_on) {
+        char line[160] = {};
+        std::snprintf(line, sizeof(line), "auto-equipped %u from slot %d into %d",
+                      item_id, inventory_slot, slot);
+        log_line(line);
+    }
 }
 
 // Every `E8 rel32` in the game's code that calls `target`.  Resolving the calls by arithmetic rather
@@ -448,6 +573,9 @@ private:
 
 // --------------------------------------------------------------------------- the detour
 void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
+    std::uint32_t equip_ids[kGiveCapacity] = {};
+    int equip_slots[kGiveCapacity] = {};
+    std::uint32_t equip_count = 0;
     if (items != nullptr && (!g_manifest.weapons.empty() || !g_manifest.armor.empty())) {
         thread_local loot_variants::Rng rng(g_seed ^ static_cast<std::uint64_t>(GetCurrentThreadId()));
         std::uint32_t count = items->item_struct_count;
@@ -462,24 +590,42 @@ void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
             if (rolled.item_id == before && rolled.ash == loot_variants::kNoAsh) {
                 continue;
             }
-            if (rolled.item_id != before) {
-                item.item_id = rolled.item_id;
-                item.item_quantity = 1;
-                item.item_relayvalue = 0;
+            if (!g_dry_run.load(std::memory_order_relaxed)) {
+                if (rolled.item_id != before) {
+                    item.item_id = rolled.item_id;
+                    item.item_quantity = 1;
+                    item.item_relayvalue = 0;
+                }
+                if (rolled.ash != loot_variants::kNoAsh) {
+                    item.item_ashes_of_war = rolled.ash;
+                }
             }
-            if (rolled.ash != loot_variants::kNoAsh) {
-                item.item_ashes_of_war = rolled.ash;
+            if (g_auto_equip.load(std::memory_order_relaxed) &&
+                (rolled.item_id & loot_variants::kArmorBit) != 0 && equip_count < kGiveCapacity) {
+                const auto piece = g_manifest.armor.find(rolled.item_id & loot_variants::kArmorIdMask);
+                if (piece != g_manifest.armor.end() && piece->second.slot >= 12) {
+                    equip_ids[equip_count] = rolled.item_id;
+                    equip_slots[equip_count] = piece->second.slot;
+                    ++equip_count;
+                }
             }
             g_roll_count.fetch_add(1, std::memory_order_relaxed);
             const std::uint32_t logged = g_rolls_logged.fetch_add(1, std::memory_order_relaxed);
             if (logged < 20) {
-                char line[160] = {};
-                std::snprintf(line, sizeof(line), "roll %u -> %u ash=%08X", before, rolled.item_id, rolled.ash);
+                char line[192] = {};
+                std::snprintf(line, sizeof(line), "%s %u -> %u ash=%08X",
+                              g_dry_run.load(std::memory_order_relaxed) ? "would roll" : "roll",
+                              before, rolled.item_id, rolled.ash);
                 log_line(line);
             }
         }
     }
     g_original(manager, items, details);
+    // Equip after the game has put the granted items into the inventory.  Runs on the give thread,
+    // like the reference randomizer; each call is SEH-guarded and fails soft.
+    for (std::uint32_t i = 0; i < equip_count; ++i) {
+        auto_equip(equip_ids[i], equip_slots[i]);
+    }
 }
 
 // --------------------------------------------------------------------------- init
@@ -568,6 +714,18 @@ DWORD WINAPI init_thread(LPVOID) {
     if (!module_range(GetModuleHandleW(nullptr), module, module_size)) {
         log_line("loot_variants: cannot read the game's PE headers - inert");
         return 0;
+    }
+
+    int auto_equip_enabled = 0;
+    if (have_ini) {
+        ini_int(ini, L"auto_equip", L"enabled", auto_equip_enabled);
+    }
+    if (auto_equip_enabled != 0 &&
+        find_world_chr_man(module) && find_auto_equip_functions(module)) {
+        g_auto_equip.store(true);
+        log_line("loot_variants: auto-equip ready (optional, armour only)");
+    } else if (auto_equip_enabled != 0) {
+        log_line("loot_variants: auto-equip requested but a game function could not be resolved - off");
     }
 
     struct Site {

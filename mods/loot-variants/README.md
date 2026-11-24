@@ -78,6 +78,12 @@ rolled_level`:
   `0x10000000 | level << 24 | base` — the layout whose `level << 24` field is stored in each
   `ReinforceParamProtector` row.  Pieces that cannot be reinforced are omitted.  Set `[armor]
   enabled = 0` in the ini to leave armour alone.
+
+Optional, off by default: `[auto_equip] enabled = 1` calls the game's own equip function right after
+the grant, putting the rerolled piece into its head/body/arms/legs slot (the slot travels in the
+manifest). It stays inert if the singleton or either function cannot be resolved. `[general]
+dry_run = 1` logs `would roll …` without changing any item — useful to confirm the hook is live
+before you commit to a run.
 * Ammo, talismans, goods, Ashes themselves and any weapon or armour piece not in the manifest pass
   through untouched.  So do cut rows with an affinity outside 0–12.
 

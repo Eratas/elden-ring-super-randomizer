@@ -140,14 +140,16 @@ void test_armor() {
     const std::string text =
         "MADLOVE-LOOT-VARIANTS 2\n"
         "weapon 1000000 25 1 0 - - - - - - - - - - - -\n"
-        "armor 40000 10\n"
-        "armor 50000 0\n"
+        "armor 40000 10 12\n"
+        "armor 50000 0 13\n"
         "armor 20000000 10\n";          // > 0x00FFFFFF: malformed, must be rejected
     loot_variants::Manifest m;
     std::string error;
     CHECK(loot_variants::parse_manifest(text, m, error));
     CHECK_EQ(m.bad_lines, 1);
     CHECK_EQ(m.armor.size(), 2);
+    CHECK_EQ(m.armor[40000].slot, 12);
+    CHECK_EQ(m.armor[50000].max_level, 0);
 
     loot_variants::Options options;
     options.level_curve = loot_variants::kCurveEven;

@@ -1567,6 +1567,54 @@ def run_self_test() -> tuple[int, int]:
     return _CHECKS, len(_FAILS)
 
 
+def test_backup_full_msg() -> None:
+    """A rollback covers every file in msg/, not just item_dlc02.msgbnd.dcx."""
+    import json
+
+    import backup
+
+    root = Path(tempfile.mkdtemp(prefix="backup-msg-test-"))
+    saved = backup.program_dir
+    backup.program_dir = lambda: root
+    try:
+        src = root / "regulation.bin"
+        src.write_bytes(b"REG")
+        msg = root / "input" / "msg"
+        (msg / "engus").mkdir(parents=True)
+        (msg / "engus" / backup.ARCHIVE_NAME).write_bytes(b"ITEM")
+        (msg / "engus" / "menu_dlc02.msgbnd.dcx").write_bytes(b"MENU")
+        (msg / "engus" / "sub").mkdir()
+        (msg / "engus" / "sub" / "extra.txt").write_bytes(b"EXTRA")
+        given = backup.detected_archives(src, [msg])
+        check(len(given) == 3, f"detected_archives found {len(given)} msg files, expected 3")
+        files = backup.collect_files(src, given)
+        check(len(files) == 4, f"collect_files found {len(files)} files, expected 4")
+        made = backup.make_backup(files)
+        check(made is not None, "make_backup returned None for the full msg tree")
+        check(backup.verify_backup(made) == [], f"a fresh backup failed verification: {backup.verify_backup(made)}")
+        info = backup.backup_info(made)
+        check(info["files"] == 4, f"backup_info says {info['files']} files, expected 4")
+        first = next((made / e["name"] for e in json.loads(
+            (made / backup.MANIFEST).read_text(encoding="utf-8")) if "menu" in e["name"]), None)
+        check(first is not None, "the menu archive was not backed up")
+        if first is not None:
+            first.write_bytes(b"TAMPERED")
+            problems = backup.verify_backup(made)
+            check(any("checksum changed" in p or "size changed" in p for p in problems),
+                  f"verify_backup did not notice a tampered file: {problems}")
+            first.write_bytes(b"MENU")
+        src.write_bytes(b"CLOBBERED")
+        for p in given:
+            p.write_bytes(b"CLOBBERED")
+        check(len(backup.restore(made)) == 4, "restore did not return all four files")
+        check(src.read_bytes() == b"REG", "regulation.bin was not restored")
+        check((msg / "engus" / "menu_dlc02.msgbnd.dcx").read_bytes() == b"MENU",
+              "the menu archive was not restored")
+    finally:
+        backup.program_dir = saved
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_install_runtime() -> None:
     """The optional DLL installer: copies once, keeps the ini, and fails cleanly."""
     import install_runtime
@@ -1616,7 +1664,7 @@ def main() -> int:
             fuzz_path = args[i + 1]
 
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
-                               test_dropshuffle_protection, test_install_runtime):
+                               test_dropshuffle_protection, test_backup_full_msg, test_install_runtime):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

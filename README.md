@@ -519,7 +519,7 @@ so — a missing vendor degrades, it never crashes.
 
 ---
 
-## Backups and revert
+## Backups, revert and rollback
 
 When **Backup and replace** is on (the default), a run that would overwrite your files first copies them
 aside:
@@ -528,13 +528,21 @@ aside:
 <program>\backups\20261119-204453\
   00_regulation.bin
   01_item_dlc02.msgbnd.dcx
-  manifest.json          <- which file goes back where
+  02_menu_dlc02.msgbnd.dcx
+  ...                    <- every file in every msg/<language> folder
+  manifest.json          <- where each file goes, its size and SHA-256
 ```
 
-The originals keep their bytes and timestamps. **Revert** (next to the *Backup* button) restores the most
-recent backup: every file in it goes back to where it came from. The 20 newest backups are kept, older ones
-are pruned automatically. A revert with a missing or corrupt manifest fails softly and says so rather than
-guessing. **Backup** makes a backup on demand, without running anything.
+The originals keep their bytes and timestamps. A backup is assembled in a staging folder and renamed into
+place only once its manifest is complete, so an interrupted run cannot leave a half-built restore point.
+
+- **Backup** copies the input regulation and the *whole* msg tree on demand, using the same archive
+  discovery a real run uses.
+- **Revert** restores the most recent backup.
+- **Rollback** lets you pick any saved backup, checks its checksums first, then restores every file in it.
+
+The 20 newest backups are kept, older ones are pruned automatically. A restore with a missing, partial or
+tampered manifest fails softly and says so rather than guessing.
 
 Turn the option off (**--no-backup-replace**) to write only to the output folder and leave your input
 files untouched. The tool never writes into the input's own folder unless you asked it to replace it.

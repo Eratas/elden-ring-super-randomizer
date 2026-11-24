@@ -6,12 +6,16 @@ files the user pointed at - their ``regulation.bin`` and the ``msg/<lang>/item_d
 archives - into a timestamped backup folder under ``<program>/backups/`` **before** overwriting
 them with the freshly generated ones.  A revert puts every file back exactly where it came from.
 
-A backup folder holds the copied files plus a ``manifest.json`` that records each file's original
-absolute path, so a revert does not have to guess where anything belongs.  Backups are plain
-folders: a user can browse, copy or delete them with Explorer.
+Unlike the old version, a backup covers **every file in the msg language folders**, not just
+``item_dlc02.msgbnd.dcx``: if a mod adds menu or caption archives, rollback still restores them.
+A backup folder is built in a staging directory and renamed into place only once its manifest is
+complete, so an interrupted run never leaves a half-created restore point.  The manifest records each
+file's original absolute path, size and SHA-256, so a rollback can tell whether a backup is intact.
+Backups are plain folders: a user can browse, copy or delete them with Explorer.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -56,9 +60,34 @@ def _archive_files(archives: list[Path]) -> list[Path]:
     return out
 
 
+def _digest(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _msg_files(archives: list[Path]) -> list[Path]:
+    """Every file under the given msg folders - not just item_dlc02.msgbnd.dcx.
+
+    A mod can ship item, menu, caption and script archives.  Backing up only the one the name pass
+    touches used to lose everything else in a rollback.  Explicit files are accepted unchanged.
+    """
+    out: list[Path] = []
+    for a in archives:
+        p = Path(a)
+        if p.is_dir():
+            out.extend(sorted(x for x in p.rglob("*") if x.is_file()))
+        elif p.is_file():
+            out.append(p)
+    # deterministic, and stable even when the caller passes overlapping folders
+    return list(dict.fromkeys(p.resolve() for p in out))
+
+
 def collect_files(input_file: Path, archives: list[Path]) -> list[Path]:
-    """The files a backup would cover: the input regulation.bin plus every msg archive file."""
-    return [Path(input_file)] + _archive_files(archives)
+    """The files a backup covers: the input regulation.bin plus every file in the msg folders."""
+    return [Path(input_file)] + _msg_files(archives)
 
 
 def detected_archives(input_file: Path, given=()) -> list[Path]:
@@ -69,11 +98,11 @@ def detected_archives(input_file: Path, given=()) -> list[Path]:
     input mod's ``msg/<language>/item_dlc02.msgbnd.dcx`` files are exactly the ones the game loads
     next to that regulation.bin, so they are the ones to copy before replacing them.
     """
-    files = _archive_files([Path(a) for a in given])
+    files = _msg_files([Path(a) for a in given])
     if files:
         return files
     msg = Path(input_file).resolve().parent / "msg"
-    return sorted(msg.glob(f"*/{ARCHIVE_NAME}")) if msg.is_dir() else []
+    return _msg_files([msg]) if msg.is_dir() else []
 
 
 def program_dir() -> Path:
@@ -103,13 +132,23 @@ def make_backup(files: list[Path]) -> Path | None:
     while dest.exists():
         suffix += 1
         dest = backup_root() / f"{stamp}-{suffix}"
-    dest.mkdir(parents=True, exist_ok=True)
-    manifest: list[dict[str, str]] = []
-    for index, src in enumerate(existing):
-        target = dest / f"{index:02d}_{src.name}"
-        shutil.copy2(src, target)
-        manifest.append({"name": target.name, "original": str(src.resolve())})
-    (dest / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+    staging = backup_root() / f".staging-{dest.name}"
+    if staging.exists():
+        shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True, exist_ok=True)
+    manifest: list[dict] = []
+    try:
+        for index, src in enumerate(existing):
+            target = staging / f"{index:02d}_{src.name}"
+            _atomic_copy(src, target)
+            manifest.append({"name": target.name, "original": str(src.resolve()),
+                             "size": src.stat().st_size, "sha256": _digest(src)})
+        # The manifest is written last: until it exists, list_backups() ignores the staging folder.
+        (staging / MANIFEST).write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+        os.replace(staging, dest)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     prune_backups()
     return dest
 
@@ -128,7 +167,8 @@ def prune_backups(keep: int = KEEP_BACKUPS) -> int:
     removed = 0
     for old in backups[keep:]:
         shutil.rmtree(old, ignore_errors=True)
-        removed += 1
+        if not old.exists():
+            removed += 1
     return removed
 
 
@@ -149,6 +189,44 @@ def restore(backup: Path) -> list[Path]:
     return restored
 
 
+def backup_info(backup: Path) -> dict:
+    """A short summary a rollback picker can show: folder name, file count, total bytes."""
+    manifest = json.loads((Path(backup) / MANIFEST).read_text(encoding="utf-8"))
+    return {"name": Path(backup).name, "files": len(manifest),
+            "bytes": sum(int(e.get("size", 0)) for e in manifest)}
+
+
+def verify_backup(backup: Path) -> list[str]:
+    """Problems that would make a rollback partial: missing or changed copied files."""
+    problems: list[str] = []
+    folder = Path(backup)
+    try:
+        manifest = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return [f"cannot read {MANIFEST}: {e}"]
+    if not isinstance(manifest, list):
+        return [f"{MANIFEST} is not a list"]
+    for entry in manifest:
+        try:
+            name = Path(entry["name"]).name
+            original = Path(entry["original"])
+            src = folder / name
+        except (KeyError, TypeError):
+            problems.append("a manifest entry is malformed")
+            continue
+        if not src.is_file():
+            problems.append(f"{name}: missing from the backup")
+            continue
+        expected = entry.get("sha256")
+        if expected and _digest(src) != expected:
+            problems.append(f"{name}: checksum changed")
+        if entry.get("size") is not None and src.stat().st_size != entry["size"]:
+            problems.append(f"{name}: size changed")
+        if not original.is_absolute():
+            problems.append(f"{name}: original path is not absolute")
+    return problems
+
+
 def backup_and_replace(input_file: Path, output_file: Path, archives: list[Path]) -> Path | None:
     """Back up the user's input files, then copy the generated output over them.
 
@@ -162,7 +240,7 @@ def backup_and_replace(input_file: Path, output_file: Path, archives: list[Path]
     input_file = Path(input_file)
     output_file = Path(output_file)
     archive_files = _archive_files(archives)
-    backup = make_backup([input_file] + archive_files)
+    backup = make_backup(collect_files(input_file, archives))
     if backup is None:
         return None
     # replace the regulation.bin
