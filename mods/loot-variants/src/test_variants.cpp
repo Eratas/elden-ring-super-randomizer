@@ -84,9 +84,10 @@ void test_parser() {
     const std::string broken = std::string("MADLOVE-LOOT-VARIANTS 1\n") +
                                "weapon 1000000 25 8191 0 0 0\n" +
                                "weapon 1000000 25 8191 0 0 0 0 0 0 0 0 0 0 0 0 0\n" +
+                               "weapon 1000000 10 1 0 - - - - - - - - - - - -\n" +  // duplicate id
                                "nonsense 1 2 3\n";
     CHECK(loot_variants::parse_manifest(broken, partial, error));
-    CHECK_EQ(partial.bad_lines, 2);
+    CHECK_EQ(partial.bad_lines, 3);
     CHECK_EQ(partial.weapons.size(), 1);
 
     loot_variants::Manifest rejected;
@@ -142,12 +143,15 @@ void test_armor() {
         "weapon 1000000 25 1 0 - - - - - - - - - - - -\n"
         "armor 40000 10 12 40000 41000 42000\n"
         "armor 50000 0 13\n"
+        "armor 60000 10\n"              // v1/v2 line without slot still parses
         "armor 20000000 10\n";          // > 0x00FFFFFF: malformed, must be rejected
     loot_variants::Manifest m;
     std::string error;
     CHECK(loot_variants::parse_manifest(text, m, error));
     CHECK_EQ(m.bad_lines, 1);
-    CHECK_EQ(m.armor.size(), 2);
+    CHECK_EQ(m.armor.size(), 3);
+    CHECK_EQ(m.armor[60000].slot, -1);
+    CHECK(m.armor[60000].ids.size() == 1 && m.armor[60000].ids[0] == 60000);
     CHECK_EQ(m.armor[40000].slot, 12);
     CHECK_EQ(m.armor[40000].ids.size(), 3);
     CHECK_EQ(m.armor[50000].ids.size(), 1);      // old v2 line without ids still works

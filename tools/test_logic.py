@@ -1657,6 +1657,31 @@ def test_install_runtime() -> None:
             check(False, "install_runtime: a missing target folder was accepted")
 
 
+def test_rarity_label_tables() -> None:
+    """The two name FMGs share ids; tags must come from the matching table and never inject a missing FMG."""
+    import rarity_labels
+
+    saved = rarity_labels.read_names
+    try:
+        rarity_labels.read_names = lambda _p: {"WeaponName": {1000000: "Dagger"}, "ProtectorName": {}}
+        labels = rarity_labels.RarityLabels.__new__(rarity_labels.RarityLabels)
+        labels.rarity = {"WeaponName": {1000000: "RARE"}, "ProtectorName": {1000000: "COMMON"}}
+        texts: dict = {}
+        touched, total = labels.apply_to(Path("fake.msgbnd.dcx"), texts)
+        check(touched == 1 and total == 2, f"rarity labels: touched {touched} of {total} ids")
+        check(texts.get("WeaponName", {}).get(1000000) == "Dagger [RARE]",
+              "rarity labels: the weapon got the protector's tag")
+        check("ProtectorName" not in texts, "rarity labels: an FMG absent from the archive was injected")
+        # An old tag must be replaced, not stacked, when the row's rarity changes.
+        rarity_labels.read_names = lambda _p: {"WeaponName": {1000000: "Dagger [COMMON]"}, "ProtectorName": {}}
+        labels.rarity["WeaponName"][1000000] = "RARE"
+        texts = {}
+        labels.apply_to(Path("fake.msgbnd.dcx"), texts)
+        check(texts["WeaponName"][1000000] == "Dagger [RARE]", "rarity labels: tags stacked")
+    finally:
+        rarity_labels.read_names = saved
+
+
 def test_release_package() -> None:
     """A release zip is an additive whitelist: no settings, saves or backups leak into it."""
     import zipfile
@@ -1674,6 +1699,7 @@ def test_release_package() -> None:
     (dist / "randomized").mkdir()
     (dist / "randomized" / "regulation.bin").write_bytes(b"save")
     try:
+        pack_release.ensure_docs(dist)      # the real packer stages the root docs into dist
         files = pack_release.collect_release_files(dist)
         names = {p.as_posix() for p in files}
         check("EldenRingSuperRandomizer.exe" in names, "the release omits the executable")
@@ -1727,7 +1753,7 @@ def main() -> int:
 
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
                                test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
-                               test_presets, test_release_package):
+                               test_presets, test_release_package, test_rarity_label_tables):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

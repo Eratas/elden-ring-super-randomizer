@@ -1169,6 +1169,7 @@ class App:
         self._remember_paths(force=True)
         self._save(now=True)
         self.running = True
+        self._set_actions(False)
         self._failed = False
         self._t0 = time.monotonic()
         self.status.set(self.t("ui:working", "working ..."))
@@ -1287,6 +1288,8 @@ class App:
 
     def _backup_now(self) -> None:
         """Copy the input files into a timestamped backup, without running anything."""
+        if self.running:
+            return
         import backup
         # Use the same validation and archive discovery a real run uses.  The raw widget values are
         # StringVars for path rows, so passing them straight to collect_files used to back up only
@@ -1313,6 +1316,8 @@ class App:
 
     def _install_dll(self) -> None:
         """Copy the optional native mod to the Mod Engine dll/offline folder, no run involved."""
+        if self.running:
+            return
         target = install_runtime.find_target()
         if target is None:
             chosen = filedialog.askdirectory(
@@ -1320,7 +1325,13 @@ class App:
             if not chosen:
                 return
             target = Path(chosen)
-        if not messagebox.askokcancel(
+        if install_runtime.find_dll() is None:
+            messagebox.showerror(self.t("ui:install_failed", "Install failed"),
+                                 self.t("ui:install_no_dll", "The built loot_variants.dll was not found. "
+                                                             "Run mods/loot-variants/build.ps1 first."),
+                                 parent=self.root)
+            return
+        if not messagebox.askyesno(
                 self.t("ui:install_dll", "Install DLL"),
                 self.t("ui:install_dll_body", "Install the loot-variants DLL in:\n{0}\n\n"
                                               "No regulation or save file is changed.").format(target),
@@ -1340,6 +1351,8 @@ class App:
 
     def _revert(self) -> None:
         """Restore the most recent backup, after a confirmation."""
+        if self.running:
+            return
         import backup
         backups = backup.list_backups()
         if not backups:
@@ -1356,13 +1369,16 @@ class App:
                 parent=self.root):
             return
         try:
-            restored = backup.restore(latest) if (latest / backup.MANIFEST).is_file() else []
-        except (OSError, ValueError):
+            problems = backup.verify_backup(latest)
+            restored = [] if problems else backup.restore(latest)
+            reason = "; ".join(problems[:8]) if problems else ""
+        except (OSError, ValueError) as error:
             restored = []
+            reason = str(error)
         if not restored:
             messagebox.showerror(self.t("ui:revert_failed", "Revert failed"),
-                                 self.t("ui:revert_failed_body", "Could not read the backup manifest in:\n{0}")
-                                 .format(latest), parent=self.root)
+                                 self.t("ui:revert_failed_detail", "Could not restore from:\n{0}\n{1}")
+                                 .format(latest, reason), parent=self.root)
             return
         self._log(f"# revert: {len(restored)} file(s) restored from {latest}", True)
         messagebox.showinfo(self.t("ui:revert_done", "Reverted"),
@@ -1372,6 +1388,8 @@ class App:
 
     def _rollback(self) -> None:
         """Restore a *chosen* backup, including every msg file it holds."""
+        if self.running:
+            return
         import backup
         backups = backup.list_backups()
         if not backups:
@@ -1398,8 +1416,10 @@ class App:
             return
         try:
             info = backup.backup_info(folder)
-        except (OSError, ValueError):
-            info = {"files": len(backups), "bytes": 0}
+        except (OSError, ValueError) as error:
+            messagebox.showerror(self.t("ui:rollback_failed", "Rollback failed"), str(error),
+                                 parent=self.root)
+            return
         if not messagebox.askyesno(
                 self.t("ui:rollback_title", "Roll back to this backup?"),
                 self.t("ui:rollback_body", "Restore {0} file(s) from\n{1}\n\n"
@@ -1423,8 +1443,18 @@ class App:
                             self.t("ui:rollback_done_body", "{0} file(s) restored from:\n{1}").format(
                                 len(restored), folder), parent=self.root)
 
+    def _set_actions(self, enabled: bool) -> None:
+        """Backup/Rollback/Install touch the same files a run does: never let them race the worker."""
+        state = "normal" if enabled else "disabled"
+        for name in ("open_btn", "backup_btn", "revert_btn", "rollback_btn", "install_btn",
+                     "repack_btn", "sim_btn", "preview_btn", "run_btn"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.configure(state=state)
+
     def _finish(self) -> None:
         self.running = False
+        self._set_actions(True)
         self.clock.set("")
         self.progress.stop()
         self.progress.configure(mode="determinate")

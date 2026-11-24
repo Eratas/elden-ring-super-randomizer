@@ -4,9 +4,9 @@ A window and a command line tool for [b]regulation.bin[/b] — the single parame
 
 Written for game version [b]1.17.1[/b] (Shadow of the Erdtree included) and the [url=https://www.nexusmods.com/site/mods/617]Mod Engine 2[/url] [b]1.4[/b] / [b]ERR[/b] mod loaders. Vanilla, the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url] and [url=https://www.nexusmods.com/eldenring/mods/11542]Elden Ring Reforged[/url] output all work as input, so you can stack this on top of them.
 
-[quote][b]What's new in v1.0.7[/b] — [b]enemy drops are now a pure chance roll[/b]: each kill rolls [i]Rolls per enemy[/i] dice and every die lands at [i]Chance per roll[/i], so a kill can give nothing, one item or several (default 3 dice at 25%; 0 still means one guaranteed item). All loot options — the drop table, the upgrade level of what drops, unique weapons, materials and the four "move to another enemy" passes — now live in one [b]Loot and upgrade levels[/b] section. Every tooltip was rewritten as three plain paragraphs of facts with an example, for readers who have never seen the tool. Full notes in the [url=#changelog]Changelog[/url].[/quote]
+[quote][b]What's new in v1.0.8[/b] — [b]loot keeps its identity but not its stats.[/b] The optional runtime DLL rerolls affinity, level and Ash on every weapon pickup, and the reinforcement level (plus optional stat clones) on every armour pickup, so five copies of one sword are five different swords. A new [b]Borderlands armory[/b] preset, --rarity-labels, a full msg/ backup with [b]Rollback[/b], an [b]Install DLL[/b] button and a one-command release zip are included. Full notes in the [url=#changelog]Changelog[/url].[/quote]
 
-[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.7[/b], last updated [b]2026-11-22[/b].
+[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.8[/b], last updated [b]2026-11-24[/b].
 
 [code]
 Files and output
@@ -76,6 +76,8 @@ D:\mods\my-mod\
   spells.txt              <- spell effects, spell stats
   drops.txt               <- enemy drop tables
   hp.txt, runes.txt       <- enemy hit points and rune drops
+  loot_variants.txt       <- CONTENT: copy this beside regulation.bin when using the runtime DLL
+  variants.txt            <- the human-readable report of the same data (do NOT copy this one)
 [/code]
 
 With Mod Engine 2:
@@ -99,29 +101,28 @@ Stacking with the Item and Enemy Randomizer / Fog Gate Randomizer: run their con
 [*] [b]Shops[/b] | every merchant slot is refilled from a curated pool of real items (no debug rows, no "Type N" armour, no Depleted Ash); a shop never repeats an item in one run, and small general shops are filled to at least 40 rows when the pools allow it — prices untouched
 [*] [b]Weapons[/b] | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; [b]requirements are derived from the scaling the row actually received[/b], so a Strength/Arcane split asks for both and a 20-Strength requirement never lands on an S-Arcane weapon; [b]Chaotic weapon effects[/b] has its own section: [b]Shuffle on-hit bundles[/b] and [b]Shuffle held bundles[/b] move the complete effect bundle (including its text ids) inside a class, [b]Roll chaotic statuses[/b] gives each row 0–2 real statuses from the input's own SpEffect table with matching text and no repeated family, and [b]Chaotic statuses on loot only[/b] limits that roll to weapons that appear in loot
 [*] [b]Ashes of War[/b] | every Ash of War can receive another ash's [b]skill[/b] (Lion's Claw becomes Sky Shot) and/or another ash's [b]on-hit effects[/b]; donors come only from ashes that fit the same weapon types, and the two switches are independent
-[*] [b]Loot[/b] | enemy drop tables rerolled (choose the kinds); N independent rolls per enemy at P% each (default 3 at 25%, so a kill drops 0–3 items and 0.75 on average; 0 rolls = one guaranteed item); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a [b]rarity curve[/b], and [b]bosses roll a better curve[/b]; [b]rare unique weapons[/b] and [b]upgrade materials[/b] can turn up; every category can be [b]moved between enemies[/b], armour sets as a set
-[*] [b]Armour & talismans[/b] | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally [b]keeping each set coherent[/b]), or move armour to different enemies; talismans shuffle whole rows and can move between enemies
+[*] [b]Loot[/b] | enemy drop tables rerolled (choose the kinds); N independent rolls per enemy at P% each (default 3 at 25%, so a kill drops 0–3 items and 0.75 on average; 0 rolls = one guaranteed item); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a [b]rarity curve[/b], and [b]bosses roll a better curve[/b]; [b]rare unique weapons[/b] and [b]upgrade materials[/b] can turn up; every category can be [b]moved between enemies[/b], armour sets as a set [b]Loot variants[/b] (--loot-variants) writes a small manifest for the optional runtime DLL, which rerolls affinity, level and Ash on every weapon pickup.
+[*] [b]Armour & talismans[/b] | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally [b]keeping each set coherent[/b]), or move armour to different enemies; talismans shuffle whole rows and can move between enemies [b]Stat variants[/b] (--armor-variants) clones rows with the same look and chosen stat columns for the runtime to hand out; --rarity-labels tags item names.
 [*] [b]Enemies[/b] | rune drops (NpcParam.getSoul) and hit points (NpcParam.hp) shuffled, redrawn in a range, or scaled per band; bosses can be scaled back up and their runes coupled to their hit points
 [*] [b]World[/b] | the Flask of Crimson Tears and the Flask of Cerulean Tears move to a random pickup / boss reward / gift / merchant, and what was there goes to the first Site of Grace; start with the Spirit Calling Bell and/or the Lantern
 [*] [b]Checking a seed[/b] | a [b]loot simulator[/b] builds the tables in memory and shows what N random kills dropped, without writing or compressing anything
-[*] [b]Safety[/b] | [b]backup and replace[/b] copies regulation.bin [b]and every text archive it replaces[/b] aside before overwriting them, and [b]Revert[/b] puts them back; the output folder is a separate copy with the logs
+[*] [b]Safety[/b] | [b]backup and replace[/b] copies regulation.bin [b]and the whole msg folder[/b] aside before overwriting them; [b]Revert[/b] restores the newest backup and [b]Rollback[/b] picks any backup, checks its checksums and restores it. [b]Install DLL[/b] copies the optional native mod into Mod Engine.
 [*] [b]Output[/b] | kraken (the game's own Oodle format, needs the game's oo2core_6_win64.dll), leviathan, zstd (no DLL, larger), or auto; fast or maximum effort; --repack repairs a regulation.bin another tool wrote in a form the game rejects
 [/list]
 
-[b]Not included[/b]: a character-creation / starting-class randomizer, a regulation.bin [b]enemies-and-bosses[/b] randomizer (that is the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url]'s job), connectivity / seamless co-op, an Elden Ring installation, an unpacked game, the game's DLL.
+[b]Not included[/b]: a character-creation / starting-class randomizer, a regulation.bin [b]enemies-and-bosses[/b] randomizer (that is the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url]'s job), connectivity / seamless co-op, an Elden Ring installation, an unpacked game, the game's own Oodle DLL (not shipped).
 
 [b]Static file vs. runtime mod — what "random" can mean here[/b]
 
-regulation.bin is one table shared by the whole game. Every copy of a Longsword reads the same rows, so [b]two copies of the same weapon can never have different stats in a static file[/b] — that needs a runtime mod. What this tool does instead:
+regulation.bin is one table shared by the whole game: every copy of a Longsword reads the same rows, so [b]per-pickup variety needs a runtime mod[/b]. This tool ships both halves:
 
 [list]
-[*] every [b]affinity row[/b] of a weapon gets its own stats, so "Longsword (Heavy)" and "Longsword (Keen)" are different weapons (13 rows per weapon);
-[*] the [b]affinity[/b] of a dropped weapon is rerolled, so two Longsword drops usually are not the same weapon at all;
-[*] the [b]upgrade level[/b] of a dropped weapon is rerolled, so a drop can be +2 or +18;
-[*] with several rolls per enemy, every kill rolls the drop table again, so the same enemy can hand you a different weapon each time.
+[*] the [b]static rewrite[/b] gives every affinity row its own stats, rerolls the affinity and upgrade level of dropped weapons, scrambles armour columns, and rolls the drop table again on every kill;
+[*] --loot-variants writes loot_variants.txt, a small manifest the optional loot_variants.dll reads at pickup time. The DLL draws a fresh affinity, level and Ash for weapons and a fresh reinforcement level (and optional stat clone) for armour, while the model and moveset stay recognisable;
+[*] without the DLL the regulation is still a complete random run — the manifest is simply unused.
 [/list]
 
-That is as close to Borderlands-style loot as a static rewrite gets.
+--install-runtime (or the window's [b]Install DLL[/b] button) copies the DLL into the Mod Engine folder. That is the Borderlands-style layer; the static file alone cannot do it.
 
 [line]
 
@@ -133,6 +134,8 @@ Twelve collapsible sections, ordered by what most runs need first: [b]Files and 
 [*] [b]Presets[/b] — a dropdown in the title bar loads a whole coherent set of options in one click; any manual change turns the box into [b]Custom[/b]. Save your own with [i]Save preset[/i], move them between installs with [i]Export / Import[/i] in the Advanced section, delete them with [i]Delete[/i] (built-ins cannot be deleted).
 [*] [b]Backup and replace[/b] (Files and output, on by default) — before the generated file replaces your input, the tool copies every file it is about to overwrite into a timestamped backups\<date-time>\ folder next to the program, with a manifest.json recording where each file came from. [b]Revert[/b] restores the most recent one; the twenty newest are kept. Turn the option off to write only to the output folder and leave your files alone. Details below.
 [*] [b]Open output folder[/b] — opens the output folder in Explorer.
+[*] [b]Backup / Revert / Rollback[/b] — copy the input files (including the whole msg tree) aside, restore the newest backup, or choose any backup and check its checksums before restoring it.
+[*] [b]Install DLL[/b] — copies the optional loot-variants native mod into the Mod Engine dll/offline folder. It writes no game data and can be used before or after a run.
 [*] [b]Loot simulator[/b] — pick how many kills (1–200) and a seed; it builds the tables with the settings currently ticked and lists what those kills dropped, weapon affinity and upgrade level included. Nothing is written, nothing is compressed, so it costs seconds. The safe way to judge a seed.
 [*] [b]Find[/b] next to the input field, the Oodle DLL and the text-archive folder searches this machine (Steam library, the usual Games folders, mod folders) and fills the field with the first hit; the others land in the dropdown.
 [*] [b]Language[/b] — the [b]Aa[/b] dropdown, top right. It changes the window only: reports, console output and the game text stay in English. English plus thirteen complete packs: German, Spanish, French, Italian, Dutch, Polish, Portuguese (Brazil), Swedish, Finnish, Russian, Japanese, Korean, Simplified Chinese. Adding one more is a single file, tools/lang_<code>.py — anything missing falls back to English per string, so a half-finished pack still runs. Start in a given language with python tools/gui.py --lang pt.
@@ -153,7 +156,8 @@ Twelve collapsible sections, ordered by what most runs need first: [b]Files and 
 [*] [b]Preset | What it is for[/b]
 [*] [b]Gentle start[/b] | consumables, spells, prices and buffs only. The safest first run.
 [*] [b]Classic randomizer[/b] | the traditional set: effects and prices. Weapons stay as they are.
-[*] [b]Borderlands loot[/b] | any enemy drops any weapon at a random affinity, upgrade level and stat roll, three rolls per kill at 100%, so every kill drops three things.
+[*] [b]Borderlands loot[/b] | any enemy drops any weapon at a random affinity, upgrade level and stat roll, three rolls per kill at 100%, so every kill drops three things. With the runtime DLL, each pickup rolls its own affinity, level and Ash.
+[*] [b]Borderlands armory[/b] | the gear version: armour and talismans drop everywhere, each piece gets fresh stats, and the runtime DLL rolls a new reinforcement level (and optional stat clone) per pickup.
 [*] [b]Loot and stats[/b] | weapons get new movesets, skills and stats, and every weapon can drop anywhere.
 [*] [b]Armor and talismans[/b] | armour numbers shaken and rolled, sets coherent, armour and talismans lootable anywhere.
 [*] [b]Ashes of War[/b] | every ash gets another ash's skill and effects, and ashes drop from any enemy.
@@ -501,6 +505,8 @@ The tool is fully offline: it makes no network requests, downloads nothing, and 
 [/list]
 
 [heading]Changelog[/heading]
+
+[b]1.0.8[/b] — 2026-11-24 — [b]per-pickup loot with an optional runtime DLL.[/b] --loot-variants writes a manifest the DLL uses to roll a fresh affinity, level and Ash per weapon pickup, and a fresh +0..+10 level (plus --armor-variants stat clones) per armour pickup. Adds --rarity-labels, a Borderlands armory preset, a full-msg backup with checksums and a Rollback button, an Install DLL button, and pack_release.ps1 for a player-ready zip.
 
 [b]1.0.7[/b] — 2026-11-22 — [b]enemy drops are a chance roll again[/b]: each kill rolls [i]Rolls per enemy[/i] independent dice and every die lands at [i]Chance per roll[/i] (default 3 at 25%), so a kill can give nothing, one item or several, and 0 is the only way to ask for a guaranteed item. The drop passes, --random-loot-levels and the four "move to another enemy" passes now share one [b]Loot and upgrade levels[/b] section, the remaining section is [b]Enemies: health and runes[/b], and [i]Move armor sets as a set[/i] sits under its parent. [b]Every tooltip was rewritten[/b] as at most three plain paragraphs of facts plus an example, with no references to earlier builds of the tool; the 13 language packs carry the new drop and size-limit tips. --enemy-drop-chance defaults to 25 and the drop presets were rebalanced for the new model.
 

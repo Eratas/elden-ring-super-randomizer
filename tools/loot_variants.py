@@ -36,11 +36,12 @@ animations (weapons.py `_restrict_ash_affinities`), so the pool follows the move
 A weapon where nothing can change (one affinity, no upgrades, no Ash) is left out of the manifest, so
 the mod keeps unique quest weapons exactly as the table has them.
 
-Armour has no affinity rows: the same helmet can only be +0..+10.  Those levels are real stats (damage
-negation and resistances scale through ReinforceParamProtector), so the runtime mod rerolls just the
-level while keeping the piece - and therefore the appearance - identical.  Only pieces that can be
-reinforced are listed; the give id is `0x10000000 | level << 24 | base`, the layout the game uses for
-upgraded armour (and the same `level << 24` field ReinforceParamProtector stores).
+Armour has no affinity rows.  The runtime rerolls the piece's reinforcement level (+0..+10 for vanilla)
+and, when --armor-variants is on, also picks one of a few cloned rows whose selected stat columns were
+changed while every appearance field stayed the same.  The give id is
+`0x10000000 | level << 24 | chosen_id`, the layout the game uses for upgraded armour (and the same
+`level << 24` field ReinforceParamProtector stores).  Only pieces the reinforcement table can handle
+are listed.
 
 The mod is optional.  Without it the regulation is still a complete run and this option only writes
 the manifest; with it, `loot_variants.txt` has to sit next to `loot_variants.dll` or next to
@@ -130,6 +131,23 @@ class Variants:
         self.armor = self._build_armor(armor_variants or {})
 
     # ------------------------------------------------------------ the armour
+    def _armor_ceilings(self) -> dict[int, int]:
+        """reinforceTypeId -> highest +N in ReinforceParamProtector (0..10 and 100..105 in vanilla)."""
+        try:
+            table = erreg.Param.loose(self.reg, "ReinforceParamProtector")
+        except (ValueError, KeyError, AttributeError):
+            return {}
+        ids = {r.id for r in table.rows}
+        out: dict[int, int] = {}
+        for track in ids:
+            first = 0 if track == 0 else track * 100
+            top = 0
+            while first + top in ids:
+                top += 1
+            if top:
+                out[track] = top - 1
+        return out
+
     def _build_armor(self, armor_variants: dict[int, tuple[int, ...]]) -> dict[int, tuple[int, int, tuple[int, ...]]]:
         """base id -> highest reinforcement level, for named pieces the smith can actually upgrade.
 
@@ -142,13 +160,22 @@ class Variants:
         # The give-path equipment slots match the reference randomizer: head 12, body 13, legs 14,
         # arms 15.  -1 means "unknown slot" and disables auto-equip for that piece.
         slots = {0: 12, 1: 13, 2: 15, 3: 14}
+        ceilings = self._armor_ceilings()
+        self.armor_skipped = 0
         clones = {i for ids in armor_variants.values() for i in ids}
         out: dict[int, tuple[int, int, tuple[int, ...]]] = {}
         for row in P.rows:
             if row.id in clones or P.get(row, "weight") <= 0 or P.get(row, "materialSetId") == -1:
                 continue
+            track = P.get(row, "reinforceTypeId")
+            # Without a reinforcement table (synthetic/small regs) assume vanilla +10; on a real table
+            # a row with an unsupported track has no level to roll and is left out of the manifest.
+            top = ceilings.get(track, 10 if not ceilings else 0)
+            if top <= 0:
+                self.armor_skipped += 1
+                continue
             ids = (row.id, *armor_variants.get(row.id, ()))
-            out[row.id] = (10, slots.get(P.get(row, "protectorCategory"), -1), ids)
+            out[row.id] = (top, slots.get(P.get(row, "protectorCategory"), -1), ids)
         return out
 
     # ------------------------------------------------------------ the Ash pool

@@ -85,7 +85,6 @@ std::ofstream g_log;
 bool g_log_on = false;
 std::atomic<bool> g_dry_run{false};    // [general] dry_run = 1: log rolls, change nothing
 std::atomic<std::uint32_t> g_rolls_logged{0};
-std::atomic<std::uint64_t> g_roll_count{0};
 
 void log_line(const std::string& text) {
     if (!g_log_on) {
@@ -124,13 +123,21 @@ std::string read_file(const std::wstring& path, bool& ok) {
         return {};
     }
     std::string data(static_cast<std::size_t>(size.QuadPart), '\0');
-    DWORD read = 0;
-    const bool read_ok = ReadFile(file, data.data(), static_cast<DWORD>(data.size()), &read, nullptr) != 0;
-    CloseHandle(file);
-    if (!read_ok) {
-        return {};
+    DWORD total = 0;
+    bool read_ok = true;
+    while (total < data.size()) {
+        DWORD read = 0;
+        const DWORD want = static_cast<DWORD>(data.size() - total);
+        if (ReadFile(file, data.data() + total, want, &read, nullptr) == 0 || read == 0) {
+            read_ok = false;
+            break;
+        }
+        total += read;
     }
-    data.resize(read);
+    CloseHandle(file);
+    if (!read_ok || total != data.size()) {
+        return {};                        // a short read would fingerprint the wrong regulation
+    }
     ok = true;
     return data;
 }
@@ -150,9 +157,9 @@ std::wstring join(const std::wstring& a, const std::wstring& b) {
 std::wstring find_manifest(const std::wstring& dir, const std::wstring& configured) {
     std::vector<std::wstring> candidates;
     if (!configured.empty()) {
-        candidates.push_back(configured.size() > 1 && configured[1] == L':'
-                                 ? configured
-                                 : join(dir, configured));
+        const bool absolute = (configured.size() > 1 && configured[1] == L':') ||
+                              configured.rfind(L"\\\\", 0) == 0;   // UNC path
+        candidates.push_back(absolute ? configured : join(dir, configured));
     }
     candidates.push_back(join(dir, L"loot_variants.txt"));
     std::wstring up = dir;
@@ -361,6 +368,31 @@ std::uint8_t* rel32_target(std::uint8_t* insn) {
     return insn + 5 + disp;
 }
 
+bool readable(const void* address, std::size_t bytes) {
+    MEMORY_BASIC_INFORMATION info{};
+    if (VirtualQuery(address, &info, sizeof(info)) != sizeof(info)) {
+        return false;
+    }
+    if (info.State != MEM_COMMIT || info.Protect == PAGE_NOACCESS ||
+        info.Protect == (PAGE_GUARD | PAGE_NOACCESS)) {
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(
+        static_cast<const std::uint8_t*>(address) - static_cast<const std::uint8_t*>(info.BaseAddress));
+    return offset <= info.RegionSize && bytes <= info.RegionSize - offset;
+}
+
+bool in_executable(const void* address, std::uint8_t* module) {
+    const auto target = reinterpret_cast<std::uintptr_t>(address);
+    for (const Section& section : exec_sections(module)) {
+        const auto begin = reinterpret_cast<std::uintptr_t>(section.begin);
+        if (target >= begin && target < begin + section.size) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // elden-x finds FD4 singletons by scanning for this sequence and asking the game for each runtime
 // class's name.  We only need WorldChrMan, whose slot is then re-read on every grant (the singleton
 // itself is stable, the player pointer is not).
@@ -385,8 +417,14 @@ bool find_world_chr_man(std::uint8_t* module) {
                                     *reinterpret_cast<const std::int32_t*>(hit + 15);
         auto name_fn = reinterpret_cast<GetRuntimeClassName>(
             hit + 24 + *reinterpret_cast<const std::int32_t*>(hit + 20));
-        // All three pointers come from in-module rel32 arithmetic; no allocation, no state changes.
-        const char* name = name_fn != nullptr ? name_fn(runtime_class) : nullptr;
+        // A byte-pattern hit can be a false positive: never call an arbitrary indirect pointer.
+        if (!in_executable(reinterpret_cast<const void*>(name_fn), module) ||
+            !readable(runtime_class, 8) || !readable(slot, sizeof(void*))) {
+            cursor = hit + 1;
+            left = section.size - static_cast<std::size_t>(cursor - section.begin);
+            continue;
+        }
+        const char* name = name_fn(runtime_class);
         if (slot != nullptr && name != nullptr && std::strcmp(name, "WorldChrMan") == 0) {
             g_world_chr_man_slot = slot;
             return true;
@@ -425,24 +463,24 @@ void auto_equip(std::uint32_t item_id, int slot) {
         return;
     }
     void* world = *g_world_chr_man_slot;
-    if (world == nullptr) {
-        return;                       // player has not loaded yet
-    }
-    auto* base = static_cast<std::uint8_t*>(world);
     // verified elden-x offsets: WorldChrMan::main_player 0x1E508, PlayerIns::game_data 0x580,
     // PlayerGameData::equip_game_data 0x2B0, EquipGameData::equip_inventory_data 0x158.
+    if (world == nullptr || !readable(static_cast<const std::uint8_t*>(world) + 0x1E508, sizeof(void*))) {
+        return;                       // player has not loaded yet, or the offsets do not fit
+    }
+    auto* base = static_cast<std::uint8_t*>(world);
     auto* player = *reinterpret_cast<std::uint8_t**>(base + 0x1E508);
-    if (player == nullptr) {
+    if (player == nullptr || !readable(player + 0x580, sizeof(void*))) {
         return;
     }
     auto* game_data = *reinterpret_cast<std::uint8_t**>(player + 0x580);
-    if (game_data == nullptr) {
+    if (game_data == nullptr || !readable(game_data + 0x2B0 + 0x158, sizeof(void*))) {
         return;
     }
     void* inventory = game_data + 0x2B0 + 0x158;
     int query = static_cast<int>(item_id);
-    // No SEH here (MinGW cannot compile MS __try): every pointer above was validated, and the two
-    // function addresses come from AOBs verified in the installed executable.
+    // No SEH here (MinGW cannot compile MS __try): every pointer above was probed with VirtualQuery
+    // and both function addresses come from AOBs verified in the installed executable.
     const int inventory_slot = g_get_inventory_id(inventory, &query);
     if (inventory_slot < 0) {
         return;
@@ -521,7 +559,12 @@ bool patch_call(std::uint8_t* call, std::uint8_t* relay) {
     std::memcpy(call + 1, &displacement, sizeof(displacement));
     FlushInstructionCache(GetCurrentProcess(), call, 5);
     DWORD ignored = 0;
-    VirtualProtect(call, 5, old, &ignored);
+    if (!VirtualProtect(call, 5, old, &ignored)) {
+        // The bytes are already patched and flushed; failing to restore RX is a rare hygiene issue,
+        // not a reason to keep running with a half-installed hook.
+        log_line("loot_variants: could not restore page protection at a call site");
+        return false;
+    }
     return true;
 }
 
@@ -600,7 +643,8 @@ void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
                     item.item_ashes_of_war = rolled.ash;
                 }
             }
-            if (g_auto_equip.load(std::memory_order_relaxed) &&
+            if (!g_dry_run.load(std::memory_order_relaxed) &&
+                g_auto_equip.load(std::memory_order_relaxed) &&
                 (rolled.item_id & loot_variants::kArmorBit) != 0 && equip_count < kGiveCapacity) {
                 const auto piece = g_manifest.armor.find(rolled.item_id & loot_variants::kArmorIdMask);
                 if (piece != g_manifest.armor.end() && piece->second.slot >= 12) {
@@ -609,7 +653,6 @@ void detour(std::uint64_t manager, ItemGiveStruct* items, void* details) {
                     ++equip_count;
                 }
             }
-            g_roll_count.fetch_add(1, std::memory_order_relaxed);
             const std::uint32_t logged = g_rolls_logged.fetch_add(1, std::memory_order_relaxed);
             if (logged < 20) {
                 char line[192] = {};
@@ -786,7 +829,10 @@ DWORD WINAPI init_thread(LPVOID) {
     std::memcpy(relay + sizeof(stub), &destination, sizeof(destination));
     FlushInstructionCache(GetCurrentProcess(), relay, 14);
     DWORD relay_protection = 0;
-    VirtualProtect(relay, 64, PAGE_EXECUTE_READ, &relay_protection);
+    if (!VirtualProtect(relay, 64, PAGE_EXECUTE_READ, &relay_protection)) {
+        log_line("loot_variants: could not make the relay executable-only - inert");
+        return 0;
+    }
 
     g_original = target;
     std::size_t patched = 0;

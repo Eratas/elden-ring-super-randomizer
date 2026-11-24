@@ -18,7 +18,7 @@ values another pass is about to change):
     drops      what an enemy drops (ItemLotParam_enemy)
     dropped_weapons  enemy drop slots hold fresh random weapons (ItemLotParam_enemy)
     weapons    somber affinities, movesets, default skills, per-row stats (EquipParamWeapon ...)
-    variants   per-pickup affinity/level/Ash manifest for the runtime DLL (no param rows added)
+    variants   per-pickup affinity/level/Ash manifest for the runtime DLL; optional armour stat clones
     ashes      skills and on-hit effects of Ashes of War (EquipParamGem)
     armour     armour stats (EquipParamProtector), talisman rows (EquipParamAccessory)
     levels     upgrade levels of the weapons in drop tables, chests and shops
@@ -645,11 +645,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             print("\n".join(l for l in alines if l.startswith("#")))
 
         armor_variant_map: dict[int, tuple[int, ...]] = {}
+        clone_names: dict[int, tuple[int, str]] = {}
         if v["loot_variants"] and v.get("armor_variants"):
             # Cloned rows are built from the final armour stats, before the manifest is written.  The
             # weapon ceilings are still the pristine snapshot taken before the weapon pass.
             av = armor_variants.ArmorVariants(reg, rng, v["armor_variants"], v["armor_variant_stats"])
             armor_variant_map = av.variants
+            clone_names = av.names
             alines += [""] + av.lines()
         if v["loot_variants"] and wp is not None:
             variants = loot_variants.Variants(
@@ -681,7 +683,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
 
         wnames = None
         text_patches: list[tuple[Path, dict, dict]] = []
-        if (v["somber_infusable"] and not v["no_weapon_names"]) or v["rarity_labels"]:
+        if ((v["somber_infusable"] and not v["no_weapon_names"]) or v["rarity_labels"] or clone_names):
             say(phases.WEAPON_NAMES)
             given = list(v["weapon_names"] or ())
             if not given:
@@ -691,16 +693,21 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 auto = sorted((Path(v["input"]).resolve().parent / "msg").glob(
                     f"*/{weapon_names.ARCHIVE}"))
                 given = [str(p.parent) for p in auto]
-            archives = (textarchives.expand_archives("--weapon-names", given, weapon_names.ARCHIVE)
+            names_active = v["somber_infusable"] and not v["no_weapon_names"]
+            name_trigger = "--weapon-names" if names_active else (
+                "--rarity-labels" if v["rarity_labels"] else "--armor-variants")
+            archives = (textarchives.expand_archives(name_trigger, given, weapon_names.ARCHIVE)
                         or [str(p) for p in weapon_names.shipped_archives()])
             if not archives:
-                raise SystemExit(f"--weapon-names: the shipped item text archives are missing: "
+                raise SystemExit(f"{name_trigger}: the shipped item text archives are missing: "
                                  f"{textarchives.MSG_DIR}/<language>/{weapon_names.ARCHIVE}. "
                                  + ("Put the msg folder from the Release zip next to the executable, "
                                     if getattr(sys, "frozen", False) else "Restore tools/msg/ from the repository, ")
-                                 + "or pass the path(s) of the game's msg/<language>/item_dlc02.msgbnd.dcx (or --no-weapon-names).")
+                                  + ("or pass the path(s) of the game's msg/<language>/item_dlc02.msgbnd.dcx (or --no-weapon-names)."
+                                     if names_active else
+                                     "or pass the path(s) of the game's msg/<language>/item_dlc02.msgbnd.dcx."))
             if not given:
-                for line in shipped_warning("--weapon-names", [Path(a) for a in archives]):
+                for line in shipped_warning(name_trigger, [Path(a) for a in archives]):
                     print(line)
                     wlines.append(line)
             if v["somber_infusable"] and not v["no_weapon_names"]:
@@ -711,19 +718,26 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                     print(line)
                     wlines.append(line)
                 text_patches = wnames.patches
+            if not text_patches:
+                for src in archives:
+                    archive_guard(name_trigger, Path(src), Path(v["output"]), v["dry_run"])
+                text_patches = [(Path(src), {}, {}) for src in archives]
+            if clone_names:
+                named = 0
+                for src, texts, anchor in text_patches:
+                    named += rarity_labels.add_armor_clone_names(src, texts, anchor, clone_names)
+                if named:
+                    line = f"# armour variant names: {named} cloned ids named in ProtectorName.fmg"
+                    print(line)
+                    wlines.append(line)
             if v["rarity_labels"]:
                 labels = rarity_labels.RarityLabels(reg)
-                if not text_patches:
-                    for src in archives:
-                        archive_guard("--rarity-labels", Path(src), Path(v["output"]), v["dry_run"])
-                    text_patches = [(Path(src), {}, {}) for src in archives]
                 for src, texts, _anchor in text_patches:
                     touched, total = labels.apply_to(src, texts)
                     line = (f"# rarity labels: {src}: {touched} names tagged from {total} rarity rows "
                             "(text tags, no colour code verified)")
                     print(line)
                     wlines.append(line)
-
         slines: list[str] = []
         if v["spells"] or spell_stats:
             say(phases.SPELLS)

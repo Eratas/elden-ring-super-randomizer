@@ -231,12 +231,12 @@ OPTIONS: tuple[Opt, ...] = (
        needs=("random_armor_fresh",), default=True, label="Keep armor sets together"),
     _o("random_armor", "--random-armor", group="gear", label="Shuffle armor stats"),
     _o("random_talismans", "--random-talismans", group="gear", label="Shuffle talismans"),
-    _o("armor_variants", "--armor-variants", kind="int", default=0, metavar="N", group="gear",
+    _o("armor_variants", "--armor-variants", kind="int", default=0, metavar="N", group="loot",
        label="Stat variants per armor piece", needs=("loot_variants",)),
-    _o("armor_variant_stats", "--armor-variant-stats", kind="groups", group="gear",
+    _o("armor_variant_stats", "--armor-variant-stats", kind="groups", group="loot",
        default="", items=("negation", "resistance", "poise", "weight"),
        label="Which stats vary", needs=("armor_variants",)),
-    _o("rarity_labels", "--rarity-labels", group="gear", label="Rarity labels in item names"),
+    _o("rarity_labels", "--rarity-labels", group="loot", label="Rarity labels in item names"),
 
     # --- enemies: health and runes ---------------------------------------------------------
     _o("random_enemy_hp", "--random-enemy-hp", group="drops", label="Shuffle enemy HP"),
@@ -472,6 +472,8 @@ def validate(values: dict) -> dict:
             raise ValueError("Rolls per enemy must be between 0 and 32 (0 = one guaranteed item per kill)")
         if out["enemy_drop_rolls"] == 0:
             out["enemy_drop_rolls"] = None       # 0 and an empty field mean the guaranteed mode
+    if out.get("armor_variants") is not None and not 0 <= out["armor_variants"] <= 8:
+        raise ValueError("Stat variants per armor piece must be between 0 and 8")
     if out["enemy_drop_chance"] is None:
         out["enemy_drop_chance"] = BY_KEY["enemy_drop_chance"].default
     if not 1 <= out["enemy_drop_chance"] <= 100:
@@ -683,8 +685,8 @@ def argv_from_values(values: dict) -> list[str]:
                       ("start_lantern", "--start-with-lantern"),
                       ("random_dropped_weapons", "--random-dropped-weapons"),
                       ("random_dropped_shop_weapons", "--random-dropped-shop-weapons"),
-                       ("loot_variants", "--loot-variants"),
-                       ("rarity_labels", "--rarity-labels"),
+                      ("loot_variants", "--loot-variants"),
+                      ("rarity_labels", "--rarity-labels"),
                       ("random_enemy_drops", "--random-enemy-drops"),
                       ("unique_drops", "--unique-drops"),
                       ("material_drops", "--material-drops"),

@@ -245,6 +245,9 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
                 ++out.bad_lines;
                 continue;
             }
+            if (out.weapons.count(w.base) != 0) {
+                ++out.bad_lines;              // a duplicate row would make the roll ambiguous
+            }
             out.weapons[w.base] = w;
             continue;
         }
@@ -254,8 +257,10 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
             std::uint32_t base = 0;
             std::uint32_t top = 0;
             int slot = -1;
-            if (tok.size() < 4 || !detail::to_u32(tok[1], base) || !detail::to_u32(tok[2], top) ||
-                !detail::to_int(tok[3], slot) || top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0 ||
+            const bool has_slot = tok.size() >= 4;
+            if (tok.size() < 3 || !detail::to_u32(tok[1], base) || !detail::to_u32(tok[2], top) ||
+                (has_slot && !detail::to_int(tok[3], slot)) || top > kArmorMaxLevel ||
+                (base & ~kArmorIdMask) != 0 ||
                 (slot != -1 && slot != 12 && slot != 13 && slot != 14 && slot != 15)) {
                 ++out.bad_lines;
                 continue;
@@ -274,6 +279,9 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
             if (piece.ids.empty()) {
                 piece.ids.push_back(base);       // a v2 manifest had no ids column
             }
+            if (out.armor.count(base) != 0) {
+                ++out.bad_lines;
+            }
             out.armor[base] = piece;
             continue;
         }
@@ -282,6 +290,9 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
             if (tok.size() < 2 || !detail::to_int(tok[1], cls)) {
                 ++out.bad_lines;
                 continue;
+            }
+            if (out.gems.count(cls) != 0) {
+                ++out.bad_lines;              // a second pool for one class would be ambiguous
             }
             std::vector<std::uint32_t>& ids = out.gems[cls];
             for (std::size_t t = 2; t < tok.size(); ++t) {

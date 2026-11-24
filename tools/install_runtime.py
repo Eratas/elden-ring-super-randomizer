@@ -84,7 +84,11 @@ def _digest(path: Path) -> str:
 
 def _copy_atomic(src: Path, dst: Path) -> None:
     """Write to a sibling temp file then replace, so readers never see a partial DLL."""
-    tmp = dst.with_name(dst.name + ".tmp")
+    import tempfile
+
+    fd, name = tempfile.mkstemp(prefix=dst.name + ".", suffix=".tmp", dir=dst.parent)
+    tmp = Path(name)
+    os.close(fd)
     try:
         shutil.copy2(src, tmp)
         os.replace(tmp, dst)
@@ -113,9 +117,13 @@ def install(source: str | Path | None = None, dll_dir: str | Path | None = None)
         _copy_atomic(dll, dst)
         lines.append(f"# installed {dst}")
 
-    ini_src = program_dir() / "mods" / "loot-variants" / INI_NAME
+    candidates = [program_dir() / INI_NAME,                       # released zip: ini at dist root
+                  target / ".." / INI_NAME,                       # source tree: beside dll/offline
+                  program_dir() / "mods" / "loot-variants" / INI_NAME,
+                  HERE / INI_NAME]
+    ini_src = next((p for p in candidates if p.is_file()), None)
     ini_dst = target / INI_NAME
-    if ini_src.is_file() and not ini_dst.exists():
+    if ini_src is not None and not ini_dst.exists():
         _copy_atomic(ini_src, ini_dst)
         lines.append(f"# installed a fresh {ini_dst} (your settings can be changed there)")
     elif ini_dst.exists():

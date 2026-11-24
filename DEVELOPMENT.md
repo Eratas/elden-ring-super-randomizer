@@ -143,8 +143,21 @@ Ashes, a single moveset, a regulation with no timed buffs) failing soft.
 * `tools/lang_<code>.py` — the translated window text; `tools/check_packs.py` gates them.
 * `tools/version.py` — the version shown in the window footer; bump it here **and** the version tuple in
   `tools/version_info.txt` (a test fails if they drift).
+* Naming: option **keys** and CLI flags use US spelling (`armor_variants`, `--armor-variants`), while
+  labels, tips and docs use UK spelling (`armour`). Keep that split for new options; the older
+  `armour_keep_sets` key is the historical exception.
 * `tools/randomize.py` — the engine: parse, run the passes, write the output and the reports.
 * `tools/backup.py` — backup-and-replace, revert and backup pruning.
 * `tools/test_logic.py` — the logic tests above; also used by `gui.py --self-test` inside the frozen exe.
 * `tools/test_passes_synthetic.py` — the randomizer passes (weapons, gems, gear, spells, goods, shops,
   enemy-drops) on a built regulation; part of the gate (`tools/gate.py`).
+* `tools/loot_variants.py` — the per-pickup manifest (weapon affinities/Ash, armour levels and stat
+  clones) and its `bind` fingerprint over the written regulation.
+* `tools/armor_variants.py` — clones `EquipParamProtector` rows with the same appearance and selected
+  stat columns; the runtime picks one per pickup.
+* `tools/rarity_labels.py` — text rarity tags in the patched item-name archives.
+* `tools/install_runtime.py` — the `--install-runtime` flag and the window's Install DLL button.
+* `tools/pack_release.py` — the additive release-zip whitelist; `pack_release.ps1` drives the whole
+  build order: `mods/loot-variants/build.ps1` → `build_exe.bat` → `python tools/pack_release.py`.
+* `mods/loot-variants/` — the optional native mod: `build.ps1` builds the DLL and host tests, `src/`
+  holds the PE hook, manifest parser and roll logic. The DLL is shipped in `dist/` for releases.

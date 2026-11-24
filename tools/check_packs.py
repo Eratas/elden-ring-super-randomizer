@@ -347,6 +347,13 @@ def check_coverage(reference: set[str]) -> list[str]:
     for phase in phases.PHASES:
         if f"phase:{phase}" not in reference:
             problems.append(f"no pack defines phase:{phase}")
+    # Safety dialogs are strings too: a key used by the window but defined by no pack silently
+    # falls back to English.  These four predate the contract and are allowed until translated.
+    allow = {"ui:open_output", "ui:tip_open_output", "ui:compressing", "ui:close"}
+    source = (HERE / "ui" / "app.py").read_text(encoding="utf-8")
+    for key in sorted(set(re.findall(r'self\.t\(\s*["\'](ui:[^"\']+)["\']', source)) - allow):
+        if key not in reference:
+            problems.append(f"no pack defines {key}")
     return problems
 
 

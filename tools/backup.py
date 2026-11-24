@@ -30,7 +30,11 @@ BACKUP_DIR_NAME = "backups"
 def _atomic_copy(src: Path, dst: Path) -> None:
     """Copy src onto dst atomically: write a sibling temp file, then os.replace() over dst, so a
     crash or full disk mid-copy can never leave a half-written file over the user's original."""
-    tmp = dst.with_name(dst.name + ".tmp")
+    import tempfile
+
+    fd, name = tempfile.mkstemp(prefix=dst.name + ".", suffix=".tmp", dir=dst.parent)
+    tmp = Path(name)
+    os.close(fd)
     try:
         shutil.copy2(src, tmp)
         os.replace(tmp, dst)
@@ -174,6 +178,9 @@ def prune_backups(keep: int = KEEP_BACKUPS) -> int:
 
 def restore(backup: Path) -> list[Path]:
     """Copy every file of ``backup`` back to where it came from.  Returns the restored paths."""
+    problems = verify_backup(backup)
+    if problems:
+        raise ValueError("backup is incomplete: " + "; ".join(problems[:8]))
     manifest = json.loads((Path(backup) / MANIFEST).read_text(encoding="utf-8"))
     restored: list[Path] = []
     for entry in manifest:

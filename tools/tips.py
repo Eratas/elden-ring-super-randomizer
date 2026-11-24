@@ -1,6 +1,6 @@
 """The hover text of every option.
 
-Every entry has the same shape, and never more than three paragraphs:
+Every entry has the same shape, with two or three paragraphs:
 
   paragraph 1  one sentence: what the option changes.  `randomize.py --help` shows this line.
   paragraph 2  the facts: which table or field is written, the ranges and weights, what the pass

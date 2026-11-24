@@ -19,12 +19,16 @@ int main(int argc, char** argv) {
         "defaults 50 common 1 1\n"
         "weapon 1000000 25 8191 0 0 0 0 0 0 0 0 0 0 0 0 0\n"
         "weapon 1010000 10 8191 0 0 0 0 0 0 0 0 0 0 0 0 0\n"
-        "armor 40000 10\n"
+        "armor 40000 10 12 40000 41000\n"
         "gems 0 10000 10100 10200 10300 10400\n";
     loot_variants::Manifest m;
     std::string error;
     if (!loot_variants::parse_manifest(text, m, error)) {
         std::printf("bench: bad manifest: %s\n", error.c_str());
+        return 1;
+    }
+    if (m.armor.empty() || m.weapons.empty()) {
+        std::printf("bench: manifest has no armour or weapon to roll\n");
         return 1;
     }
     loot_variants::Options options = m.defaults;

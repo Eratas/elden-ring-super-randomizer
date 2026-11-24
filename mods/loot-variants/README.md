@@ -7,9 +7,10 @@ five copies of the same sword are five different swords.
 
 It is the runtime half of the randomizer's `--loot-variants` option.  The static tool writes
 `loot_variants.txt` next to `regulation.bin`; this DLL reads it and rerolls the item id at the moment
-the game hands it out.  No param rows are cloned, so the regulation stays **~44 KB smaller** than a
-solution that adds variant rows would need (the tool has ~76 KB of headroom against the game's
-2,359,296-byte limit).
+the game hands it out.  **Weapon rows are never cloned.**  The optional `--armor-variants` pass clones
+only the armour pieces you ask for; each clone keeps the model and icons and changes just the selected
+stat columns.  A +4 armour run still leaves a few hundred KB of headroom under the game's
+2,359,296-byte regulation limit.
 
 ## Three separate switches
 
@@ -78,6 +79,9 @@ rolled_level`:
   `0x10000000 | level << 24 | base` — the layout whose `level << 24` field is stored in each
   `ReinforceParamProtector` row.  Pieces that cannot be reinforced are omitted.  Set `[armor]
   enabled = 0` in the ini to leave armour alone.
+* `--armor-variants N` adds up to N cloned rows per piece, changing only the stat columns selected by
+  `--armor-variant-stats`.  The manifest lists every clone id; the runtime picks one at random.  Each
+  clone gets a `ProtectorName` entry copied from its base, so the inventory still shows a real name.
 
 Optional, off by default: `[auto_equip] enabled = 1` calls the game's own equip function right after
 the grant, putting the rerolled piece into its head/body/arms/legs slot (the slot travels in the

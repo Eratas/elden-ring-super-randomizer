@@ -41,6 +41,7 @@ class ArmorVariants:
         self.groups = tuple(g for g in STAT_GROUPS if not groups or g in groups)
         self.fields = tuple(f for group in self.groups for f in STAT_GROUPS[group])
         self.variants: dict[int, tuple[int, ...]] = {}
+        self.names: dict[int, tuple[int, str]] = {}   # clone id -> (base id, name for ProtectorName.fmg)
         if self.count:
             self._build(rng)
 
@@ -51,6 +52,11 @@ class ArmorVariants:
                    if r.id in names and P.get(r, "weight") > 0 and P.get(r, "materialSetId") != -1]
         if not sources:
             return
+        next_id = ((max(r.id for r in P.rows) // 10000) + 1) * 10000
+        needed = next_id + len(sources) * self.count
+        if needed >= 0x1000000 or len(P.rows) + len(sources) * self.count > 0xFFFF:
+            raise ValueError("too many armour stat variants for this table to hold; "
+                             f"asked for {len(sources) * self.count} rows from id {next_id}")
         # Vanilla ranges per slot keep a heavy helm heavy and a light helm light.
         ranges: dict[int, dict[str, tuple[float, float, bool]]] = {}
         for row in sources:
@@ -65,7 +71,6 @@ class ArmorVariants:
                     v = float(P.get(row, field))
                     per[field] = (min(old[0], v), max(old[1], v), old[2])
 
-        next_id = ((max(r.id for r in P.rows) // 10000) + 1) * 10000
         for source in sources:
             slot = P.get(source, "protectorCategory")
             ids: list[int] = []
@@ -76,6 +81,9 @@ class ArmorVariants:
                     value = lo if hi <= lo else rng.uniform(lo, hi)
                     P.set(clone, field, round(value, 3) if is_float else int(round(value)))
                 ids.append(next_id)
+                # The game looks up a piece's display name by row id.  Without this entry a rerolled
+                # clone shows up as [ERROR] in the inventory even though its model is unchanged.
+                self.names[next_id] = (source.id, names[source.id])
                 next_id += 1
             self.variants[source.id] = tuple(ids)
 

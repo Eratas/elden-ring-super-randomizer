@@ -47,6 +47,7 @@ import gems  # noqa: E402
 import goods  # noqa: E402
 import loot  # noqa: E402
 import loot_variants  # noqa: E402
+import rarity_labels  # noqa: E402
 import shops  # noqa: E402
 import spells  # noqa: E402
 import talkmsg  # noqa: E402
@@ -337,6 +338,10 @@ def run() -> None:
     before_ids = {r.id for r in AP.rows}
     av = armor_variants.ArmorVariants(reg2, random.Random(7), count=2, groups=("weight", "poise"))
     check(len(av.variants) == 6, f"armour variants: {len(av.variants)} pieces, expected 6")
+    check(len(av.names) == 12, f"armour variants: {len(av.names)} clone names, expected 12")
+    for clone_id, (base_id, name) in av.names.items():
+        check(clone_id in AP.by_id and base_id in AP.by_id and name,
+              f"armour variants: clone {clone_id} has no base row or no name")
     check(all(len(ids) == 2 for ids in av.variants.values()),
           "armour variants: a piece does not have two clones")
     for base, ids in av.variants.items():
@@ -359,6 +364,17 @@ def run() -> None:
     vlines = [ln for ln in vv.manifest() if ln.startswith("armor ")]
     check(any(str(next(iter(av.variants.values()))[0]) in ln for ln in vlines),
           "armour variants: the manifest does not list a cloned id")
+
+    # --- rarity labels: the two name tables share ids, so their rarity maps must stay separate ---
+    fresh = build()
+    labels = rarity_labels.RarityLabels(fresh)
+    for table_name, prefix in (("EquipParamWeapon", "WeaponName"), ("EquipParamProtector", "ProtectorName")):
+        table = fresh.param(table_name, erreg.load_paramdef(Path("tools/paramdef") / f"{table_name}.xml"))
+        expected = {r.id for r in table.rows if table.get(r, "rarity") in rarity_labels.LABELS}
+        check(expected == set(labels.rarity[prefix]),
+              f"rarity labels: {prefix} has {len(labels.rarity[prefix])} ids, expected {len(expected)}")
+    check(any(labels.rarity["WeaponName"]) and any(labels.rarity["ProtectorName"]),
+          "rarity labels: an empty per-table map")
 
     # --- moveset modes: each produces a report and changes the tables ---
     for mode in ("affinity", "weapon", "bound"):
