@@ -746,8 +746,10 @@ _ARGV_NEEDS = {"random_prices": {"price_mode": "shuffle"}, "random_runes": {"run
                "hp_min": {"hp_mode": "range"}, "hp_max": {"hp_mode": "range"},
                "duration_min": {"duration_mode": "range"}, "duration_max": {"duration_mode": "range"},
                "moveset_variety": {"moveset_mode": "bound"},
-               "enemy_drop_chance": {"enemy_drop_rolls": 3}}
-_ARGV_INT = {"zstd_window": 18, "max_size": 2_000_000}     # the defaults are not "a different value"
+               "enemy_drop_chance": {"enemy_drop_rolls": 3},
+                "armor_variants": {"loot_variants": True},
+                "armor_variant_stats": {"loot_variants": True, "armor_variants": 2}}
+_ARGV_INT = {"zstd_window": 18, "max_size": 2_000_000, "armor_variants": 2}     # the defaults are not "a different value"
 
 
 # One parser for every argv test.  build_argparse() rebuilds ~100 arguments, which costs far more than the
@@ -889,7 +891,7 @@ _ARGV_FUZZ_INTS = {"zstd_window": [16, 18, 22], "max_size": [None, 2_000_000, 2_
                    "rune_min": [None, 1, 100], "rune_max": [None, 500, 99999],
                    "hp_min": [None, 1, 100], "hp_max": [None, 500, 99999],
                    "duration_min": [None, 5, 30], "duration_max": [None, 60, 600],
-                   "moveset_variety": [1, 2, 3, 4],
+                   "moveset_variety": [1, 2, 3, 4], "armor_variants": [0, 1, 2, 7],
                    "stamina_rate": [(0.8, 1.2), (0.5, 1.0), (1.0, 2.0)],
                    "boss_hp_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)],
                    "boss_rune_scale": [(1.0, 1.0), (1.2, 1.4), (0.5, 2.0)]}
@@ -1655,6 +1657,66 @@ def test_install_runtime() -> None:
             check(False, "install_runtime: a missing target folder was accepted")
 
 
+def test_release_package() -> None:
+    """A release zip is an additive whitelist: no settings, saves or backups leak into it."""
+    import zipfile
+
+    import pack_release
+
+    root = Path(tempfile.mkdtemp(prefix="release-test-"))
+    dist = root / "dist"
+    (dist / "msg" / "engus").mkdir(parents=True)
+    for name in (pack_release.EXE, pack_release.DLL, pack_release.INI, "README.md"):
+        (dist / name).write_bytes(b"payload")
+    (dist / "msg" / "engus" / "item_dlc02.msgbnd.dcx").write_bytes(b"msg")
+    (dist / "settings.json").write_text("{}", encoding="utf-8")
+    (dist / "self_test_result.txt").write_text("PASS", encoding="utf-8")
+    (dist / "randomized").mkdir()
+    (dist / "randomized" / "regulation.bin").write_bytes(b"save")
+    try:
+        files = pack_release.collect_release_files(dist)
+        names = {p.as_posix() for p in files}
+        check("EldenRingSuperRandomizer.exe" in names, "the release omits the executable")
+        check("loot_variants.dll" in names, "the release omits the optional DLL")
+        check("msg/engus/item_dlc02.msgbnd.dcx" in names, "the release omits the msg archives")
+        check(not any("settings" in n or "randomized" in n or "self_test" in n for n in names),
+              f"the release leaks developer files: {names}")
+        target = root / "release.zip"
+        size, count = pack_release.make_release(dist, target)
+        check(size > 0 and count == len(files), f"the release zip has {count} entries, expected {len(files)}")
+        with zipfile.ZipFile(target) as zf:
+            check(set(zf.namelist()) == names, "the zip entries differ from the whitelist")
+            check(zf.read("loot_variants.dll") == b"payload", "the DLL was not stored byte-for-byte")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_presets() -> None:
+    """A preset is a saved run: every preset must validate and the loot presets must keep the DLL flag."""
+    import presets
+
+    check(len(presets.PRESETS) >= 10, "there are fewer presets than the window advertises")
+    keys = {p["key"] for p in presets.PRESETS}
+    check(len(keys) == len(presets.PRESETS), "two presets share a key")
+    for preset in presets.PRESETS:
+        values = preset["values"]
+        for key in values:
+            check(key in options.BY_KEY, f"preset {preset['key']} has an unknown option {key}")
+        try:
+            valid = options.validate(dict(values))
+        except (ValueError, SystemExit) as e:
+            check(False, f"preset {preset['key']} does not validate: {e}")
+            continue
+        check(valid["input"] and valid["output"], f"preset {preset['key']} has no input/output")
+        if preset["key"] in ("borderlands", "borderlands_armory"):
+            check(valid.get("loot_variants") is True,
+                  f"preset {preset['key']} lost --loot-variants: the headline feature would be off")
+    # The GUI presets must not end up with a name-less or tip-less button.
+    for preset in presets.PRESETS:
+        check(bool(preset.get("label")) and len(preset.get("tip", "")) > 40,
+              f"preset {preset['key']} has no label or tip")
+
+
 def main() -> int:
     args = sys.argv[1:]
     fuzz_path = os.environ.get("ER_REGULATION_BIN")
@@ -1664,7 +1726,8 @@ def main() -> int:
             fuzz_path = args[i + 1]
 
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
-                               test_dropshuffle_protection, test_backup_full_msg, test_install_runtime):
+                               test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
+                               test_presets, test_release_package):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

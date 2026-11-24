@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import NoReturn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import armor_variants  # noqa: E402
 import balance  # noqa: E402
 import boss_scale  # noqa: E402
 import dropshuffle  # noqa: E402
@@ -51,6 +52,7 @@ import names_gaps  # noqa: E402
 import oodle  # noqa: E402
 import options  # noqa: E402
 import phases  # noqa: E402
+import rarity_labels  # noqa: E402
 import runes  # noqa: E402
 import shops  # noqa: E402
 import spells  # noqa: E402
@@ -617,14 +619,6 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 wlines += [""] + wp.random_status_effects(rng, loot_only=bool(v["random_loot_effects"]))
             wlines += [""] + wp.clean_dead_effects()
             print("\n".join(l for l in wlines if l.startswith("#")))
-            if v["loot_variants"]:
-                # Read the final rows (including any new affinity rows and shuffled movesets), but the
-                # ceilings from the pristine snapshot above.  Adds no param rows and no new phase.
-                variants = loot_variants.Variants(
-                    reg, wp, ceilings=variant_ceilings,
-                    curve=v["loot_rarity"] if v["random_loot_levels"] else "common")
-                vlines = variants.lines()
-                print("\n".join(l for l in vlines if l.startswith("#")))
 
         glines: list[str] = []
         if v["random_gem_skills"] or v["random_gem_effects"]:
@@ -650,6 +644,21 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 alines += [""] + gear.Talismans(reg).randomize(rng)
             print("\n".join(l for l in alines if l.startswith("#")))
 
+        armor_variant_map: dict[int, tuple[int, ...]] = {}
+        if v["loot_variants"] and v.get("armor_variants"):
+            # Cloned rows are built from the final armour stats, before the manifest is written.  The
+            # weapon ceilings are still the pristine snapshot taken before the weapon pass.
+            av = armor_variants.ArmorVariants(reg, rng, v["armor_variants"], v["armor_variant_stats"])
+            armor_variant_map = av.variants
+            alines += [""] + av.lines()
+        if v["loot_variants"] and wp is not None:
+            variants = loot_variants.Variants(
+                reg, wp, ceilings=variant_ceilings,
+                curve=v["loot_rarity"] if v["random_loot_levels"] else "common",
+                armor_variants=armor_variant_map)
+            vlines = variants.lines()
+            print("\n".join(l for l in vlines if l.startswith("#")))
+
         dlines: list[str] = []
         shuffle_kinds = (("goods", "random_goods_drops"), ("weapon", "random_weapon_drops"),
                          ("armor", "random_armor_drops"), ("talisman", "random_talisman_drops"),
@@ -671,7 +680,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             print("\n".join(l for l in llines if l.startswith("#")))
 
         wnames = None
-        if v["somber_infusable"] and not v["no_weapon_names"]:
+        text_patches: list[tuple[Path, dict, dict]] = []
+        if (v["somber_infusable"] and not v["no_weapon_names"]) or v["rarity_labels"]:
             say(phases.WEAPON_NAMES)
             given = list(v["weapon_names"] or ())
             if not given:
@@ -693,12 +703,26 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 for line in shipped_warning("--weapon-names", [Path(a) for a in archives]):
                     print(line)
                     wlines.append(line)
-            wnames = weapon_names.WeaponNames(reg, archives)
-            for src in wnames.archives:
-                archive_guard("--weapon-names", src, Path(v["output"]), v["dry_run"])
-            for line in wnames.prepare():
-                print(line)
-                wlines.append(line)
+            if v["somber_infusable"] and not v["no_weapon_names"]:
+                wnames = weapon_names.WeaponNames(reg, archives)
+                for src in wnames.archives:
+                    archive_guard("--weapon-names", src, Path(v["output"]), v["dry_run"])
+                for line in wnames.prepare():
+                    print(line)
+                    wlines.append(line)
+                text_patches = wnames.patches
+            if v["rarity_labels"]:
+                labels = rarity_labels.RarityLabels(reg)
+                if not text_patches:
+                    for src in archives:
+                        archive_guard("--rarity-labels", Path(src), Path(v["output"]), v["dry_run"])
+                    text_patches = [(Path(src), {}, {}) for src in archives]
+                for src, texts, _anchor in text_patches:
+                    touched, total = labels.apply_to(src, texts)
+                    line = (f"# rarity labels: {src}: {touched} names tagged from {total} rarity rows "
+                            "(text tags, no colour code verified)")
+                    print(line)
+                    wlines.append(line)
 
         slines: list[str] = []
         if v["spells"] or spell_stats:
@@ -774,8 +798,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         print(note)
         vlines.append(note)
     # the patched text archives are content, not a report: they are always written
-    if wnames is not None:
-        for src, texts, anchor in wnames.patches:
+    if text_patches:
+        for src, texts, anchor in text_patches:
             dst = out.parent / "msg" / src.parent.name / src.name
             dst.parent.mkdir(parents=True, exist_ok=True)
             data, written = textarchives.patch_fmgs(src, texts, anchor)

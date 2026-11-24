@@ -259,10 +259,10 @@ from it. Keep this table in step with that file.
 | 8 | shop stock | `ShopLineupParam` | `--random-shop-stock`, `--shop-stock-kinds` |
 | 9 | weapons | `EquipParamWeapon` (+ Gem, SwordArts, Reinforce, AttackElementCorrect) | `--somber-infusable`, `--random-movesets`, `--random-default-ash`, `--random-stats`, `--random-weapon-onhit-shuffle`, `--random-weapon-holder-shuffle`, `--random-weapon-status-roll`, `--random-loot-effects` |
 | 10 | ashes of war | `EquipParamGem` | `--random-gem-skills`, `--random-gem-effects` |
-| 11 | armour, talismans | `EquipParamProtector`, `EquipParamAccessory` | `--random-armor`, `--random-armor-fresh`, `--armor-keep-sets`, `--random-talismans` |
+| 11 | armour, talismans | `EquipParamProtector`, `EquipParamAccessory` | `--random-armor`, `--random-armor-fresh`, `--armor-keep-sets`, `--random-talismans`, `--armor-variants`, `--armor-variant-stats` |
 | 12 | loot shuffle | `ItemLotParam_enemy` + map, `ShopLineupParam` | `--random-weapon-drops`, `--random-goods-drops`, `--random-armor-drops`, `--random-talisman-drops`, `--random-ashes-drops`, `--armor-drop-sets` |
 | 13 | loot levels | `ItemLotParam_enemy`, `ItemLotParam_map`, `ShopLineupParam` | `--random-loot-levels`, `--loot-rarity`, `--loot-boss-bonus`, `--loot-max-level`, `--zone-loot-levels` |
-| 14 | weapon names | `item_dlc02.msgbnd.dcx` | `--weapon-names`, `--no-weapon-names` |
+| 14 | weapon names | `item_dlc02.msgbnd.dcx` | `--weapon-names`, `--no-weapon-names`, `--rarity-labels` |
 | 15 | spells | `Magic` | `--spells` / `--no-spells`, `--mode`, `--split-anim`; `--spell-stats` runs inside this pass |
 | 16 | flask locations | `ItemLotParam_map`, `ItemLotParam_enemy`, `ShopLineupParam` | `--random-flask-locations`, `--flask-where` |
 | 17 | starting items | item lot 2000 (`ItemLotParam_map`) | `--start-with-bell`, `--start-with-lantern` |
@@ -546,6 +546,14 @@ tampered manifest fails softly and says so rather than guessing.
 
 Turn the option off (**--no-backup-replace**) to write only to the output folder and leave your input
 files untouched. The tool never writes into the input's own folder unless you asked it to replace it.
+
+## Building a release zip
+
+`pwsh -NoProfile -File pack_release.ps1` builds the native DLL, builds the one-file exe, then writes
+`<repo>\dist-<version>.zip`. The zip is an additive whitelist: the exe, the shipped `msg` archives,
+`loot_variants.dll`, its sample ini and the docs. `settings.json`, `randomized/`, `backups/` and test
+results are never included. Use `python tools\pack_release.py --check` to see the exact file list
+without building anything.
 
 ---
 

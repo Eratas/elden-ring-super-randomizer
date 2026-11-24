@@ -231,6 +231,12 @@ OPTIONS: tuple[Opt, ...] = (
        needs=("random_armor_fresh",), default=True, label="Keep armor sets together"),
     _o("random_armor", "--random-armor", group="gear", label="Shuffle armor stats"),
     _o("random_talismans", "--random-talismans", group="gear", label="Shuffle talismans"),
+    _o("armor_variants", "--armor-variants", kind="int", default=0, metavar="N", group="gear",
+       label="Stat variants per armor piece", needs=("loot_variants",)),
+    _o("armor_variant_stats", "--armor-variant-stats", kind="groups", group="gear",
+       default="", items=("negation", "resistance", "poise", "weight"),
+       label="Which stats vary", needs=("armor_variants",)),
+    _o("rarity_labels", "--rarity-labels", group="gear", label="Rarity labels in item names"),
 
     # --- enemies: health and runes ---------------------------------------------------------
     _o("random_enemy_hp", "--random-enemy-hp", group="drops", label="Shuffle enemy HP"),
@@ -678,6 +684,7 @@ def argv_from_values(values: dict) -> list[str]:
                       ("random_dropped_weapons", "--random-dropped-weapons"),
                       ("random_dropped_shop_weapons", "--random-dropped-shop-weapons"),
                        ("loot_variants", "--loot-variants"),
+                       ("rarity_labels", "--rarity-labels"),
                       ("random_enemy_drops", "--random-enemy-drops"),
                       ("unique_drops", "--unique-drops"),
                       ("material_drops", "--material-drops"),
@@ -704,6 +711,12 @@ def argv_from_values(values: dict) -> list[str]:
         a.append("--zone-loot-levels")
     if values.get("random_armor_fresh") and not values.get("armour_keep_sets", True):
         a.append("--no-armor-keep-sets")
+    if values.get("armor_variants"):
+        a += ["--armor-variants", str(values["armor_variants"])]
+        o = BY_KEY["armor_variant_stats"]
+        have = _groups_value(values, "armor_variant_stats")
+        if len(have) != len(o.items):
+            a += ["--armor-variant-stats", ",".join(have)]
 
     if values.get("random_prices"):
         if values.get("price_mode") and values["price_mode"] != "shuffle":

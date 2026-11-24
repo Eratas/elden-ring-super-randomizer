@@ -57,6 +57,7 @@ struct Options {
 struct Armor {
     std::uint32_t max_level = 0;
     int slot = -1;                         // give-path equipment slot (12..15), -1 = no auto-equip
+    std::vector<std::uint32_t> ids;        // base + optional cloned stat rows, same appearance
 };
 
 struct Manifest {
@@ -253,15 +254,27 @@ inline bool parse_manifest(const std::string& text, Manifest& out, std::string& 
             std::uint32_t base = 0;
             std::uint32_t top = 0;
             int slot = -1;
-            const bool has_slot = tok.size() == 4;
-            if ((tok.size() != 3 && tok.size() != 4) || !detail::to_u32(tok[1], base) ||
-                !detail::to_u32(tok[2], top) || top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0 ||
-                (has_slot && !detail::to_int(tok[3], slot)) ||
+            if (tok.size() < 4 || !detail::to_u32(tok[1], base) || !detail::to_u32(tok[2], top) ||
+                !detail::to_int(tok[3], slot) || top > kArmorMaxLevel || (base & ~kArmorIdMask) != 0 ||
                 (slot != -1 && slot != 12 && slot != 13 && slot != 14 && slot != 15)) {
                 ++out.bad_lines;
                 continue;
             }
-            out.armor[base] = Armor{top, slot};
+            Armor piece;
+            piece.max_level = top;
+            piece.slot = slot;
+            for (std::size_t i = 4; i < tok.size(); ++i) {
+                std::uint32_t id = 0;
+                if (!detail::to_u32(tok[i], id) || (id & ~kArmorIdMask) != 0) {
+                    ++out.bad_lines;
+                } else {
+                    piece.ids.push_back(id);
+                }
+            }
+            if (piece.ids.empty()) {
+                piece.ids.push_back(base);       // a v2 manifest had no ids column
+            }
+            out.armor[base] = piece;
             continue;
         }
         if (tok[0] == "gems") {
@@ -414,7 +427,9 @@ inline Rolled roll_item(std::uint32_t item_id, const Manifest& manifest, const O
             } else if (level > piece->second.max_level) {
                 level = piece->second.max_level;
             }
-            out.item_id = kArmorBit | (level << 24) | base;
+            const std::uint32_t chosen = piece->second.ids[rng.below(
+                static_cast<std::uint32_t>(piece->second.ids.size()))];
+            out.item_id = kArmorBit | (level << 24) | chosen;
         }
         return out;                  // armour has no affinity and cannot mount an Ash
     }

@@ -38,6 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import armor_variants  # noqa: E402
 import durations  # noqa: E402
 import enemy_drops  # noqa: E402
 import erreg  # noqa: E402
@@ -317,8 +318,8 @@ def run() -> None:
     armor_lines = [ln for ln in lines if ln.startswith("armor ")]
     check(len(armor_lines) == len(v.armor), "--loot-variants: manifest armour count mismatch")
     check(len(armor_lines) == 6, "--loot-variants: the synthetic regulation has no armour entries")
-    check(all(len(ln.split()) == 4 for ln in armor_lines),
-          "--loot-variants: an armour line does not have base, ceiling and slot")
+    check(all(len(ln.split()) >= 5 for ln in armor_lines),
+          "--loot-variants: an armour line does not have base, ceiling, slot and ids")
     check(all(int(ln.split()[2]) == 10 for ln in armor_lines),
           "--loot-variants: a reinforceable armour piece is not +10")
     for ln in armor_lines:
@@ -329,6 +330,35 @@ def run() -> None:
         check(base in reg.param("EquipParamProtector", erreg.load_paramdef(
             Path("tools/paramdef/EquipParamProtector.xml"))).by_id,
               "--loot-variants: an armour entry has no backing param row")
+
+    # --- armour variants: cloned rows keep the look, change only chosen stat columns ---
+    reg2 = build()
+    AP = reg2.param("EquipParamProtector", erreg.load_paramdef(Path("tools/paramdef/EquipParamProtector.xml")))
+    before_ids = {r.id for r in AP.rows}
+    av = armor_variants.ArmorVariants(reg2, random.Random(7), count=2, groups=("weight", "poise"))
+    check(len(av.variants) == 6, f"armour variants: {len(av.variants)} pieces, expected 6")
+    check(all(len(ids) == 2 for ids in av.variants.values()),
+          "armour variants: a piece does not have two clones")
+    for base, ids in av.variants.items():
+        source = AP.by_id[base]
+        for clone_id in ids:
+            check(clone_id not in before_ids and clone_id in AP.by_id,
+                  f"armour variants: clone {clone_id} is not a new row")
+            clone = AP.by_id[clone_id]
+            for field in ("equipModelId", "iconIdM", "iconIdF", "protectorCategory", "reinforceTypeId",
+                          "materialSetId"):
+                check(AP.get(source, field) == AP.get(clone, field),
+                      f"armour variants: {field} changed and the appearance would change")
+            check(AP.get(source, "neutralDamageCutRate") == AP.get(clone, "neutralDamageCutRate"),
+                  "armour variants: an unselected stat column was changed")
+    weighted = [b for b, ids in av.variants.items()
+                if any(AP.get(AP.by_id[i], "weight") != AP.get(AP.by_id[b], "weight") for i in ids)]
+    check(len(weighted) >= 4, f"armour variants: only {len(weighted)} pieces got a different weight")
+    vv = loot_variants.Variants(reg2, ceilings=loot.weapon_ceilings(build()),
+                                armor_variants=av.variants)
+    vlines = [ln for ln in vv.manifest() if ln.startswith("armor ")]
+    check(any(str(next(iter(av.variants.values()))[0]) in ln for ln in vlines),
+          "armour variants: the manifest does not list a cloned id")
 
     # --- moveset modes: each produces a report and changes the tables ---
     for mode in ("affinity", "weapon", "bound"):

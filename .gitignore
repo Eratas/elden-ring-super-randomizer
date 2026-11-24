@@ -2,6 +2,7 @@
 *.bin
 *.dll
 # outputs
+*.zip
 randomized/
 backups/
 /mapping.txt

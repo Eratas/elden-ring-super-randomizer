@@ -13,7 +13,7 @@ This pass writes the manifest that makes those choices safe.  Five record kinds:
     bind     <regulation size> <fnv1a64>
     defaults <ash chance %> <level curve> <reroll affinity 0|1> <reroll level 0|1>
     weapon   <base> <max level> <affinity mask> <gem class for affinity 0> ... <gem class for 12>
-    armor    <base> <max level> <auto-equip slot 12=head 13=body 15=arms 14=legs, -1=none>
+    armor    <base> <max level> <auto-equip slot> <base and cloned stat ids>
     gems     <class> <gem id> <gem id> ...
 
 `bind` is a cheap consistency tag over the exact bytes of the regulation this manifest was made
@@ -110,7 +110,8 @@ class Entry:
 
 class Variants:
     def __init__(self, reg: erreg.Regulation, wp: weapons.Weapons | None = None,
-                 ceilings: dict[int, int] | None = None, curve: str = "common") -> None:
+                 ceilings: dict[int, int] | None = None, curve: str = "common",
+                 armor_variants: dict[int, tuple[int, ...]] | None = None) -> None:
         self.reg = reg
         self.W = reg.param("EquipParamWeapon",
                            erreg.load_paramdef(HERE / "paramdef" / "EquipParamWeapon.xml"))
@@ -126,10 +127,10 @@ class Variants:
         self._class_of: dict[tuple[int, ...], int] = {}
         self.class_gems: list[tuple[int, ...]] = []
         self.entries = self._build()
-        self.armor = self._build_armor()
+        self.armor = self._build_armor(armor_variants or {})
 
     # ------------------------------------------------------------ the armour
-    def _build_armor(self) -> dict[int, tuple[int, int]]:
+    def _build_armor(self, armor_variants: dict[int, tuple[int, ...]]) -> dict[int, tuple[int, int, tuple[int, ...]]]:
         """base id -> highest reinforcement level, for named pieces the smith can actually upgrade.
 
         Armour ids are all below 0x1000000 and every row uses reinforceTypeId 0, whose
@@ -141,11 +142,13 @@ class Variants:
         # The give-path equipment slots match the reference randomizer: head 12, body 13, legs 14,
         # arms 15.  -1 means "unknown slot" and disables auto-equip for that piece.
         slots = {0: 12, 1: 13, 2: 15, 3: 14}
-        out: dict[int, tuple[int, int]] = {}
+        clones = {i for ids in armor_variants.values() for i in ids}
+        out: dict[int, tuple[int, int, tuple[int, ...]]] = {}
         for row in P.rows:
-            if P.get(row, "weight") <= 0 or P.get(row, "materialSetId") == -1:
+            if row.id in clones or P.get(row, "weight") <= 0 or P.get(row, "materialSetId") == -1:
                 continue
-            out[row.id] = (10, slots.get(P.get(row, "protectorCategory"), -1))
+            ids = (row.id, *armor_variants.get(row.id, ()))
+            out[row.id] = (10, slots.get(P.get(row, "protectorCategory"), -1), ids)
         return out
 
     # ------------------------------------------------------------ the Ash pool
@@ -231,8 +234,8 @@ class Variants:
                              for a in range(AFFINITIES))
             out.append(f"weapon {e.base} {e.max_level} {e.affinity_mask} {cells}")
         out.append("# armor <base> <max level> (same piece, different reinforcement)")
-        for base, (top, slot) in sorted(self.armor.items()):
-            out.append(f"armor {base} {top} {slot}")
+        for base, (top, slot, ids) in sorted(self.armor.items()):
+            out.append(f"armor {base} {top} {slot} " + " ".join(str(i) for i in ids))
         out.append("# gems <class> <gem id> ...")
         for i, ids in enumerate(self.class_gems):
             out.append(f"gems {i} " + " ".join(str(g) for g in ids))

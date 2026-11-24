@@ -702,10 +702,39 @@ TIPS: dict[str, str] = {
         "upgrade ceiling and which Ashes of War fit each row. The DLL draws a fresh affinity, level "
         "and Ash each time the game hands you that weapon, in drops, chests, boss rewards and shops. "
         "The model, icon and moveset stay recognisable; the stats, scaling, status build-up and skill "
-        "change. No param rows are cloned, so the regulation keeps its size.\n\n"
+        "change. Weapon rows are never cloned; the optional armour-variant pass adds only the extra "
+        "rows you ask for.\n\n"
         "Example: looting the same sword five times gives five different rolls. Risk: it needs the DLL "
         "installed, and it replaces the static level roll for these weapons; without the DLL the "
         "regulation is still a complete run."
+    ),
+    "armor_variants": (
+        "Gives each armour piece extra stat blocks with the same look, so picks differ by more than level.\n\n"
+        "The pass clones a few EquipParamProtector rows, changes only the selected stat columns, and "
+        "copies every appearance field: model, icons, slot and name. The runtime mod then draws one of "
+        "those ids on each pickup, on top of the ordinary +0..+10 reroll. Standard, weighted and "
+        "somber pieces keep their own reinforce rules because each clone inherits its source row.\n\n"
+        "Example: four variants of the same helm give four defence profiles under one model. Risk: each "
+        "clone costs about 416 bytes before compression; keep the count modest on large modpacks."
+    ),
+    "armor_variant_stats": (
+        "Chooses which armour numbers the variant pass is allowed to change.\n\n"
+        "Negation covers the eight damage-type cut rates, resistance covers the seven status resistances, "
+        "poise covers durability and toughness correction, and weight changes how heavy the piece is. "
+        "Unselected columns stay exactly as the input wrote them, so a heavy set stays heavy if you "
+        "leave weight off.\n\n"
+        "Example: negation plus resistance gives different protection but identical poise and weight. "
+        "Risk: wide ranges can produce unusual pieces; the values stay inside the vanilla range of "
+        "the piece's own slot."
+    ),
+    "rarity_labels": (
+        "Adds a plain-text rarity tag to weapon and armour names in the patched item text.\n\n"
+        "The game's item archives contain no verified colour control code, so this writes an honest "
+        "label instead: a Common, Uncommon, Rare or Legendary row gets [COMMON], [UNCOMMON], [RARE] "
+        "or [LEGENDARY] after its name. The tag comes from the row's own rarity field and is "
+        "idempotent, so running twice never stacks labels.\n\n"
+        "Example: Iron Helmet [RARE] in the inventory. Risk: the tag is literal text; if a real "
+        "colour code is confirmed later it can replace the brackets without changing the rest."
     ),
     "random_armor_drops": (
         "Moves armor to other enemies without changing the armor.\n\n"

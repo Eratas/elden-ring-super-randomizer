@@ -140,7 +140,7 @@ void test_armor() {
     const std::string text =
         "MADLOVE-LOOT-VARIANTS 2\n"
         "weapon 1000000 25 1 0 - - - - - - - - - - - -\n"
-        "armor 40000 10 12\n"
+        "armor 40000 10 12 40000 41000 42000\n"
         "armor 50000 0 13\n"
         "armor 20000000 10\n";          // > 0x00FFFFFF: malformed, must be rejected
     loot_variants::Manifest m;
@@ -149,17 +149,22 @@ void test_armor() {
     CHECK_EQ(m.bad_lines, 1);
     CHECK_EQ(m.armor.size(), 2);
     CHECK_EQ(m.armor[40000].slot, 12);
+    CHECK_EQ(m.armor[40000].ids.size(), 3);
+    CHECK_EQ(m.armor[50000].ids.size(), 1);      // old v2 line without ids still works
     CHECK_EQ(m.armor[50000].max_level, 0);
 
     loot_variants::Options options;
     options.level_curve = loot_variants::kCurveEven;
     loot_variants::Rng rng(4242);
     bool seen[11] = {};
+    bool seen_variant[3] = {};
     for (int i = 0; i < 2000; ++i) {
         const loot_variants::Rolled rolled = loot_variants::roll_item(
             loot_variants::kArmorBit | 40000, m, options, rng);
         CHECK((rolled.item_id & loot_variants::kArmorBit) != 0);
-        CHECK_EQ(rolled.item_id & loot_variants::kArmorIdMask, 40000);
+        const std::uint32_t picked = rolled.item_id & loot_variants::kArmorIdMask;
+        CHECK(picked == 40000 || picked == 41000 || picked == 42000);
+        seen_variant[picked == 40000 ? 0 : (picked == 41000 ? 1 : 2)] = true;
         const std::uint32_t level = (rolled.item_id >> 24) & 0x0F;
         CHECK(level <= 10);
         CHECK_EQ(rolled.ash, loot_variants::kNoAsh);
@@ -168,11 +173,13 @@ void test_armor() {
     for (int level = 0; level <= 10; ++level) {
         CHECK(seen[level]);
     }
+    CHECK(seen_variant[0] && seen_variant[1] && seen_variant[2]);
 
     // An incoming +N armour id keeps its piece; the level is replaced, never added to.
     const loot_variants::Rolled from_upgraded = loot_variants::roll_item(
         loot_variants::kArmorBit | (7u << 24) | 40000, m, options, rng);
-    CHECK_EQ(from_upgraded.item_id & loot_variants::kArmorIdMask, 40000);
+    const std::uint32_t upgraded_id = from_upgraded.item_id & loot_variants::kArmorIdMask;
+    CHECK(upgraded_id == 40000 || upgraded_id == 41000 || upgraded_id == 42000);
     CHECK(((from_upgraded.item_id >> 24) & 0x0F) <= 10);
 
     // A piece that cannot be reinforced keeps its exact id, as does an unknown base.
