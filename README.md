@@ -10,15 +10,15 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.9** — **backup and rollback are clearer and safer:** the whole `msg` tree is
-> copied, Rollback picks from a list of restore points with their file counts and sizes, and every
-> restore is checksum-verified. `--ash-chance` controls how often rerolled weapons mount an Ash.
-> The installer finds Mod Engine from the game's own location, and `tools\verify_aobs.py` checks the
-> native mod's patterns after a game update. Full notes in the [Changelog](#changelog).
+> **What's new in v1.0.10** — **small polish, no new mechanics.** Reset now restores every pair
+> option to its real default (stamina multiplier 0.8 to 1.2 instead of 0 to 2.0), the hover tip
+> says so in every language, and `python tools\gui.py --self-test-headless` runs the built-in checks
+> without a message box, so scripts and CI get a clean exit code. Full notes in the
+> [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.9**, last updated **2026-11-24**.
+every setting. Current version: **1.0.10**, last updated **2026-11-24**.
 
 ```
 Files and output
@@ -116,7 +116,7 @@ synthesized somber affinity) does not exist in theirs, so their pass cannot see 
 | **Spells** | every sorcery and incantation receives another spell's effect (one pool for both); the cast animation can stay, come from a spell with the same signature, or from any spell; **spell stats** (FP / stamina cost and requirements) randomized independently of the weapon stats |
 | **Prices** | shop prices (`ShopLineupParam.value`) and sell prices (`EquipParamGoods.sellValue`) shuffled, or redrawn inside a range; sell prices optional; weapons, armour and Ashes of War can join the sell pool |
 | **Shops** | every merchant slot is refilled from a curated pool of real items (no debug rows, no "Type N" armour, no Depleted Ash); a shop never repeats an item in one run, and small general shops are filled to at least 40 rows when the pools allow it — prices untouched |
-| **Weapons** | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; **requirements are derived from the scaling the row actually received**, so a Strength/Arcane split asks for both and a 20-Strength requirement never lands on an S-Arcane weapon; **Chaotic weapon effects** has its own section: **Shuffle on-hit bundles** and **Shuffle held bundles** move the complete effect bundle (including its text ids) inside a class, **Roll chaotic statuses** gives each row 0–2 real statuses from the input's own SpEffect table with matching text and no repeated family, and **Chaotic statuses on loot only** limits that roll to weapons that appear in loot |
+| **Weapons** | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; **requirements are derived from the scaling the row actually received**, so a Strength/Arcane split asks for both and a 20-Strength requirement never lands on an S-Arcane weapon; **Chaotic weapon effects** has its own section: **Shuffle on-hit bundles** and **Shuffle held bundles** move the complete effect bundle (including its text ids) inside a class, **Roll chaotic statuses** gives each row 0–2 real statuses from the input's own SpEffect table with matching text and no repeated family, and **Chaotic statuses on loot only** limits that roll to weapons that appear in loot The stamina multiplier defaults to 0.8–1.2; Reset restores that range. |
 | **Ashes of War** | every Ash of War can receive another ash's **skill** (Lion's Claw becomes Sky Shot) and/or another ash's **on-hit effects**; donors come only from ashes that fit the same weapon types, and the two switches are independent |
 | **Loot** | enemy drop tables rerolled (choose the kinds); N independent rolls per enemy at P% each (default 3 at 25%, so a kill drops 0–3 items and 0.75 on average; 0 rolls = one guaranteed item); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a **rarity curve**, and **bosses roll a better curve**; **rare unique weapons** and **upgrade materials** can turn up; every category can be **moved between enemies**, armour sets as a set **Loot variants** (`--loot-variants`) writes a small manifest for the optional runtime DLL, which rerolls affinity, level and Ash on every weapon pickup. `--ash-chance` sets how often a rerolled pickup also mounts an Ash (default 50%). |
 | **Armour & talismans** | swap the stat columns between pieces of the same slot, roll each piece's numbers again (optionally **keeping each set coherent**), or move armour to different enemies; talismans shuffle whole rows and can move between enemies **Stat variants** (`--armor-variants`) clones rows with the same look and chosen stat columns for the runtime to hand out; `--rarity-labels` tags item names. |
@@ -700,6 +700,12 @@ game's own `oo2core_6_win64.dll` that the user already has.
   redistribute the game's files or DLL.
 
 ## Changelog
+
+**1.0.10** — 2026-11-24 — **polish.** Reset reads pair defaults from the option table, so the
+stamina multiplier goes back to 0.8–1.2; its tip now states that in all 13 languages.
+`gui.py --self-test-headless` skips the modal message box and writes the result file with a
+proper exit code for scripted runs. `goods_gaps.txt` again contains the name warnings rather than the
+Ash-of-War report.
 
 **1.0.9** — 2026-11-24 — **backup and rollback hardening:** whole-`msg` backups, a list-based
 Rollback picker, post-restore checksum verification, and Mod Engine discovery from the game path.

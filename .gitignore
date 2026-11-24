@@ -23,6 +23,7 @@ __pycache__/
 /dist/
 *.spec
 /gui_error.log
+/self_test_result.txt
 # Rust build cache for the fp-regen mod (regenerable with `cargo build`; ~240 MB, never commit)
 mods/fp-regen/target/
 mods/fp-regen/**/target/

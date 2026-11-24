@@ -149,6 +149,7 @@ Ashes, a single moveset, a regulation with no timed buffs) failing soft.
 * `tools/randomize.py` — the engine: parse, run the passes, write the output and the reports.
 * `tools/backup.py` — backup-and-replace, revert and backup pruning.
 * `tools/test_logic.py` — the logic tests above; also used by `gui.py --self-test` inside the frozen exe.
+  Add `--self-test-headless` to skip the message box and get a real exit code in scripts / CI.
 * `tools/test_passes_synthetic.py` — the randomizer passes (weapons, gems, gear, spells, goods, shops,
   enemy-drops) on a built regulation; part of the gate (`tools/gate.py`).
 * `tools/loot_variants.py` — the per-pickup manifest (weapon affinities/Ash, armour levels and stat

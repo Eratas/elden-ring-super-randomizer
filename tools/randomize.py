@@ -533,11 +533,11 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             say(phases.STACK_SIZES)
             qlines = goods.randomize(reg, names, rng)
             print("\n".join(l for l in qlines if l.startswith("#")))
-        glines: list[str] = []                             # read-only warning about goods without names
+        nglines: list[str] = []                            # read-only warning about goods without names
         if v["goods_name_gaps"]:                            # ... done above the Goods phase
             say(phases.NAMES_GAPS)
-            glines = names_gaps.goods_gaps(reg)
-            print("\n".join(l for l in glines if l.startswith("#")))
+            nglines = names_gaps.goods_gaps(reg)
+            print("\n".join(l for l in nglines if l.startswith("#")))
         if v["random_prices"]:
             say(phases.PRICES)
             lines += [""] + randomize_prices(reg, rng, v["price_mode"], v["price_min"], v["price_max"],
@@ -855,8 +855,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             dump("start.txt", tlines)
         if qlines:
             dump("goods.txt", qlines)
-        if glines:
-            dump("goods_gaps.txt", glines)
+        if nglines:
+            dump("goods_gaps.txt", nglines)
         if shop_lines:
             dump("shops.txt", shop_lines)
         if dlines:

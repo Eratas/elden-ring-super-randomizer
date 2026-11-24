@@ -324,6 +324,12 @@ for _opt in OPTIONS:
         BY_FLAG[_flag] = _opt
 
 
+def pair_defaults(key: str) -> tuple[str, str]:
+    """The two halves of a `kind="pair"` default, so the window's Reset reads the same source."""
+    parts = str(BY_KEY[key].default).split(",", 1)
+    return parts[0], parts[1] if len(parts) == 2 else parts[0]
+
+
 # -------------------------------------------------------------------------------- argparse
 def build_argparse(prog: str | None = None, description: str = "", epilog: str = ""):
     """An ArgumentParser that produces exactly the options in OPTIONS."""

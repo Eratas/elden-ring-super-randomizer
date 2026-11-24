@@ -1089,9 +1089,12 @@ class App:
                 else:
                     var.set("" if o.default is None else str(o.default))
             self.vars["weapon_names_on"].set(True)
-            if "stamina_rate_lo" in self.vars:
-                self.vars["stamina_rate_lo"].set("0")
-                self.vars["stamina_rate_hi"].set("2.0")
+            for o in options.OPTIONS:
+                if o.kind != "pair" or o.key + "_lo" not in self.vars:
+                    continue
+                lo, hi = options.pair_defaults(o.key)
+                self.vars[o.key + "_lo"].set(lo)
+                self.vars[o.key + "_hi"].set(hi)
         finally:
             self.syncing = False
         self._changed()

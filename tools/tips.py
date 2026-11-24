@@ -399,7 +399,7 @@ TIPS: dict[str, str] = {
         "Every weapon row's stamina cost is multiplied by a value inside this range, written as low "
         "then high, and the cost is normalised so the first light attack costs the weapon's base cost "
         "times the multiplier whatever moveset the row ended up with. 0 allows a free attack and 2.0 "
-        "doubles the cost.\n\n"
+        "doubles the cost. It defaults to 0.8 to 1.2, and Reset restores that range.\n\n"
         "Example: 0.5 to 1.5 means no weapon costs more than one and a half times its vanilla stamina. "
         "Risk: a value near 0 makes a heavy weapon cost nothing to swing. Requires Randomize weapon "
         "stats."

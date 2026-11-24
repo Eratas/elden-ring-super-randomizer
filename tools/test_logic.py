@@ -1709,6 +1709,14 @@ def test_ash_chance_empty() -> None:
     check(back["ash_chance"] == 50, "an empty Ash chance did not fall back to the default")
 
 
+def test_pair_defaults() -> None:
+    """Reset and --help must read the same stamina range as the option table."""
+    check(options.pair_defaults("stamina_rate") == ("0.8", "1.2"),
+          f"stamina default is {options.pair_defaults('stamina_rate')}, expected 0.8 / 1.2")
+    check(options.pair_defaults("boss_hp_scale") == ("1.0", "1.0"),
+          "boss scale default is not a neutral 1.0 / 1.0")
+
+
 def test_aob_verifier() -> None:
     """The verifier must understand both wildcard widths or it reports false failures after a patch."""
     import verify_aobs
@@ -1824,7 +1832,7 @@ def main() -> int:
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
                                test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
                                test_presets, test_release_package, test_rarity_label_tables,
-                               test_aob_verifier, test_ash_chance_empty):
+                               test_aob_verifier, test_ash_chance_empty, test_pair_defaults):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")
