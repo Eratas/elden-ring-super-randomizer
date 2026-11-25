@@ -230,6 +230,15 @@ TIPS: dict[str, str] = {
         "Example: ticking weapons and armor only turns every merchant into a gear seller. Requires "
         "Randomize what shops sell."
     ),
+    "shop_stock_target": (
+        "Sets how many slots a filled-up small general shop gets.\n\n"
+        "With stock randomization on, small general shops are filled up to this target, so players see "
+        "that many sellable items instead of vanilla's roughly ten. Shops that already carry two or "
+        "more categories can reach it; merchant blocks bigger than the target are left alone. A zero "
+        "or negative target turns the fill off (individual slots are still rerolled when kinds are "
+        "selected). Default is 40.\n\n"
+        "Example: 60 gives a general shop a rotating stock of up to a minute of items."
+    ),
     "random_prices": (
         "Shuffles what shops charge.\n\n"
         "Every goods slot of every shop receives another slot's rune price (ShopLineupParam.value), so "

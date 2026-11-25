@@ -164,6 +164,10 @@ OPTIONS: tuple[Opt, ...] = (
     _o("shop_stock_kinds", "--shop-stock-kinds", kind="groups", default="", group="prices",
        needs=("random_shop_stock",), items=("weapons", "armor", "talismans", "goods", "ashes"),
        label="Shop stock categories"),
+    _o("shop_stock_target", "--shop-stock-target", kind="int", default="40", group="prices",
+       label="Shop stock target", metavar="N",
+       needs=("random_shop_stock",),
+       help="Small general shops are filled up to this many slots when stock is randomized"),
     _o("random_prices", "--random-prices", group="prices", label="Shuffle shop prices"),
     _o("price_mode", "--price-mode", kind="enum", default="shuffle", group="prices",
        choices=("shuffle", "range"), needs=("random_prices",), label="Method"),
@@ -486,6 +490,8 @@ def validate(values: dict) -> dict:
         raise ValueError("Chance of a random Ash must be between 0 and 100 (percent)")
     if out["enemy_drop_chance"] is None:
         out["enemy_drop_chance"] = BY_KEY["enemy_drop_chance"].default
+    if out["shop_stock_target"] is None:
+        out["shop_stock_target"] = int(BY_KEY["shop_stock_target"].default)
     if not 1 <= out["enemy_drop_chance"] <= 100:
         raise ValueError("Chance per roll must be between 1 and 100 (percent)")
 
@@ -783,6 +789,9 @@ def argv_from_values(values: dict) -> list[str]:
         have = _groups_value(values, "shop_stock_kinds")
         if len(have) != len(o.items):
             a += ["--shop-stock-kinds", ",".join(have)]
+        target = values.get("shop_stock_target")
+        if target not in (None, ""):
+            a += ["--shop-stock-target", str(target)]
 
     # weapons: --weapons when all four are on, else the individual flags
     four = ("somber_infusable", "random_movesets", "random_default_ash", "random_stats")

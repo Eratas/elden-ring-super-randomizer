@@ -10,14 +10,14 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.11** — **one README.** The outdated copies under `dist/`, `mods/loot-variants/`
-> and `mods/fp-regen/` are gone; this file is the single source of truth, and the native-mod internals
-> (the roll, the hook, the post-update AOB check) now live in [DEVELOPMENT.md](DEVELOPMENT.md). No
-> behaviour changed. Full notes in the [Changelog](#changelog).
+> **What's new in v1.0.12** — **shops sell more things.** New `--shop-stock-target N` (default 40)
+> sets how many slots a filled-up small general shop gets, in all 13 languages. Vanilla's five small
+> shops were at 3/1/8/3/8 slots; a seeded run with target 60 added 66 slots. Full notes in the
+> [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.11**, last updated **2026-11-24**.
+every setting. Current version: **1.0.12**, last updated **2026-11-24**.
 
 ```
 Files and output
@@ -114,7 +114,7 @@ synthesized somber affinity) does not exist in theirs, so their pass cannot see 
 | **Consumables** | every usable item (pots, greases, meats, boluses, tools, usable key items) receives another item's use effect; `shuffle` (every effect used exactly once) or `random` (repeats allowed); the use **animation** can stay with the effect, come from another item of the same class, or from any item; flasks and remembrances can join the pool; **stack sizes** shuffled; buff **durations** shuffled separately |
 | **Spells** | every sorcery and incantation receives another spell's effect (one pool for both); the cast animation can stay, come from a spell with the same signature, or from any spell; **spell stats** (FP / stamina cost and requirements) randomized independently of the weapon stats |
 | **Prices** | shop prices (`ShopLineupParam.value`) and sell prices (`EquipParamGoods.sellValue`) shuffled, or redrawn inside a range; sell prices optional; weapons, armour and Ashes of War can join the sell pool |
-| **Shops** | every merchant slot is refilled from a curated pool of real items (no debug rows, no "Type N" armour, no Depleted Ash); a shop never repeats an item in one run, and small general shops are filled to at least 40 rows when the pools allow it — prices untouched |
+| **Shops** | every merchant slot is refilled from a curated pool of real items (no debug rows, no "Type N" armour, no Depleted Ash); a shop never repeats an item in one run, and small general shops are filled to the `--shop-stock-target` (40 by default) when the pools allow it — prices untouched |
 | **Weapons** | somber/unique weapons become infusable (12 affinities + Ashes of War, rows named in the game's own text); movesets shuffled (melee ↔ shields, bows among bows); default skill rolled so it animates with the row's moveset; every affinity row gets its own randomized attack, guard, requirements, scaling, status build-up and stamina cost — each group tickable on its own; **requirements are derived from the scaling the row actually received**, so a Strength/Arcane split asks for both and a 20-Strength requirement never lands on an S-Arcane weapon; **Chaotic weapon effects** has its own section: **Shuffle on-hit bundles** and **Shuffle held bundles** move the complete effect bundle (including its text ids) inside a class, **Roll chaotic statuses** gives each row 0–2 real statuses from the input's own SpEffect table with matching text and no repeated family, and **Chaotic statuses on loot only** limits that roll to weapons that appear in loot The stamina multiplier defaults to 0.8–1.2; Reset restores that range. |
 | **Ashes of War** | every Ash of War can receive another ash's **skill** (Lion's Claw becomes Sky Shot) and/or another ash's **on-hit effects**; donors come only from ashes that fit the same weapon types, and the two switches are independent |
 | **Loot** | enemy drop tables rerolled (choose the kinds); N independent rolls per enemy at P% each (default 3 at 25%, so a kill drops 0–3 items and 0.75 on average; 0 rolls = one guaranteed item); weapons in drop tables, chests, boss rewards and shops get a random upgrade level (+0…+25, somber +0…+10) with a **rarity curve**, and **bosses roll a better curve**; **rare unique weapons** and **upgrade materials** can turn up; every category can be **moved between enemies**, armour sets as a set **Loot variants** (`--loot-variants`) writes a small manifest for the optional runtime DLL, which rerolls affinity, level and Ash on every weapon pickup. `--ash-chance` sets how often a rerolled pickup also mounts an Ash (default 50%). |
@@ -261,7 +261,7 @@ from it. Keep this table in step with that file.
 | 5 | enemy runes | `NpcParam.getSoul` | `--random-runes`, `--rune-mode`, `--rune-min/max` |
 | 6 | enemy hit points | `NpcParam.hp` | `--random-enemy-hp`, `--hp-mode`, `--hp-min/max` |
 | 7 | enemy drops | `ItemLotParam_enemy` (+ map, shops, goods, equipment for the pool) | `--random-enemy-drops`, `--enemy-drop-rolls`, `--enemy-drop-chance`, `--enemy-drop-kinds` |
-| 8 | shop stock | `ShopLineupParam` | `--random-shop-stock`, `--shop-stock-kinds` |
+| 8 | shop stock | `ShopLineupParam` | `--random-shop-stock`, `--shop-stock-kinds`, `--shop-stock-target` |
 | 9 | weapons | `EquipParamWeapon` (+ Gem, SwordArts, Reinforce, AttackElementCorrect) | `--somber-infusable`, `--random-movesets`, `--random-default-ash`, `--random-stats`, `--random-weapon-onhit-shuffle`, `--random-weapon-holder-shuffle`, `--random-weapon-status-roll`, `--random-loot-effects` |
 | 10 | ashes of war | `EquipParamGem` | `--random-gem-skills`, `--random-gem-effects` |
 | 11 | armour, talismans | `EquipParamProtector`, `EquipParamAccessory` | `--random-armor`, `--random-armor-fresh`, `--armor-keep-sets`, `--random-talismans`, `--armor-variants`, `--armor-variant-stats` |
@@ -701,6 +701,11 @@ game's own `oo2core_6_win64.dll` that the user already has.
   redistribute the game's files or DLL.
 
 ## Changelog
+
+**1.0.12** — 2026-11-24 — **bigger shops.** New `--shop-stock-target N` (default 40) sets how many slots
+a filled-up small general shop gets; five of the vanilla small shops (3/1/8/3/8 slots) rise to the
+target when the pools allow it. `--shop-stock-target 0` or negative turns the fill off. The tip ships
+in all 13 languages; the argv fuzz round-trips the value.
 
 **1.0.11** — 2026-11-24 — **docs consolidation.** One README: the stale copy in `dist/` and the
 two native-mod specs under `mods/` are removed, and their unique technical content (the loot roll,

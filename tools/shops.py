@@ -34,8 +34,8 @@ NAMES = {1: "EquipParamGoods", 2: "EquipParamWeapon", 3: "EquipParamProtector",
          4: "EquipParamAccessory", 5: "EquipParamGem"}
 CATEGORY_OF_PARAM = {v: k for k, v in NAMES.items()}
 BAD_NAME = re.compile(r"(?i)(^\s*$|\?|\[npc\]|^type \d+$|\b(?:dummy|test|debug|depleted|placeholder|unused)\b)")
-TARGET_STOCK = 40          # a general merchant is filled up to this many slots
-MAX_ADDED_PER_SHOP = 24    # never turn one merchant into a warehouse
+TARGET_STOCK = 40          # a general merchant is filled up to the target (default 40 slots)
+MAX_ADDED_PER_SHOP = 24    # a floor on fills, so a shop can always reach the default target
 MAX_REPORT_LINES = 300
 
 
@@ -97,7 +97,12 @@ def _median(values: list[int]) -> int:
     return values[len(values) // 2] if values else 100
 
 
-def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None = None) -> list[str]:
+def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None = None,
+              target: int = TARGET_STOCK) -> list[str]:
+    """Reroll merchant stock; small general shops are filled up to `target` slots.
+
+    Pass target = 0 (or a non-positive value) to fill only when stock randomization is on.
+    """
     wanted = set(kinds) if kinds else set(SHOP_FOR.values())
     wanted &= set(SHOP_FOR.values())
     if not wanted:
@@ -135,7 +140,7 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
 
     added: list[tuple[int, int, int]] = []           # (new id, category, template id)
     for idx, (run, eligible) in enumerate(zip(_runs(S), run_rows)):
-        if (not eligible or len(run) >= TARGET_STOCK or len(eligible) >= TARGET_STOCK
+        if (not eligible or target <= 0 or len(run) >= target or len(eligible) >= target
                 or len(eligible) < 4 or run[0].id >= 10_000_000):
             continue
         cats = {}
@@ -146,8 +151,8 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
         last_id = run[-1].id
         later = [r.id for r in S.rows if r.id > last_id]
         room = (min(later) - last_id - 1) if later else 999
-        free = [last_id + i for i in range(1, min(room, TARGET_STOCK - len(run),
-                                                  MAX_ADDED_PER_SHOP) + 1)]
+        free = [last_id + i for i in range(1, min(room, target - len(run),
+                                                  max(MAX_ADDED_PER_SHOP, target)) + 1)]
         free = [i for i in free if i not in S.by_id]
         if not free:
             continue
@@ -182,7 +187,7 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
              f"({', '.join(f'{len(pools[c])} {KIND_OF_CATEGORY[c]}' for c in sorted(pools))})",
              f"# shop stock: changed slots: "
              f"{', '.join(f'{changed.get(c, 0)} {KIND_OF_CATEGORY[c]}' for c in sorted(pools))}",
-             f"# shop stock: {len(added)} slots added to small general shops (target {TARGET_STOCK})",
+             f"# shop stock: {len(added)} slots added to small general shops (target {target})",
              "# slot  :  old item  ->  new item"]
     for rid, cat, old, new in rows:
         if new == old:
