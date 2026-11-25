@@ -276,9 +276,15 @@ GUI's **Install shops DLL** button) finds the DLL, asks for the Mod Engine `dll/
 discovery fails, and copies the sample ini without overwriting an existing one. The ini has
 `[general] enabled` and `every_minutes` (default 15, matching the manifest).
 
-**Status: staged.** The DLL parses the manifest and starts a periodic tick; the write that changes the
-game's in-memory `ShopLineupParam.equipId` is marked `--probe-step--` in `src/shops_periodic.cpp` and
-is deliberately inert. A game update or a new AOB set has to be verified before that step is enabled:
-run `python tools\verify_aobs.py` against `eldenring.exe` and add the shop-menu function's pattern and
-target before wiring the write. Until then the DLL never changes game data. In-game periodic reroll is
-**UNVERIFIED**; the parser is tested on the host (12 blocks and 5 pools from a real manifest).
+**Status: staged.** The DLL resolves its own folder, reads `shops_periodic.ini` (`=` separators and
+`;` comments) and the manifest from `dll/offline` or `<mod root>\mod`, parses it, and starts a periodic
+tick. The write that changes the game's in-memory `ShopLineupParam.equipId` is marked `--probe-step--`
+in `src/shops_periodic.cpp` and is deliberately inert. A game update or a new AOB set has to be
+verified before that step is enabled: run `python tools\verify_aobs.py` against `eldenring.exe` and add
+the shop-menu function's pattern and target before wiring the write. Until then the DLL never changes
+game data. In-game periodic reroll is **UNVERIFIED**; the parser is tested on the host (including the
+bind hash) against a real manifest (12 blocks and 5 pools).
+
+`DllMain` starts the worker directly, which is acceptable for this staged build but should move to a
+delayed thread once the AOB write lands — thread creation under the loader lock can deadlock with
+other Mod Engine natives. `pack_release.py` ships both DLLs and both sample inis in the additive zip.

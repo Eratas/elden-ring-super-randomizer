@@ -44,7 +44,10 @@ int main(int argc, char** argv) {
         std::printf("FAIL: load_manifest(%s): %s\n", path, err.c_str());
         return 1;
     }
-    check(m.every_minutes == 15 || m.every_minutes > 0, "every not parsed (>0)");
+    check(m.every_minutes > 0, "every not parsed (>0)");
+    if (argc < 2) {   // the fixture's hash is known; a passed-in real manifest just needs a bind
+        check(m.bind == 0xfe3e25833098e16bULL, "bind parsed the size instead of the FNV hash");
+    }
     check(m.bind != 0, "bind not parsed");
     check(m.valid(), "manifest invalid after load");
     check(!m.pools.empty(), "no pools parsed");

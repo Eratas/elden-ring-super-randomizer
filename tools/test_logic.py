@@ -1796,7 +1796,7 @@ def test_release_package() -> None:
     root = Path(tempfile.mkdtemp(prefix="release-test-"))
     dist = root / "dist"
     (dist / "msg" / "engus").mkdir(parents=True)
-    for name in (pack_release.EXE, pack_release.DLL, pack_release.INI):
+    for name in (pack_release.EXE, *pack_release.DLLS, *pack_release.INIS):
         (dist / name).write_bytes(b"payload")
     (dist / "msg" / "engus" / "item_dlc02.msgbnd.dcx").write_bytes(b"msg")
     (dist / "settings.json").write_text("{}", encoding="utf-8")
@@ -1809,7 +1809,9 @@ def test_release_package() -> None:
         docs = pack_release.doc_sources()
         names = {p.as_posix() for p in files} | {d.name for d in docs}
         check("EldenRingSuperRandomizer.exe" in names, "the release omits the executable")
-        check("loot_variants.dll" in names, "the release omits the optional DLL")
+        check("loot_variants.dll" in names, "the release omits the optional loot DLL")
+        check("shops_periodic.dll" in names, "the release omits the optional shops DLL")
+        check("shops_periodic.ini" in names, "the release omits the shops sample ini")
         check("msg/engus/item_dlc02.msgbnd.dcx" in names, "the release omits the msg archives")
         check(not any("settings" in n or "randomized" in n or "self_test" in n for n in names),
               f"the release leaks developer files: {names}")

@@ -19,8 +19,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 EXE = "EldenRingSuperRandomizer.exe"
-DLL = "loot_variants.dll"
-INI = "loot_variants.ini"
+DLL = "loot_variants.dll"                       # required warning; the other native is optional too
+DLLS = ("loot_variants.dll", "shops_periodic.dll")
+INI = "loot_variants.ini"                        # kept for the test contract
+INIS = ("loot_variants.ini", "shops_periodic.ini")
 DOCS = ("README.md", "NEXUS_DESCRIPTION.txt", "NEXUS_DESCRIPTION.strict.txt")
 
 
@@ -28,7 +30,7 @@ def collect_release_files(dist: Path) -> list[Path]:
     """Paths relative to dist/, sorted; only files that actually exist."""
     dist = Path(dist)
     out: list[Path] = []
-    for name in (EXE, DLL, INI):
+    for name in (EXE, *DLLS, *INIS):
         if (dist / name).is_file():
             out.append(Path(name))
     msg = dist / "msg"

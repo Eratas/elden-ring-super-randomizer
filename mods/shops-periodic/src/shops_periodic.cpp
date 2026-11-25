@@ -36,11 +36,13 @@ std::string ini_value(const char* ini_path, const char* section, const char* key
             section_cur = line;
             continue;
         }
-        if (section_cur != std::string("[") + section + "]" || line.find(':') == std::string::npos) {
+        const std::size_t sep = line.find('=');
+        if (section_cur != std::string("[") + section + "]" || sep == std::string::npos
+                || line.front() == ';' || line.front() == '#') {
             continue;
         }
-        std::string k = line.substr(0, line.find(':'));
-        std::string v = line.substr(line.find(':') + 1);
+        std::string k = line.substr(0, sep);
+        std::string v = line.substr(sep + 1);
         while (!v.empty() && v.front() == ' ') v.erase(v.begin());
         while (!k.empty() && (k.back() == ' ' || k.back() == '\r')) k.pop_back();
         while (!v.empty() && v.back() == '\r') v.pop_back();
@@ -105,8 +107,25 @@ extern "C" __declspec(dllexport) void shops_periodic_shutdown() {
     }
 }
 
-BOOL WINAPI DllMain(HMODULE, DWORD reason, LPVOID) {
-    if (reason == DLL_PROCESS_DETACH) {
+BOOL WINAPI DllMain(HMODULE module, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        char dll_path[MAX_PATH] = {0};
+        GetModuleFileNameA(module, dll_path, MAX_PATH);
+        std::string folder(dll_path);
+        const std::size_t slash = folder.find_last_of("\\/");
+        folder = slash == std::string::npos ? std::string(".") : folder.substr(0, slash);
+        const std::string ini = folder + "\\shops_periodic.ini";
+        // The manifest travels with regulation.bin in <mod root>\mod, two folders up from dll/offline.
+        const std::string local = folder + "\\shops_periodic.txt";
+        const std::string mod = folder + "\\..\\..\\mod\\shops_periodic.txt";
+        const char* manifest = std::ifstream(local).good() ? local.c_str() : mod.c_str();
+        try {
+            shops_periodic_init(manifest, ini.c_str());
+        } catch (...) {
+            // DllMain must never throw: leave the game untouched and let the log explain.
+            g_running = false;
+        }
+    } else if (reason == DLL_PROCESS_DETACH) {
         shops_periodic_shutdown();
     }
     return TRUE;

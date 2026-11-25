@@ -35,9 +35,9 @@ bool next_tok(std::istringstream& ss, std::string& tok) {
 
 bool parse_bind(const char* line, std::uint64_t& out, std::string& error) {
     std::istringstream ss(line);
-    std::string kind, hex;
-    ss >> kind >> hex;
-    if (kind != "bind" || hex.empty()) {
+    std::string kind, size_tok, hex;
+    ss >> kind >> size_tok >> hex;
+    if (kind != "bind" || size_tok.empty() || hex.empty()) {
         error = "expected: bind <size> <hex>";
         return false;
     }
@@ -111,8 +111,8 @@ bool load_manifest(const char* path, Manifest& out, std::string& error) {
             continue;
         }
         if (first == "bind") {
-            std::string hex;
-            ss >> hex;
+            std::string size_tok, hex;
+            ss >> size_tok >> hex;
             out.bind = std::strtoull(hex.c_str(), nullptr, 16);
         } else if (first == "every") {
             std::string tok;
