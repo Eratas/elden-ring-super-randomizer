@@ -581,7 +581,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
         if v["random_shop_stock"]:
             say(phases.SHOP_STOCK)
             shop_lines = shops.randomize(reg, rng, _kinds(v["shop_stock_kinds"]),
-                                 target=int(v["shop_stock_target"]))
+                                         target=int(v["shop_stock_target"]))
             print("\n".join(l for l in shop_lines if l.startswith("#")))
         else:
             shop_lines = []

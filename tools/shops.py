@@ -101,7 +101,8 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
               target: int = TARGET_STOCK) -> list[str]:
     """Reroll merchant stock; small general shops are filled up to `target` slots.
 
-    Pass target = 0 (or a non-positive value) to fill only when stock randomization is on.
+    The fill is skipped when target <= 0, while the per-slot reroll still runs (that half is what
+    --random-shop-stock buys; the fill is the extra bit the target adds).
     """
     wanted = set(kinds) if kinds else set(SHOP_FOR.values())
     wanted &= set(SHOP_FOR.values())
