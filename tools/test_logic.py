@@ -575,6 +575,23 @@ def test_real_file(path: str) -> None:
               for r in S.rows if shops.SHOP_FOR.get(S.get(r, "equipType")) in pools),
           "shops.randomize put an item of the wrong category in a shop slot")
 
+    # shops periodic manifest (the file mods/shops-periodic reads)
+    lines = shops.periodic_manifest(reg, data=Path(path).read_bytes())
+    check(any(l.startswith("bind ") for l in lines), "shops.periodic_manifest wrote no bind line")
+    check(any(l.startswith("every ") for l in lines), "shops.periodic_manifest wrote no every line")
+    check(any(l.startswith("pool ") for l in lines), "shops.periodic_manifest wrote no pool lines")
+    check(any(l.startswith("shop ") for l in lines), "shops.periodic_manifest wrote no shop lines")
+    for l in lines:
+        parts = l.split()
+        if parts[0] == "shop":
+            ids = [int(x) for x in parts[2::2]]
+            check(ids and all(i > 0 for i in ids), "shops.periodic_manifest shop line has no slot ids")
+    # the pools must be real pool entries and the bind must match the file
+    pool_line = next(l for l in lines if l.startswith("pool "))
+    pool_ids = [int(x) for x in pool_line.split()[2:]]
+    check(pool_ids and all(i > 0 for i in pool_ids), "shops.periodic_manifest wrote empty pool entries")
+    check(lines[0].startswith("bind "), "shops.periodic_manifest bind must come first")
+
     # talkmsg + weapon_names (item 8): patch an FMG text into a shipped archive and read it back
     archive = textarchives.MSG_DIR / "engus" / textarchives.ITEM_ARCHIVE
     if archive.is_file():
@@ -1659,6 +1676,16 @@ def test_install_runtime() -> None:
               "install_runtime: an existing ini was overwritten")
         check(any("already up to date" in line for line in lines),
               "install_runtime: a repeat install was not recognised as up to date")
+        # The second optional native (shops_periodic) uses the same discovery, different names.
+        shop_dll = source / "shops_periodic.dll"
+        shop_dll.write_bytes(b"shops dll payload")
+        install_runtime.install(source=shop_dll, dll_dir=target, kind="shops_periodic")
+        check((target / "shops_periodic.dll").read_bytes() == shop_dll.read_bytes(),
+              "install_runtime: the shops DLL was not copied byte-for-byte")
+        check((target / "shops_periodic.ini").is_file(),
+              "install_runtime: the shops sample ini was not installed")
+        check(install_runtime.find_dll(source=shop_dll, kind="shops_periodic") == shop_dll,
+              "install_runtime: find_dll ignored an explicit shops source")
         import discover
         saved_default, saved_discover = install_runtime.DEFAULT_TARGET, install_runtime._discovered_targets
         saved_folders, saved_dirs = discover.err_folders, discover.game_dirs

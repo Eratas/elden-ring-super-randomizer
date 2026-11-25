@@ -371,6 +371,14 @@ class App:
                                                                 "Mod Engine dll/offline folder so pickups can be "
                                                                 "rerolled at runtime. Writes no game data."))
 
+        self.install_shops_btn = ttk.Button(actions, text=self.t("ui:install_shops_dll", "Install shops DLL"),
+                                            style="TButton", command=lambda: self._install_dll("shops_periodic"))
+        self.install_shops_btn.pack(side="left", padx=(0, 8), pady=5)
+        Tooltip(self.install_shops_btn,
+                self.t("ui:tip_install_shops_dll", "Copy the optional shops-periodic DLL into the Mod Engine "
+                                                   "dll/offline folder. shops_periodic.txt must sit next to "
+                                                   "regulation.bin; the ini sets the reroll interval."))
+
         self.run_btn = ttk.Button(actions, text=self.t("ui:randomize", "Randomize"), style="Run.TButton",
                                   command=lambda: self._run("run"))
         self.run_btn.pack(side="right", padx=(6, PAD), pady=5)
@@ -1317,40 +1325,46 @@ class App:
                             self.t("ui:backup_done_body", "Original files copied to:\n{0}").format(bdir),
                             parent=self.root)
 
-    def _install_dll(self) -> None:
-        """Copy the optional native mod to the Mod Engine dll/offline folder, no run involved."""
+    def _install_dll(self, kind: str = "loot_variants") -> None:
+        """Copy an optional native mod to the Mod Engine dll/offline folder, no run involved."""
         if self.running:
             return
-        target = install_runtime.find_target()
+        shops = kind == "shops_periodic"
+        target = install_runtime.find_target(kind=kind)
         if target is None:
             chosen = filedialog.askdirectory(
                 title=self.t("ui:install_dll_pick", "Mod Engine dll/offline folder"), parent=self.root)
             if not chosen:
                 return
             target = Path(chosen)
-        if install_runtime.find_dll() is None:
+        if install_runtime.find_dll(kind=kind) is None:
             messagebox.showerror(self.t("ui:install_failed", "Install failed"),
-                                 self.t("ui:install_no_dll", "The built loot_variants.dll was not found. "
-                                                             "Run mods/loot-variants/build.ps1 first."),
+                                 self.t("ui:install_no_dll", "The built DLL was not found. "
+                                                             "Run the mod's build.ps1 first."),
                                  parent=self.root)
             return
+        body = self.t("ui:install_shop_body", "Install the shops DLL in:\n{0}\n\n"
+                                             "No regulation or save file is changed.") if shops else \
+            self.t("ui:install_dll_body", "Install the loot-variants DLL in:\n{0}\n\n"
+                                          "No regulation or save file is changed.")
         if not messagebox.askyesno(
-                self.t("ui:install_dll", "Install DLL"),
-                self.t("ui:install_dll_body", "Install the loot-variants DLL in:\n{0}\n\n"
-                                              "No regulation or save file is changed.").format(target),
-                parent=self.root):
+                self.t("ui:install_dll", "Install DLL"), body.format(target), parent=self.root):
             return
         try:
-            lines = install_runtime.install(dll_dir=target)
+            lines = install_runtime.install(dll_dir=target, kind=kind)
         except (ValueError, OSError) as error:
             messagebox.showerror(self.t("ui:install_failed", "Install failed"), str(error), parent=self.root)
             return
         for line in lines:
             self._log(line, True)
-        messagebox.showinfo(self.t("ui:install_done", "DLL installed"),
-                            self.t("ui:install_done_body", "The optional loot mod is installed.\n\n"
-                                                           "Generate a regulation with --loot-variants and copy "
-                                                           "loot_variants.txt next to it."), parent=self.root)
+        done = self.t("ui:install_shop_done", "The shops DLL is installed.\n\n"
+                                             "Generate with --random-shop-stock, copy shops_periodic.txt next "
+                                             "to regulation.bin, and set every_minutes in shops_periodic.ini.") \
+            if shops else \
+            self.t("ui:install_done_body", "The optional loot mod is installed.\n\n"
+                                           "Generate a regulation with --loot-variants and copy "
+                                           "loot_variants.txt next to it.")
+        messagebox.showinfo(self.t("ui:install_done", "DLL installed"), done, parent=self.root)
 
     def _revert(self) -> None:
         """Restore the most recent backup, after a confirmation."""
@@ -1496,7 +1510,7 @@ class App:
         """Backup/Rollback/Install touch the same files a run does: never let them race the worker."""
         state = "normal" if enabled else "disabled"
         for name in ("open_btn", "backup_btn", "revert_btn", "rollback_btn", "install_btn",
-                     "repack_btn", "sim_btn", "preview_btn", "run_btn"):
+                     "install_shops_btn", "repack_btn", "sim_btn", "preview_btn", "run_btn"):
             widget = getattr(self, name, None)
             if widget is not None:
                 widget.configure(state=state)

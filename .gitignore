@@ -29,5 +29,8 @@ mods/fp-regen/target/
 mods/fp-regen/**/target/
 # native mod build output (regenerable with build.ps1)
 mods/loot-variants/dist/
+mods/shops-periodic/dist/
+# host-test fixture written by test_shops_periodic.cpp
+/shops_periodic_fixture.txt
 # local scratch space (audit dumps, one-off notes)
 /Temp/

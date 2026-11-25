@@ -60,4 +60,4 @@ T = {'ui:tip_command': 'このウィンドウが実行するコマンドライ�
     'phase:goods name gaps': 'goods name gaps',
     'opt:random_dropped_shop_weapons:label': '武器店の在庫にランダムな武器',
     'opt:random_dropped_shop_weapons:tip': '各武器店(ShopLineupParam)の入庫スロットを再抽出します:店が販売する武器が毎回異なるランダムなものになります。\n\n実行ごとの再抽出:各商人スロットが販売する武器は世界の武器のプールから再抽出されるため、購入するものは実行ごとに変わります。世界に同じ外観の2行がある場合、販売される武器は異なる行になります。武器スロットだけが変わります。店の他のスロットは変わりません。\n\n例: 武器店は毎回異なるランダムな武器を販売します。リスク: 特別なものはありません。「敵のドロップ品でランダムな武器」が必要です。'
-}
+, 'ui:install_shops_dll': "ショップDLLをインストール", 'ui:tip_install_shops_dll': "オプションの shops-periodic DLL を Mod Engine の dll/offline にコピーします。shops_periodic.txt は regulation.bin の隣に置き、間隔は ini で設定します。", 'ui:install_shop_body': "ショップDLLのインストール先:\n{0}\n\nゲームデータは変更しません。", 'ui:install_shop_done': "ショップDLLをインストールしました。\n\n--random-shop-stock で生成し、shops_periodic.txt を regulation.bin の隣に置き、shops_periodic.ini で every_minutes を設定してください。"}

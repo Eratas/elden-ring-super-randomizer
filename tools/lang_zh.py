@@ -60,4 +60,4 @@ T = {'ui:tip_command': '此窗口将执行的命令行。点击复制。', 'opt:
     'phase:goods name gaps': 'goods name gaps',
     'opt:random_dropped_shop_weapons:label': '武器店的随机武器',
     'opt:random_dropped_shop_weapons:tip': '重新抽取每家武器店(ShopLineupParam)的武器槽:每个槽每次都会出售不同的随机武器。\n\n每次运行重抽：每个商人槽卖的武器从世界武器池重新抽取，所以购买内容每次运行都变；如果世界有同一外观的不同行，出售的武器是不同的行。仅武器槽受影响；商店其他槽不变。\n\n示例：武器店每次出售不同的随机武器。风险：无。需要“敌人掉落的随机武器”。'
-}
+, 'ui:install_shops_dll': "安装商店 DLL", 'ui:tip_install_shops_dll': "将可选的 shops-periodic DLL 复制到 Mod Engine 的 dll/offline 文件夹。shops_periodic.txt 必须放在 regulation.bin 旁边，间隔由 ini 设置。", 'ui:install_shop_body': "安装商店 DLL 到:\n{0}\n\n不修改任何游戏文件。", 'ui:install_shop_done': "商店 DLL 已安装。\n\n用 --random-shop-stock 生成，把 shops_periodic.txt 放在 regulation.bin 旁边，并在 shops_periodic.ini 中设置 every_minutes。"}

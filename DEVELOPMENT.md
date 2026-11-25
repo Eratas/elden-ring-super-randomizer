@@ -255,3 +255,30 @@ must be pinned to a version supporting 1.17.x, disable for PvP, and the tick no-
 pointer is ready. Runtime rather than `regulation.bin` because vanilla FP does not regenerate and a
 resident `SpEffect` cannot be verified without in-game testing; it never touches the regulation, so
 it composes with randomizer output.
+
+## Runtime mod: shops-periodic
+
+Optional second DLL (`mods/shops-periodic/`) for Borderlands-style merchant stock: reroll the items on
+offer **while** the game runs. `tools/shops.py::periodic_manifest()` writes `shops_periodic.txt` next
+to `regulation.bin` on every `--random-shop-stock` run:
+
+```
+bind <regulation size> <fnv1a64>       # refuse a manifest from another regulation, like loot-variants
+every <minutes>                        # the manifest default (15); ini can override
+pool <cat> <id> <id> ...               # curated items for one category (1..5)
+shop <block idx> <slot id> <cat> ...   # the sellable slots of one merchant block
+```
+
+`src/manifest.h` + `manifest.cpp` parse that file; `build.ps1` compiles `dist/test_shops_periodic.exe`
+(self-contained fixture, or pass a real manifest as an argument) and then `dist/shops_periodic.dll`,
+copying the DLL into the program's `dist/`. `tools/install_runtime.py --kind shops_periodic` (or the
+GUI's **Install shops DLL** button) finds the DLL, asks for the Mod Engine `dll/offline` folder when
+discovery fails, and copies the sample ini without overwriting an existing one. The ini has
+`[general] enabled` and `every_minutes` (default 15, matching the manifest).
+
+**Status: staged.** The DLL parses the manifest and starts a periodic tick; the write that changes the
+game's in-memory `ShopLineupParam.equipId` is marked `--probe-step--` in `src/shops_periodic.cpp` and
+is deliberately inert. A game update or a new AOB set has to be verified before that step is enabled:
+run `python tools\verify_aobs.py` against `eldenring.exe` and add the shop-menu function's pattern and
+target before wiring the write. Until then the DLL never changes game data. In-game periodic reroll is
+**UNVERIFIED**; the parser is tested on the host (12 blocks and 5 pools from a real manifest).

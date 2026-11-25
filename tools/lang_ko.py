@@ -60,4 +60,4 @@ T = {'ui:tip_command': '이 창이 실행할 명령줄입니다. 클릭하면 �
     'phase:goods name gaps': 'goods name gaps',
     'opt:random_dropped_shop_weapons:label': '무기 가게 재고 무기 랜덤화',
     'opt:random_dropped_shop_weapons:tip': '각 무기 가게(ShopLineupParam)의 무기 슬롯을 새 추첨으로 다시 씁니다: 가게가 판매하는 무기가 매번 다른 무작위 무기가 됩니다.\n\n실행마다 다시 추첨: 상인 슬롯마다 판매하는 무기는 세계의 무기 풀에서 다시 뽑혀 사는 것이라 구매하는 것이 매번 바뀝니다. 세계에 하나 외관을 가진 여러 행이 있으면 판매되는 무기는 서로 다른 행입니다. 무기 슬롯만 바뀌고 가게의 다른 슬롯은 그대로입니다.\n\n예: 무기 가게는 매번 다른 무작위 무기를 판매합니다. 위험: 특별한 것은 없습니다. 적 드롭에서 랜덤 무기가 필요합니다.'
-}
+, 'ui:install_shops_dll': "상점 DLL 설치", 'ui:tip_install_shops_dll': "선택적 shops-periodic DLL을 Mod Engine의 dll/offline 폴더에 복사합니다. shops_periodic.txt는 regulation.bin 옆에 두고, 주기는 ini에서 설정합니다.", 'ui:install_shop_body': "상점 DLL 설치 위치:\n{0}\n\n게임 파일은 변경되지 않습니다.", 'ui:install_shop_done': "상점 DLL이 설치되었습니다.\n\n--random-shop-stock으로 생성하고 shops_periodic.txt를 regulation.bin 옆에 복사한 뒤 shops_periodic.ini에서 every_minutes를 설정하세요."}

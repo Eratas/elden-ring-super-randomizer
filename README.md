@@ -10,14 +10,16 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.12** — **shops sell more things.** New `--shop-stock-target N` (default 40)
-> sets how many slots a filled-up small general shop gets, in all 13 languages. Vanilla's five small
-> shops were at 3/1/8/3/8 slots; a seeded run with target 60 added 66 slots. Full notes in the
+> **What's new in v1.0.13** — **periodic shops DLL (staged).** `--random-shop-stock` now writes
+> `shops_periodic.txt`; the optional `shops_periodic.dll` parses it and ticks every 15 minutes
+> (ini-configurable), installable with the GUI's **Install shops DLL** button. The in-memory write is
+> intentionally gated behind an AOB probe and stays inert until verified — see
+> [DEVELOPMENT.md](DEVELOPMENT.md#runtime-mod-shops-periodic). Full notes in the
 > [Changelog](#changelog).
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.12**, last updated **2026-11-24**.
+every setting. Current version: **1.0.13**, last updated **2026-11-24**.
 
 ```
 Files and output
@@ -91,6 +93,7 @@ D:\mods\my-mod\
   drops.txt               <- enemy drop tables
   hp.txt, runes.txt       <- enemy hit points and rune drops
   loot_variants.txt       <- CONTENT: copy this beside regulation.bin when using the runtime DLL
+  shops_periodic.txt      <- CONTENT: copy this beside regulation.bin when using the shops DLL
   variants.txt            <- the human-readable report of the same data (do NOT copy this one)
 ```
 
@@ -143,8 +146,11 @@ so **per-pickup variety needs a runtime mod**. This tool ships both halves:
 * without the DLL the regulation is still a complete random run — the manifest is simply unused.
 
 `--install-runtime` (or the window's **Install DLL** button) copies the DLL into the Mod Engine folder.
-That is the Borderlands-style layer; the static file alone cannot do it. For the roll rules, the
-`E8` call-site hook, and the AOB check to run after a game update, see
+That is the Borderlands-style layer; the static file alone cannot do it. `--random-shop-stock` also
+writes `shops_periodic.txt`, the manifest for the optional **shops DLL** that rerolls merchant stock
+periodically in game (ini `every_minutes`, default 15); install it with the window's **Install shops
+DLL** button or `python tools\install_runtime.py --kind shops_periodic`. For the roll rules, the
+`E8` call-site hook, the AOB check to run after a game update, and the shops DLL's probe step, see
 [DEVELOPMENT.md — Runtime mod](DEVELOPMENT.md#runtime-mod-loot-variants).
 
 ---
@@ -701,6 +707,13 @@ game's own `oo2core_6_win64.dll` that the user already has.
   redistribute the game's files or DLL.
 
 ## Changelog
+
+**1.0.13** — 2026-11-24 — **periodic shops DLL (staged).** `--random-shop-stock` writes
+`shops_periodic.txt` (bind + pools + shop slots). The optional `mods/shops-periodic/` DLL parses it,
+runs a 15-minute tick from `shops_periodic.ini`, and installs via `--install-runtime --kind
+shops_periodic` or the GUI's **Install shops DLL** button; 4 new UI keys are translated in all 13
+packs. The in-memory `ShopLineupParam` write is deliberately gated behind an AOB probe and stays
+inert until a play session verifies it — see DEVELOPMENT.md. No in-game behaviour is claimed.
 
 **1.0.12** — 2026-11-24 — **bigger shops.** New `--shop-stock-target N` (default 40) sets how many slots
 a filled-up small general shop gets; five of the vanilla small shops (3/1/8/3/8 slots) rise to the
