@@ -578,14 +578,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 rng, _kinds(v["enemy_drop_kinds"]), shops=v["random_dropped_shop_weapons"])
             print("\n".join(l for l in dw_lines if l.startswith("#")))
 
-        periodic_lines: list[str] = []
+        make_periodic = False
         if v["random_shop_stock"]:
             say(phases.SHOP_STOCK)
             shop_lines = shops.randomize(reg, rng, _kinds(v["shop_stock_kinds"]),
                                          target=int(v["shop_stock_target"]))
             print("\n".join(l for l in shop_lines if l.startswith("#")))
-            periodic_lines = shops.periodic_manifest(reg, _kinds(v["shop_stock_kinds"]),
-                                                     data=Path(v["input"]).read_bytes())
+            make_periodic = True
         else:
             shop_lines = []
 
@@ -815,6 +814,13 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                 "on every weapon pickup and the reinforcement level on every armour pickup")
         print(note)
         vlines.append(note)
+    # The shops manifest is content too: without it the periodic DLL has nothing to reroll from.
+    if make_periodic:
+        manifest = out.parent / shops.PERIODIC_MANIFEST
+        lines = shops.periodic_manifest(reg, _kinds(v["shop_stock_kinds"]), data=out.read_bytes())
+        manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"# shops periodic: {manifest} ({len(lines)} records); install the optional DLL with "
+              "--install-runtime --kind shops_periodic (or the GUI's Install shops DLL button)")
     # the patched text archives are content, not a report: they are always written
     if text_patches:
         for src, texts, anchor in text_patches:
@@ -863,8 +869,6 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             dump("goods_gaps.txt", nglines)
         if shop_lines:
             dump("shops.txt", shop_lines)
-        if periodic_lines:
-            dump(shops.PERIODIC_MANIFEST, periodic_lines)
         if dlines:
             dump("loot-shuffle.txt", dlines)
         if rlines:
@@ -878,8 +882,6 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
              + (f", ashes: {out.with_name('ashes.txt')}" if glines else "")
              + (f", stack sizes: {out.with_name('goods.txt')}" if qlines else "")
               + (f", shops: {out.with_name('shops.txt')}" if shop_lines else "")
-              + (f", shops periodic: {out.with_name(shops.PERIODIC_MANIFEST)}"
-                 if periodic_lines else "")
               + (f", loot shuffle: {out.with_name('loot-shuffle.txt')}" if dlines else "")
              + (f", loot levels: {out.with_name('loot.txt')}" if llines else "")
              + (f", spells: {out.with_name('spells.txt')}" if slines else "")

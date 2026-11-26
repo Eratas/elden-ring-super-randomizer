@@ -22,7 +22,6 @@ HERE = Path(__file__).resolve().parent
 DLL_NAME = "loot_variants.dll"
 INI_NAME = "loot_variants.ini"
 DEFAULT_TARGET = Path(r"C:\Games\ERR\dll\offline")
-SOURCE_HINT = "Run: pwsh -NoProfile -File mods\\loot-variants\\build.ps1 (then copy dist\\loot_variants.dll here)."
 
 # One entry per optional native mod: the shipped names, the env overrides and the source-tree hints.
 _KINDS: dict[str, dict[str, str]] = {

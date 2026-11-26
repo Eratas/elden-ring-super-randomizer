@@ -9,15 +9,12 @@
 #pragma once
 
 #include <cstdint>
-#include <cstdio>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace shops_periodic {
-
-constexpr int kCategories = 5;      // matches tools/shops.py KIND_OF_CATEGORY: 1..5
 
 struct Manifest {
     std::uint64_t bind = 0;                       // hash of the regulation this manifest was made for
@@ -35,15 +32,16 @@ struct Manifest {
         }
         return it->second[static_cast<std::size_t>(rng()) % it->second.size()];
     }
-    // Slot indexes for one block, in file order.
-    const std::vector<std::pair<std::uint32_t, std::uint32_t>>* block(std::size_t idx) const {
-        return idx < shops.size() ? &shops[idx] : nullptr;
-    }
     std::size_t shop_count() const { return shops.size(); }
 };
 
+// INI lookup on the whole file text: [section] headers, `key = value`, inline `;` / `#` comments.
+// Kept here (not in the Windows half) so the host tests can verify `enabled = 0 ; ...` really means 0.
+std::string ini_value(const std::string& text, const char* section, const char* key,
+                      const std::string& fallback);
+
 // Parse tools/shops.py::periodic_manifest output.  Returns false on the first malformed line and
-// fills `error`.  An unknown category is reported, not fatal.
+// fills `error`.
 bool load_manifest(const char* path, Manifest& out, std::string& error);
 
 // Parse helpers (free for tests).

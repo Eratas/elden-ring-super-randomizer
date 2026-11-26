@@ -31,7 +31,48 @@ bool next_tok(std::istringstream& ss, std::string& tok) {
     return true;
 }
 
+std::string trim(std::string s) {
+    const std::size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return {};
+    }
+    const std::size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+std::string strip_comment(const std::string& s) {
+    const std::size_t mark = s.find_first_of(";#");
+    return mark == std::string::npos ? s : s.substr(0, mark);
+}
+
 }  // namespace
+
+std::string ini_value(const std::string& text, const char* section, const char* key,
+                      const std::string& fallback) {
+    const std::string wanted = std::string("[") + section + "]";
+    std::string current;
+    std::istringstream ss(text);
+    std::string line;
+    while (std::getline(ss, line)) {
+        line = trim(strip_comment(line));
+        if (line.empty()) {
+            continue;
+        }
+        if (line.front() == '[') {
+            current = line;
+            continue;
+        }
+        const std::size_t sep = line.find('=');
+        if (current != wanted || sep == std::string::npos) {
+            continue;
+        }
+        if (trim(line.substr(0, sep)) == key) {
+            std::string value = trim(line.substr(sep + 1));
+            return value.empty() ? fallback : value;
+        }
+    }
+    return fallback;
+}
 
 bool parse_bind(const char* line, std::uint64_t& out, std::string& error) {
     std::istringstream ss(line);
@@ -111,9 +152,9 @@ bool load_manifest(const char* path, Manifest& out, std::string& error) {
             continue;
         }
         if (first == "bind") {
-            std::string size_tok, hex;
-            ss >> size_tok >> hex;
-            out.bind = std::strtoull(hex.c_str(), nullptr, 16);
+            if (!parse_bind(line.c_str(), out.bind, error)) {
+                return false;
+            }
         } else if (first == "every") {
             std::string tok;
             if (!next_tok(ss, tok) || !parse_u32(tok, out.every_minutes)) {

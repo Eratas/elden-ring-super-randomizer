@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -24,33 +25,9 @@ struct Config {
     std::atomic<unsigned> every_minutes{15};
 };
 
-std::string ini_value(const char* ini_path, const char* section, const char* key, const char* fallback) {
-    std::ifstream f(ini_path);
-    if (!f) {
-        return fallback;
-    }
-    std::string line, section_cur;
-    while (std::getline(f, line)) {
-        if (line.empty()) continue;
-        if (line.front() == '[') {
-            section_cur = line;
-            continue;
-        }
-        const std::size_t sep = line.find('=');
-        if (section_cur != std::string("[") + section + "]" || sep == std::string::npos
-                || line.front() == ';' || line.front() == '#') {
-            continue;
-        }
-        std::string k = line.substr(0, sep);
-        std::string v = line.substr(sep + 1);
-        while (!v.empty() && v.front() == ' ') v.erase(v.begin());
-        while (!k.empty() && (k.back() == ' ' || k.back() == '\r')) k.pop_back();
-        while (!v.empty() && v.back() == '\r') v.pop_back();
-        if (k == key) {
-            return v.empty() ? fallback : v;
-        }
-    }
-    return fallback;
+std::string read_ini(const char* path) {
+    std::ifstream f(path);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
 }
 
 Config g_cfg;
@@ -86,10 +63,11 @@ extern "C" __declspec(dllexport) bool shops_periodic_init(const char* manifest_p
         std::printf("[shops_periodic] inert: cannot load manifest %s (%s)\n", manifest_path, err.c_str());
         return false;
     }
+    const std::string ini_text = read_ini(ini_path);
     unsigned minutes = static_cast<unsigned>(std::strtoul(
-        ini_value(ini_path, "general", "every_minutes", "15").c_str(), nullptr, 10));
+        ini_value(ini_text, "general", "every_minutes", "15").c_str(), nullptr, 10));
     g_cfg.every_minutes = minutes > 0 ? minutes : 15;
-    g_cfg.enabled = ini_value(ini_path, "general", "enabled", "1") != "0";
+    g_cfg.enabled = ini_value(ini_text, "general", "enabled", "1") != "0";
     if (!g_cfg.enabled) {
         std::printf("[shops_periodic] inert: enabled = 0 in ini\n");
         return true;

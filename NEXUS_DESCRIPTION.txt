@@ -4,9 +4,11 @@ A window and a command line tool for [b]regulation.bin[/b] — the single parame
 
 Written for game version [b]1.17.1[/b] (Shadow of the Erdtree included) and the [url=https://www.nexusmods.com/site/mods/617]Mod Engine 2[/url] [b]1.4[/b] / [b]ERR[/b] mod loaders. Vanilla, the [url=https://www.nexusmods.com/eldenring/mods/12]Item and Enemy Randomizer[/url] and [url=https://www.nexusmods.com/eldenring/mods/11542]Elden Ring Reforged[/url] output all work as input, so you can stack this on top of them.
 
-[quote][b]What's new in v1.0.13[/b] — [b]periodic shops DLL (staged).[/b] --random-shop-stock now writes shops_periodic.txt; the optional shops_periodic.dll parses it and ticks every 15 minutes (ini-configurable), installable with the GUI's [b]Install shops DLL[/b] button. The in-memory write is intentionally gated behind an AOB probe and stays inert until verified — see [url=DEVELOPMENT.md#runtime-mod-shops-periodic]DEVELOPMENT.md[/url]. Full notes in the [url=#changelog]Changelog[/url].[/quote]
+[quote][b]What's new in v1.0.14[/b] — [b]nits on the shops DLL.[/b] The manifest is now written as content (not a report), bound to the regulation [b]actually written[/b], so --no-reports still ships it and a stale pair cannot match. The ini parser handles enabled = 0 ; comment, the bind test checks the FNV hash, and dead constants went away. Full notes in the [url=#changelog]Changelog[/url].[/quote]
 
-[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.13[/b], last updated [b]2026-11-24[/b].
+[quote][b]Previously in v1.0.13[/b] — [b]periodic shops DLL (staged).[/b] --random-shop-stock now writes shops_periodic.txt; the optional shops_periodic.dll parses it and ticks every 15 minutes (ini-configurable), installable with the GUI's [b]Install shops DLL[/b] button. The in-memory write is intentionally gated behind an AOB probe and stays inert until verified — see [url=DEVELOPMENT.md#runtime-mod-shops-periodic]DEVELOPMENT.md[/url]. Full notes in the [url=#changelog]Changelog[/url].[/quote]
+
+[b]Nothing is switched on when it starts.[/b] You tick what you want, every control explains itself on hover, options that cannot be used are greyed out, and the window remembers its size, its paths and every setting. Current version: [b]1.0.14[/b], last updated [b]2026-11-27[/b].
 
 [code]
 Files and output
@@ -506,6 +508,8 @@ The tool is fully offline: it makes no network requests, downloads nothing, and 
 [/list]
 
 [heading]Changelog[/heading]
+
+[b]1.0.14[/b] — 2026-11-27 — [b]nits.[/b] shops_periodic.txt is written as content after compression and bound to the written regulation's bytes (so --no-reports no longer drops it and the bind cannot point at the input instead of the output). The DLL's ini parser strips inline comments, so enabled = 0 ; disabled really disables it; the host test now checks the FNV bind and the ini rules; dead constants in install_runtime.py and pack_release.py removed.
 
 [b]1.0.13[/b] — 2026-11-24 — [b]periodic shops DLL (staged).[/b] --random-shop-stock writes shops_periodic.txt (bind + pools + shop slots). The optional mods/shops-periodic/ DLL parses it, runs a 15-minute tick from shops_periodic.ini, and installs via --install-runtime --kind shops_periodic or the GUI's [b]Install shops DLL[/b] button; 4 new UI keys are translated in all 13 packs. The in-memory ShopLineupParam write is deliberately gated behind an AOB probe and stays inert until a play session verifies it — see DEVELOPMENT.md. No in-game behaviour is claimed.
 

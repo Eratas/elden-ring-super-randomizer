@@ -10,7 +10,12 @@ Written for game version **1.17.1** (Shadow of the Erdtree included) and the
 [Elden Ring Reforged](https://www.nexusmods.com/eldenring/mods/11542) output all work as input, so you
 can stack this on top of them.
 
-> **What's new in v1.0.13** — **periodic shops DLL (staged).** `--random-shop-stock` now writes
+> **What's new in v1.0.14** — **nits on the shops DLL.** The manifest is now written as content (not a
+> report), bound to the regulation **actually written**, so `--no-reports` still ships it and a stale
+> pair cannot match. The ini parser handles `enabled = 0 ; comment`, the bind test checks the FNV hash,
+> and dead constants went away. Full notes in the [Changelog](#changelog).
+
+> **Previously in v1.0.13** — **periodic shops DLL (staged).** `--random-shop-stock` now writes
 > `shops_periodic.txt`; the optional `shops_periodic.dll` parses it and ticks every 15 minutes
 > (ini-configurable), installable with the GUI's **Install shops DLL** button. The in-memory write is
 > intentionally gated behind an AOB probe and stays inert until verified — see
@@ -19,7 +24,7 @@ can stack this on top of them.
 
 **Nothing is switched on when it starts.** You tick what you want, every control explains itself on
 hover, options that cannot be used are greyed out, and the window remembers its size, its paths and
-every setting. Current version: **1.0.13**, last updated **2026-11-24**.
+every setting. Current version: **1.0.14**, last updated **2026-11-27**.
 
 ```
 Files and output
@@ -707,6 +712,12 @@ game's own `oo2core_6_win64.dll` that the user already has.
   redistribute the game's files or DLL.
 
 ## Changelog
+
+**1.0.14** — 2026-11-27 — **nits.** `shops_periodic.txt` is written as content after compression and
+bound to the written regulation's bytes (so `--no-reports` no longer drops it and the bind cannot
+point at the input instead of the output). The DLL's ini parser strips inline comments, so
+`enabled = 0 ; disabled` really disables it; the host test now checks the FNV bind and the ini rules;
+dead constants in `install_runtime.py` and `pack_release.py` removed.
 
 **1.0.13** — 2026-11-24 — **periodic shops DLL (staged).** `--random-shop-stock` writes
 `shops_periodic.txt` (bind + pools + shop slots). The optional `mods/shops-periodic/` DLL parses it,

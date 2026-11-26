@@ -260,7 +260,9 @@ it composes with randomizer output.
 
 Optional second DLL (`mods/shops-periodic/`) for Borderlands-style merchant stock: reroll the items on
 offer **while** the game runs. `tools/shops.py::periodic_manifest()` writes `shops_periodic.txt` next
-to `regulation.bin` on every `--random-shop-stock` run:
+to `regulation.bin` on every `--random-shop-stock` run. Like `loot_variants.txt`, it is content, not a
+report: it is written after compression, bound to the bytes actually written, and survives
+`--no-reports`:
 
 ```
 bind <regulation size> <fnv1a64>       # refuse a manifest from another regulation, like loot-variants

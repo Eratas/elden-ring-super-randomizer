@@ -49,6 +49,16 @@ int main(int argc, char** argv) {
         check(m.bind == 0xfe3e25833098e16bULL, "bind parsed the size instead of the FNV hash");
     }
     check(m.bind != 0, "bind not parsed");
+    // inline comments and whitespace must not turn `enabled = 0` back into 1
+    const std::string ini = "[general]\nenabled = 0   ; disabled\nevery_minutes = 15  ; tick\n";
+    check(ini_value(ini, "general", "enabled", "1") == "0", "ini_value kept an inline comment");
+    check(ini_value(ini, "general", "every_minutes", "0") == "15", "ini_value lost the minutes value");
+    check(ini_value(ini, "other", "enabled", "1") == "1", "ini_value read the wrong section");
+    std::uint64_t parsed_bind = 0;
+    std::string bind_error;
+    check(parse_bind("bind 2111760 fe3e25833098e16b", parsed_bind, bind_error)
+          && parsed_bind == 0xfe3e25833098e16bULL, "parse_bind did not read the FNV hash");
+    check(!parse_bind("bind 2111760", parsed_bind, bind_error), "parse_bind accepted a missing hash");
     check(m.valid(), "manifest invalid after load");
     check(!m.pools.empty(), "no pools parsed");
     check(m.shop_count() > 0, "no shop blocks parsed");
