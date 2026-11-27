@@ -84,6 +84,8 @@ D:\mods\my-mod\
   variants.txt            <- the human-readable report of the same data (do NOT copy this one)
 [/code]
 
+A run without Backup and replace prints a warning naming the manifests that were generated but not copied. That warning is the difference between a working runtime mod and a log that says inert.
+
 With Mod Engine 2:
 
 [code]

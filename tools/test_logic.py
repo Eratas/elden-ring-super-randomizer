@@ -1918,6 +1918,32 @@ def test_content_copy() -> None:
               "a missing manifest should be skipped without raising")
 
 
+
+def test_content_copy_hint() -> None:
+    """Output-only runs must say how to deliver manifests; silent success was the original incident."""
+    with tempfile.TemporaryDirectory() as root:
+        base = Path(root)
+        out, mod = base / "out", base / "mod"
+        out.mkdir()
+        mod.mkdir()
+        generated = out / "regulation.bin"
+        generated.write_bytes(b"GENERATED")
+        replaced = mod / "regulation.bin"
+        replaced.write_bytes(b"ORIGINAL")
+        names = ("loot_variants.txt", "shops_periodic.txt")
+        (out / names[0]).write_text("bind 9 deadbeef\n", encoding="utf-8")
+        (out / names[1]).write_text("bind 9 cafebabe\n", encoding="utf-8")
+
+        hint = randomize.manifest_copy_hint(generated, replaced, names)
+        check(len(hint) == 2 and names[0] in hint[0] and names[1] in hint[0],
+              f"copy hint did not name both generated manifests: {hint}")
+        check("Backup and replace" in hint[1], "copy hint did not offer the automatic path")
+        check(randomize.manifest_copy_hint(generated, generated, names) == [],
+              "copy hint should be silent when input and output share a folder")
+        check(randomize.manifest_copy_hint(generated, replaced, ("absent.txt",)) == [],
+              "copy hint should be silent when no manifest was generated")
+
+
 def test_input_hardening() -> None:
     """Truncated/bogus binary structures must fail with ValueError, never struct.error or silent data loss."""
     # read_bnd4: a per-file header of one byte passes the coarse table-size guard but cannot hold the
@@ -1971,7 +1997,7 @@ def main() -> int:
                                test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
                                test_presets, test_release_package, test_rarity_label_tables,
                                test_aob_verifier, test_ash_chance_empty, test_pair_defaults,
-                               test_input_hardening, test_content_copy):
+                               test_input_hardening, test_content_copy, test_content_copy_hint):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

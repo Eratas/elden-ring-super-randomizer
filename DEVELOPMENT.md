@@ -284,15 +284,22 @@ GUI's **Install shops DLL** button) finds the DLL, asks for the Mod Engine `dll/
 discovery fails, and copies the sample ini without overwriting an existing one. The ini has
 `[general] enabled` and `every_minutes` (default 15, matching the manifest).
 
-**Status: staged.** The DLL resolves its own folder, reads `shops_periodic.ini` (`=` separators and
-`;` comments) and the manifest from `dll/offline` or `<mod root>\mod`, parses it, and starts a periodic
-tick. The write that changes the game's in-memory `ShopLineupParam.equipId` is marked `--probe-step--`
-in `src/shops_periodic.cpp` and is deliberately inert. A game update or a new AOB set has to be
-verified before that step is enabled: run `python tools\verify_aobs.py` against `eldenring.exe` and add
-the shop-menu function's pattern and target before wiring the write. Until then the DLL never changes
-game data. In-game periodic reroll is **UNVERIFIED**; the parser is tested on the host (including the
-bind hash) against a real manifest (12 blocks and 5 pools).
+**Status: write path implemented, fail-closed.** The DLL resolves its own folder, reads
+`shops_periodic.ini` (`=` separators and `;` comments) and the manifest from `dll/offline` or
+`<mod root>\mod`, parses it, and starts a periodic tick. `plan_reroll()` in `manifest.h` picks one
+unique item per slot of each shop block; it is pure C++ and host-tested. The Windows half writes those
+picks into live `ShopLineupParam.equipId` rows, but only when `[param]` in the ini supplies a verified
+AOB and row geometry. Without them the log says `tick-only` and nothing is written — there are no
+guessed game offsets in the source.
 
-`DllMain` starts the worker directly, which is acceptable for this staged build but should move to a
-delayed thread once the AOB write lands — thread creation under the loader lock can deadlock with
-other Mod Engine natives. `pack_release.py` ships both DLLs and both sample inis in the additive zip.
+To arm it: run `python tools\verify_aobs.py --pattern "<candidate AOB>"` against the installed
+`eldenring.exe` until a pattern hits, determine `row_count`, `row_stride`, `row_pointer`, `id_offset`
+and `equip_id_offset` for that game build, then uncomment `[param]` in the sample ini. Startup logs
+`armed: N row ids ...` when indexing succeeded, or the exact reason it stayed inert. Every resolved
+address is probed with `VirtualQuery` before a `u32` write; a wrong geometry cannot fault the process.
+In-game periodic reroll is **UNVERIFIED** until a play session confirms the log and the merchant stock;
+the parser and the reroll plan are host-tested against a real manifest (12 blocks and 5 pools).
+
+`DllMain` still creates the worker with `CreateThread` (the body starts after the loader lock is
+released) and shuts it down with a bounded wait; a delayed thread would be a cleaner long-term fix.
+`pack_release.py` ships both DLLs and both sample inis in the additive zip.

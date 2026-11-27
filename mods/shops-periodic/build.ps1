@@ -6,8 +6,8 @@
 #   .\build.ps1 -Install   ... and copy the DLL to C:\Games\ERR\dll\offline
 #   .\build.ps1 -TestOnly  only compile and run the tests
 #
-# The DLL only reads the manifest (shops_periodic_init).  The in-game reroll (the probe step) is a
-# TODO in src/shops_periodic.cpp until verify_aobs.py is run against a fresh Elden Ring.
+# The DLL reads the manifest and can write ShopLineupParam rows once [param] in shops_periodic.ini
+# carries a verified AOB and row geometry.  Without them it stays tick-only; no game data is touched.
 param(
     [switch]$Install,
     [switch]$TestOnly,

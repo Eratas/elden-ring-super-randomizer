@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -34,6 +35,44 @@ struct Manifest {
     }
     std::size_t shop_count() const { return shops.size(); }
 };
+
+struct Reroll {
+    std::uint32_t row_id = 0;
+    std::uint32_t item_id = 0;
+};
+
+// Pure planning layer: one item per sellable slot, unique within its shop block where the pool is
+// large enough.  Kept in the header so the host tests verify the picks without Windows; the DLL only
+// has to write the resulting (row id, item id) pairs into live parameter rows.
+template <typename Rng>
+std::vector<Reroll> plan_reroll(const Manifest& manifest, Rng& rng) {
+    std::vector<Reroll> out;
+    for (const auto& block : manifest.shops) {
+        std::set<std::uint32_t> used;
+        for (const auto& [row_id, cat] : block) {
+            std::uint32_t item = manifest.roll_item(cat, rng);
+            if (item == 0) {
+                continue;                       // empty pool: leave the slot untouched
+            }
+            if (!used.insert(item).second) {
+                bool unique = false;
+                for (unsigned attempt = 0; attempt < 8; ++attempt) {
+                    const std::uint32_t candidate = manifest.roll_item(cat, rng);
+                    if (candidate != 0 && used.insert(candidate).second) {
+                        item = candidate;
+                        unique = true;
+                        break;
+                    }
+                }
+                if (!unique) {
+                    continue;                   // pool exhausted: a duplicate is worse than no change
+                }
+            }
+            out.push_back({row_id, item});
+        }
+    }
+    return out;
+}
 
 // INI lookup on the whole file text: [section] headers, `key = value`, inline `;` / `#` comments.
 // Kept here (not in the Windows half) so the host tests can verify `enabled = 0 ; ...` really means 0.

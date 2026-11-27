@@ -141,6 +141,28 @@ def copy_content_to_input(out: Path, input_file: Path, names: tuple[str, ...]) -
     return copied
 
 
+def manifest_copy_hint(out: Path, input_file: Path, names: tuple[str, ...]) -> list[str]:
+    """Tell the owner how to deliver manifests when automatic copy is not in play.
+
+    The runtime DLLs only look beside themselves or beside the regulation the game loads.  A run that
+    deliberately leaves the input folder alone still generates correct manifests in the output folder;
+    without this hint they look done while every installed DLL stays inert.
+    """
+    source_dir = Path(out).parent.resolve()
+    target_dir = Path(input_file).resolve().parent
+    if source_dir == target_dir:
+        return []
+    present = [name for name in names if (source_dir / name).is_file()]
+    if not present:
+        return []
+    return [
+        "# runtime content generated but NOT copied next to " + str(input_file) + ": "
+        + ", ".join(present),
+        "# the installed DLL stays inert until those files sit beside the game's regulation.bin; "
+        "copy them from " + str(source_dir) + " or enable Backup and replace",
+    ]
+
+
 def fail(message: str) -> NoReturn:
     """Print a one-line error and stop with a non-zero exit code.
 
@@ -916,6 +938,10 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
              + (f", enemy drops: {out.with_name('drops.txt')}" if elines else "")
              + (f", enemy hp: {out.with_name('hp.txt')}" if hlines else "")
              + (f", runes: {out.with_name('runes.txt')}" if rlines else "")) + ")")
+    content_names = tuple(name for present, name in (
+        (variants is not None, loot_variants.MANIFEST_NAME),
+        (make_periodic, shops.PERIODIC_MANIFEST),
+    ) if present)
     if v["backup_replace"] and not v["dry_run"]:
         import backup
         # --weapon-names is the option the window and the automatic path actually use; --archives is
@@ -936,10 +962,6 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             print(f"# backup and replace: then replaced {v['input']}"
                   + (f" and {len(archs)} msg archive(s)" if archs else "")
                   + "; use the backup folder to undo")
-            content_names = tuple(name for present, name in (
-                (variants is not None, loot_variants.MANIFEST_NAME),
-                (make_periodic, shops.PERIODIC_MANIFEST),
-            ) if present)
             copied_content = copy_content_to_input(out, Path(v["input"]), content_names)
             if copied_content:
                 print("# runtime content next to the replaced regulation.bin: "
@@ -947,6 +969,11 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
                       + "; restart the game so the installed DLL reads it")
         else:
             print("# backup and replace: input file not found, nothing was backed up")
+            for line in manifest_copy_hint(out, Path(v["input"]), content_names):
+                print(line)
+    else:
+        for line in manifest_copy_hint(out, Path(v["input"]), content_names):
+            print(line)
     say(phases.DONE)
     return 0
 

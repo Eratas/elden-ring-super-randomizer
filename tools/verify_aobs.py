@@ -5,6 +5,7 @@ Run after updating Elden Ring:
 
     python tools/verify_aobs.py                       # default install path
     python tools/verify_aobs.py --exe <path>          # another install / Steam library
+    python tools/verify_aobs.py --pattern "48 8b ?? ????????"   # test a candidate ShopLineupParam AOB
 
 If a give-call pattern no longer matches, that call site is skipped; the DLL only logs `inert` when
 *both* give patterns fail. The other three patterns only gate the optional auto-equip feature. This
@@ -79,6 +80,7 @@ def call_target(data: bytes, match: int, offset: int) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exe", default=str(DEFAULT_EXE), help="path to eldenring.exe")
+    ap.add_argument("--pattern", help="scan one extra pattern (hex bytes, ?? wildcards)")
     args = ap.parse_args(argv)
     path = Path(args.exe)
     if not path.is_file():
@@ -102,6 +104,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"       no E8 at the expected call offset in {name}")
             else:
                 targets[name] = target
+    if args.pattern:
+        try:
+            hits = scan(data, args.pattern)
+        except ValueError as error:
+            failed = True
+            print(f"  FAIL custom pattern: {error}")
+        else:
+            count = f"{len(hits)}+" if len(hits) >= 20 else str(len(hits))
+            print(f"  ---  custom pattern: {count} hit(s) at "
+                  + ", ".join(hex(h) for h in hits[:5]))
     if len(targets) == 2 and len(set(targets.values())) == 1:
         print(f"  OK   both give patterns target file offset {next(iter(targets.values())):#x}")
     elif len(targets) == 2:

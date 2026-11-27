@@ -9,6 +9,7 @@
 #include <fstream>
 #include <random>
 #include <string>
+#include <vector>
 
 using namespace shops_periodic;
 
@@ -30,10 +31,64 @@ static const char* kFixture() {
         "pool 1 111 150 190\n"
         "pool 2 1000000 1010000\n"
         "shop 0 1000 1 1001 2\n";
-    const char* path = "shops_periodic_fixture.txt";
+    static std::string path;
+    const char* tmp = std::getenv("TEMP");
+    if (tmp == nullptr) {
+        tmp = std::getenv("TMPDIR");
+    }
+    path = tmp ? std::string(tmp) + "/shops_periodic_fixture.txt" : "shops_periodic_fixture.txt";
     std::ofstream f(path);
     f << fixture;
-    return path;
+    return path.c_str();
+}
+
+static bool in_pool(const Manifest& m, std::uint32_t cat, std::uint32_t id) {
+    const auto it = m.pools.find(cat);
+    if (it == m.pools.end()) {
+        return false;
+    }
+    for (std::uint32_t candidate : it->second) {
+        if (candidate == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_plan() {
+    Manifest m;
+    m.bind = 1;
+    m.pools[1] = {111, 150, 190};
+    m.pools[2] = {1000000, 1010000};
+    m.shops.push_back({{1000, 1}, {1001, 2}, {1002, 1}});
+
+    std::mt19937 rng(17);
+    const std::vector<Reroll> plan = plan_reroll(m, rng);
+    check(plan.size() == 3, "plan_reroll dropped a slot with a populated pool");
+    for (const Reroll& r : plan) {
+        const std::uint32_t cat = r.row_id == 1001 ? 2 : 1;
+        check(in_pool(m, cat, r.item_id), "plan_reroll picked an id outside its category pool");
+    }
+    check(plan[0].item_id != plan[2].item_id, "plan_reroll repeated an id inside one shop block");
+
+    // An exhausted pool must skip the duplicate instead of writing the same item into two rows.
+    Manifest tiny;
+    tiny.bind = 1;
+    tiny.pools[1] = {7};
+    tiny.shops.push_back({{10, 1}, {11, 1}});
+    const std::vector<Reroll> tiny_plan = plan_reroll(tiny, rng);
+    check(tiny_plan.size() == 1 && tiny_plan[0].item_id == 7,
+          "plan_reroll wrote a duplicate when the pool had one item");
+
+    // A missing category and an empty manifest are both no-ops, never a zero equipId write.
+    Manifest missing;
+    missing.bind = 1;
+    missing.pools[1] = {9};
+    missing.shops.push_back({{20, 99}, {21, 1}});
+    const std::vector<Reroll> missing_plan = plan_reroll(missing, rng);
+    check(missing_plan.size() == 1 && missing_plan[0].item_id == 9,
+          "plan_reroll planned a write for an absent pool");
+    check(plan_reroll(Manifest{}, rng).empty(), "plan_reroll produced a plan for an empty manifest");
 }
 
 int main(int argc, char** argv) {
@@ -79,7 +134,8 @@ int main(int argc, char** argv) {
             (void)id;
         }
     }
-    std::printf("%s: %zu blocks, %zu pools parsed\n",
+    test_plan();
+    std::printf("%s: %zu blocks, %zu pools parsed, plan checked\n",
                 g_failures == 0 ? "PASS" : "FAIL", m.shop_count(), m.pools.size());
     return g_failures == 0 ? 0 : 1;
 }

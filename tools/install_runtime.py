@@ -148,7 +148,8 @@ def install(source: str | Path | None = None, dll_dir: str | Path | None = None,
     elif ini_dst.exists():
         lines.append(f"# kept your existing {ini_dst}")
     manifest = "loot_variants.txt" if kind == "loot_variants" else "shops_periodic.txt"
-    lines.append(f"# the randomizer writes {manifest} next to regulation.bin; copy both files together")
+    lines.append(f"# the randomizer writes {manifest} into its output folder and, with Backup and "
+                 "replace, copies it beside regulation.bin automatically; otherwise copy it there yourself")
     return lines
 
 
