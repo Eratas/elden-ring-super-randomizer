@@ -292,9 +292,12 @@ picks into live `ShopLineupParam.equipId` rows, but only when `[param]` in the i
 AOB and row geometry. Without them the log says `tick-only` and nothing is written — there are no
 guessed game offsets in the source.
 
-To arm it: run `python tools\verify_aobs.py --pattern "<candidate AOB>"` against the installed
-`eldenring.exe` until a pattern hits, determine `row_count`, `row_stride`, `row_pointer`, `id_offset`
-and `equip_id_offset` for that game build, then uncomment `[param]` in the sample ini. Startup logs
+To arm it: `python tools\verify_aobs.py` checks the installed `eldenring.exe`, including the
+single-hit `ParamRepository singleton` pattern whose slot holds the live repository pointer. With the
+game running and a save loaded, `python tools\probe_param_rows.py` follows that slot read-only and
+prints candidate array bases; the game's own name table maps `ShopLineupParam` to id `0x1A`. Use that
+evidence to set `row_count`, `row_stride`, `row_pointer`, `id_offset` and `equip_id_offset` for that
+build, then uncomment `[param]` in the sample ini. Startup logs
 `armed: N row ids ...` when indexing succeeded, or the exact reason it stayed inert. Every resolved
 address is probed with `VirtualQuery` before a `u32` write; a wrong geometry cannot fault the process.
 In-game periodic reroll is **UNVERIFIED** until a play session confirms the log and the merchant stock;
