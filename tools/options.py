@@ -164,7 +164,7 @@ OPTIONS: tuple[Opt, ...] = (
     _o("shop_stock_kinds", "--shop-stock-kinds", kind="groups", default="", group="prices",
        needs=("random_shop_stock",), items=("weapons", "armor", "talismans", "goods", "ashes"),
        label="Shop stock categories"),
-    _o("shop_stock_target", "--shop-stock-target", kind="int", default="40", group="prices",
+    _o("shop_stock_target", "--shop-stock-target", kind="int", default=40, group="prices",
        label="Shop stock target", metavar="N",
        needs=("random_shop_stock",),
        help="Small general shops are filled up to this many slots when stock is randomized"),
@@ -281,7 +281,7 @@ OPTIONS: tuple[Opt, ...] = (
        label="Include remembrances"),
     _o("goods_quantity", "--goods-quantity", group="goods", label="Shuffle stack sizes"),
     _o("split_anim", "--split-anim", kind="enum", default="none", group="goods",
-       choices=("none", "same", "any"), needs=("goods",), metavar="same|any",
+       choices=("none", "same", "any"), needs=("goods",), metavar="none|same|any",
        label="Use animation"),
     _o("random_durations", "--random-durations", group="goods", label="Shuffle buff durations"),
     _o("duration_mode", "--duration-mode", kind="enum", default="shuffle", group="goods",
@@ -515,22 +515,21 @@ def validate(values: dict) -> dict:
     if not 1 <= out["unique_rate"] <= 20:
         raise ValueError("Unique weapon rate must be between 1 and 20 (percent)")
 
-    if out["random_prices"] and out["price_mode"] == "range":
-        lo, hi = out["price_min"], out["price_max"]
+    # Each range passes through randomize.new_prices(), which rejects lo < 1 with a SystemExit in
+    # the final engine run.  Check it here so the window can name the field instead of dying late.
+    for switch, mode, low_key, high_key, low_label, high_label in (
+        ("random_prices", "price_mode", "price_min", "price_max", "Minimum price", "maximum price"),
+        ("random_runes", "rune_mode", "rune_min", "rune_max", "Fewest runes", "most runes"),
+        ("random_enemy_hp", "hp_mode", "hp_min", "hp_max", "Lowest HP", "highest HP"),
+        ("random_durations", "duration_mode", "duration_min", "duration_max", "Shortest buff", "longest buff"),
+    ):
+        if not out[switch] or out[mode] != "range":
+            continue
+        lo, hi = out[low_key], out[high_key]
+        if lo is not None and lo < 1:
+            raise ValueError(f"{low_label} must be at least 1")
         if lo is not None and hi is not None and lo > hi:
-            raise ValueError("Minimum price cannot be larger than the maximum price")
-    if out["random_runes"] and out["rune_mode"] == "range":
-        lo, hi = out["rune_min"], out["rune_max"]
-        if lo is not None and hi is not None and lo > hi:
-            raise ValueError("Fewest runes cannot be larger than the most runes")
-    if out["random_enemy_hp"] and out["hp_mode"] == "range":
-        lo, hi = out["hp_min"], out["hp_max"]
-        if lo is not None and hi is not None and lo > hi:
-            raise ValueError("Lowest HP cannot be larger than the highest HP")
-    if out["random_durations"] and out["duration_mode"] == "range":
-        lo, hi = out["duration_min"], out["duration_max"]
-        if lo is not None and hi is not None and lo > hi:
-            raise ValueError("Shortest buff cannot be longer than the longest buff")
+            raise ValueError(f"{low_label} cannot be larger than the {high_label}")
 
     if out["random_stats"]:
         o = BY_KEY["stat_groups"]

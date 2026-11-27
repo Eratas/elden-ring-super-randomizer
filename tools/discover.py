@@ -6,7 +6,7 @@ so nobody has to click through My Computer again.
 Search order:
   1. the Steam library (from the registry, plus every library in libraryfolders.vdf),
   2. the folders other tools use: <game>\\Game\\regulation.bin, <mod>\\mod\\regulation.bin,
-  3. a shallow walk of the usual roots (C:\\Games, D:\\Games, E:\\Games, the workspace).
+  3. a shallow walk of the usual roots (C:\\Games, D:\\Games, E:\\Games, C:\\Games\\ERR).
 
 Every hit is verified to exist and to be at least 1 MB, which filters out the tiny files some tools
 leave behind.

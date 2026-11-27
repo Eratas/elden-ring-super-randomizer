@@ -32,7 +32,7 @@ while IFS='=' read -r _k _v; do export "$_k=$_v"; done <<EOF
 $tkenv
 EOF
 "$VENV/bin/python" -c 'import PyInstaller' 2>/dev/null \
-  || "$VENV/bin/python" -m pip install --quiet pyinstaller
+  || "$VENV/bin/python" -m pip install --quiet pyinstaller==6.22.3
 "$VENV/bin/python" -m PyInstaller --noconfirm --clean --onefile --windowed --noupx --name EldenRingSuperRandomizer \
   --version-file "$PWD/tools/version_info.txt" \
   --hidden-import test_logic \

@@ -21,8 +21,8 @@ For every `lang_<code>.py` next to this file the check verifies that
     translation - only long tips, see untranslated_tip_problems),
   * tips are at least two non-empty, non-repeated paragraphs and reach the depth threshold,
   * quotes are balanced (guillemets, straight and curly double quotes),
-  * the Russian pack uses an em-dash for asides, an en-dash for numeric ranges and a dot for
-    decimals (its typography convention),
+  * the Russian pack uses an em-dash for asides and an en-dash for numeric ranges
+    (its typography convention),
   * the engine's run order (randomize.py's `say()` calls) matches phases.PHASES, so the progress
     bar cannot silently rewind.
 

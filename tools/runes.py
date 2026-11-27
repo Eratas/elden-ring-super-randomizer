@@ -10,13 +10,12 @@ an amount log-uniformly between --rune-min and --rune-max (default: the lowest /
 from __future__ import annotations
 
 import random
-import re
 from pathlib import Path
 
 import erreg
+from constants import BRACKET
 
 HERE = Path(__file__).resolve().parent
-BRACKET = re.compile(r"^\[(.+?)\]")
 
 
 def randomize(reg: erreg.Regulation, rng: random.Random, mode: str, lo: int | None, hi: int | None) -> list[str]:

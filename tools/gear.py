@@ -98,7 +98,7 @@ class Armour:
         groups = self.rows()
         all_rows = [r for g in groups.values() for r in g]
         n_rows = len(all_rows)
-        lines = [f"# armor: {n_rows} pieces, {len(ARMOR_COLUMNS)} columns rolled again inside each slot's "
+        lines = [f"# armour: {n_rows} pieces, {len(ARMOR_COLUMNS)} columns rolled again inside each slot's "
                  f"vanilla range (EquipParamProtector)",
                  "# row  piece  |  " + "  |  ".join(ARMOR_SUMMARY) + "   (old -> new)"]
         before = {r.id: tuple(P.get(r, f) for f in ARMOR_SUMMARY) for r in all_rows}
@@ -115,7 +115,7 @@ class Armour:
         # factor is drawn once per set and column and every piece of the set gets the same one
         sets = self._sets(all_rows, names) if keep_sets else {}
         factors = {(name, f): rng.uniform(0.8, 1.2)
-                   for name, members in sets.items() for f in ARMOR_COLUMNS}
+                   for name in sets for f in ARMOR_COLUMNS}
         slot_of = {r.id: cat for cat, rows in groups.items() for r in rows}
         done: set[int] = set()
         for name, members in sets.items():

@@ -23,8 +23,8 @@ It asserts behaviour, not just "did not crash":
   * a status whose text list lost its own line is repaired, so no passive is silent;
   * the same seed gives byte-identical output (reproducibility: a set/dict iterated in a random
     order before an RNG draw would break this on some interpreter);
-  * the degenerate cases fail soft - bound mode with too few Ashes, a single-moveset pool, and a
-     regulation with no timed buffs report "nothing changed" instead of raising.
+  * the degenerate cases fail soft - bound mode with too few Ashes and a regulation with no timed
+     buffs report "nothing changed"; a single-moveset keep-its-rows pool emits no donor lines.
 
 No regulation.bin, no game install and no oo2core DLL are needed: it only uses shipped paramdefs and
 names.  Run directly (`python tools/test_passes_synthetic.py`) or through tools/gate.py.
@@ -310,6 +310,10 @@ def run() -> None:
     custom = loot_variants.Variants(reg, ceilings=ceilings, curve="legendary", ash_chance=100)
     check(any(ln.startswith("defaults 100 legendary ") for ln in custom.manifest()),
           "--loot-variants: the chosen Ash chance did not reach the manifest")
+    # Zero is a real setting ("turn Ash mounting off"), not an unset value that may fall back to 50.
+    no_ash = loot_variants.Variants(reg, ceilings=ceilings, curve="legendary", ash_chance=0)
+    check(any(ln.startswith("defaults 0 legendary ") for ln in no_ash.manifest()),
+          "--loot-variants: --ash-chance 0 was replaced by the default 50")
     weapon_lines = [ln for ln in lines if ln.startswith("weapon ")]
     check(len(weapon_lines) == len(v.entries), "--loot-variants: manifest weapon count mismatch")
     check(all(len(ln.split()) == 4 + loot_variants.AFFINITIES for ln in weapon_lines),
@@ -423,10 +427,8 @@ def run() -> None:
     # --- enemy drops change the lot rows; HP pass changes NpcParam.hp ---
     reg = build()
     ed = enemy_drops.EnemyDrops(reg)
-    before = ed.L.get(ed.L.by_id[300000000], "lotItemId01")
     ed.randomize(random.Random(1), rolls=2, chance=100)
     after = ed.L.get(ed.L.by_id[300000000], "lotItemId01")
-    check(before != after or True, "enemy drops ran")   # a report was produced (checked below)
     check(isinstance(after, int), "enemy drops: lot row unreadable after randomize")
 
     # --- enemy drops are dice, not a promise: N rows at P% each, and 0 rolls is the only guarantee ---
@@ -535,7 +537,7 @@ def run() -> None:
     # --- the effective size ceiling: a big input keeps its own size, an explicit limit still wins ---
     big = object.__new__(erreg.Regulation)
     big.source_size = 3_031_632
-    check(big.output_limit() == 3_031_632, "ceiling: an ERR-sized input is cut to 2,359,296")
+    check(big.output_limit() == 3_031_632, "ceiling: an ERR-sized input must keep its own size")
     check(big.output_limit(2_000_000) == 2_000_000, "ceiling: an explicit smaller limit is ignored")
     small = object.__new__(erreg.Regulation)
     small.source_size = 1_000_000
@@ -669,7 +671,10 @@ def run() -> None:
     keep = [i for i in sorted(W.by_id) if 2000000 <= i < 2100000]   # a single melee moveset
     W.rows = [W.by_id[i] for i in keep]
     W.by_id = {r.id: r for r in W.rows}
-    weapons.Weapons(reg).random_movesets(random.Random(1), mode="affinity")   # must not raise
+    out = weapons.Weapons(reg).random_movesets(random.Random(1), mode="affinity")
+    donors = [ln for ln in out if ln.lstrip()[:1].isdigit() and " <- " in ln]
+    check(not donors,
+          f"affinity mode with a single moveset should keep every row, got {donors[:2]}")
 
     # --- buff durations with no timed buff at all: report "nothing changed", never min() on an empty
     # list (a stripped or mod-built SpEffectParam has no buffs, and that is not a crash) ---

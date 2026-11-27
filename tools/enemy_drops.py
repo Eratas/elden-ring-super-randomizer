@@ -28,10 +28,10 @@ effect here.  Items of the Land of Shadow are in the pool whenever the input han
 from __future__ import annotations
 
 import random
-import re
 from pathlib import Path
 
 import erreg
+from constants import BRACKET, SLOTS
 from flasks import (
     CATEGORY_NAMES,
     CATEGORY_OF_SHOP_TYPE,
@@ -41,8 +41,6 @@ from flasks import (
 )
 
 HERE = Path(__file__).resolve().parent
-SLOTS = 8
-BRACKET = re.compile(r"^\[(.+?)\]")                 # "[Crab] Crab Eggs" -> the enemy's name
 UNIQUE_CHANCE = 0.03                 # a drop is a unique weapon instead of the common draw
 MATERIAL_CHANCE = 0.08               # ... or an upgrade stone, with a small stack
 CATEGORY_GOODS, CATEGORY_WEAPON = 1, 2
@@ -160,7 +158,7 @@ class EnemyDrops:
         return [(cat, iid, tuple(sorted(nums))) for (cat, iid), nums in seen.items()]
 
     def world_weapons(self) -> list[int]:
-        """(one entry per row of EquipParamWeapon) the weapon rows the world can drop.
+        """(one entry per row of EquipParamWeapon) every EquipParamWeapon row, including cut/unreachable ones.
         Rows of one appearance are different instances - different stats - so the reroll hands
         out distinct rows per slot and the same appearance can be found twice with different
         stats."""
@@ -387,7 +385,7 @@ class EnemyDrops:
         world = self.world_weapons()
         if len(pool) < 2 or not slots or not world:
             return [f"# randomize dropped weapons: {len(pool)} pool weapons, {len(slots)} weapon slots, nothing changed"]
-        lines = [f"# randomize dropped weapons: rerolled {len(slots)} slot(s) over the {len(pool)}-weapon pool",
+        lines = [f"# randomize dropped weapons: rerolled {len(slots)} slots over the {len(pool)}-weapon pool",
                  "# lot row  [enemy or map lot]  old weapon -> new weapon"]
         used = {L.get(r, f"lotItemId0{i}") for r, i in slots}
         for r, i in slots:

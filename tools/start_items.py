@@ -26,6 +26,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import erreg
+from constants import SLOTS
 
 HERE = Path(__file__).resolve().parent
 # option -> EquipParamGoods id, name, getItemFlagId of the new lot row (None: the row's own pickup flag, see below)
@@ -34,7 +35,6 @@ GROUP = 2000                  # the flask lot: AwardItemLot(2000) awards rows 20
 GROUP_MAX = 2009              # row 2010 (Roped Fire Pot) belongs to the next lot
 PICKUP_FLAG_BASE = 500000     # the game's own pickup flags of this lot range: 500000 + (lot - 2000): 2010 -> 500010, 2520 -> 500520
 GOODS = 1                     # lotItemCategory of goods
-SLOTS = 8                     # lotItemId01 .. lotItemId08
 
 
 def give(reg: erreg.Regulation, keys: list[str]) -> list[str]:
@@ -50,7 +50,7 @@ def give(reg: erreg.Regulation, keys: list[str]) -> list[str]:
         # stripped or mod-built file) gets a report line, not a traceback.
         return [f"# starting items: ItemLotParam_map row {GROUP} (the flask lot) is missing, nothing added"]
     goods = [ITEMS[k] for k in keys]
-    lines = ["# starting items: " + ", ".join(f"{n} ({g})" for g, n, _ in goods) + " x1 appended to the flask lot "
+    lines = ["# starting items: " + ", ".join(f"{n} ({g})" for g, n, _ in goods) + " appended to the flask lot "
              f"(ItemLotParam_map rows {GROUP}+, awarded together with the flasks at the start: FogMod's start "
              "event / the first Site of Grace); every row gets a flag, so it is handed out once (the bell's row "
              "sets flag 60110, which enables spirit summoning; the lantern's row its own pickup flag, 500000 + (row id - 2000))"]

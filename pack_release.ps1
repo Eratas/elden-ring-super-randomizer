@@ -3,7 +3,7 @@
 #   pwsh -NoProfile -File pack_release.ps1
 #
 # The zip is written next to this script.  It contains only the exe, the shipped msg archives, the
-# optional loot-variants DLL + sample ini, and the docs - never settings.json, randomized/ or backups/.
+# optional loot-variants and shops-periodic DLLs + sample inis, and the docs - never settings.json, randomized/ or backups/.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root

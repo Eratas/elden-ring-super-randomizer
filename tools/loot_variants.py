@@ -55,6 +55,7 @@ from pathlib import Path
 import erreg
 import loot
 import weapons
+from constants import AFFINITY_COUNT as AFFINITIES
 
 HERE = Path(__file__).resolve().parent
 MANIFEST_NAME = "loot_variants.txt"
@@ -62,7 +63,6 @@ REPORT_NAME = "variants.txt"
 MAGIC = "MADLOVE-LOOT-VARIANTS"
 FORMAT_VERSION = 2                  # v2 adds `armor` lines; v1 manifests stay readable
 NO_ASH = -1
-AFFINITIES = 13                     # Standard, Heavy .. Occult: the only ids the game resolves
 ASH_CHANCE = 50                     # default of the runtime mod; the ini can override it
 CURVES = ("even", "common", "legendary")
 FNV_OFFSET, FNV_PRIME, MASK64 = 0xCBF29CE484222325, 0x100000001B3, 0xFFFFFFFFFFFFFFFF
@@ -125,7 +125,10 @@ class Variants:
         # before the weapon pass and passes them in; a standalone run has no pass to worry about.
         self.ceilings = ceilings if ceilings is not None else loot.ceilings(self.W)
         self.curve = curve if curve in CURVES else "common"
-        self.ash_chance = max(0, min(100, int(ash_chance or ASH_CHANCE)))
+        # `or` swallowed the documented "0 turns Ash mounting off": 0 is a real setting, not an unset
+        # value.  Only None (a standalone caller that did not pass the option) falls back.
+        fallback = ASH_CHANCE if ash_chance is None else ash_chance
+        self.ash_chance = max(0, min(100, int(fallback)))
         self.gems = self._gems()
         self._class_of: dict[tuple[int, ...], int] = {}
         self.class_gems: list[tuple[int, ...]] = []
@@ -262,7 +265,7 @@ class Variants:
             cells = " ".join(str(e.gem_class[a]) if (e.affinity_mask >> a) & 1 else "-"
                              for a in range(AFFINITIES))
             out.append(f"weapon {e.base} {e.max_level} {e.affinity_mask} {cells}")
-        out.append("# armor <base> <max level> (same piece, different reinforcement)")
+        out.append("# armor <base> <max level> <auto-equip slot> <base and cloned stat ids>")
         for base, (top, slot, ids) in sorted(self.armor.items()):
             out.append(f"armor {base} {top} {slot} " + " ".join(str(i) for i in ids))
         out.append("# gems <class> <gem id> ...")

@@ -299,7 +299,7 @@ class Weapons:
                     refs[wt] = (innate, b)
         refs = {wt: v[1] for wt, v in refs.items()}
         # a vanilla / Reforged table always has a Longsword; fall back to the first base row so a
-        # table that does not still works instead of raising StopIteration from next()
+        # table that lacks one still works instead of raising StopIteration from next()
         clean_ref = next((b for b in self.bases() if self.names.get(b) == "Longsword"), self.bases()[0])
         lines = ["# somber/unique weapons made infusable (12 affinity rows added, gemMountType=2)",
                  "# weapon  <-  stats derived from reference weapon"]

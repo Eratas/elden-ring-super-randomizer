@@ -41,7 +41,7 @@ echo TCL_LIBRARY=%TCL_LIBRARY%
 echo TK_LIBRARY=%TK_LIBRARY%
 "%VENV%\Scripts\python.exe" -c "import PyInstaller" >nul 2>&1 || (
   echo Installing PyInstaller into %VENV% ...
-  "%VENV%\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check pyinstaller || goto :fail
+  "%VENV%\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check pyinstaller==6.22.3 || goto :fail
 )
 rem PyInstaller's full output goes to build\pyinstaller.log (send that file when something goes wrong);
 rem on failure it is shown in full.

@@ -39,6 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import erreg
+from constants import BRACKET
 
 HERE = Path(__file__).resolve().parent
 LOCATIONS_FILE = HERE / "names" / "item_locations.txt"
@@ -53,7 +54,6 @@ CATEGORY_NAMES = {1: "EquipParamGoods", 2: "EquipParamWeapon", 3: "EquipParamPro
                   4: "EquipParamAccessory", 5: "EquipParamGem"}
 CATEGORY_WORD = {1: "goods", 2: "weapon", 3: "armor", 4: "talisman", 5: "ash of war", 6: "custom weapon"}
 MAP_WORD = re.compile(r"\bMap\b")                                 # "Map: Limgrave, West", "Cross Map", "Ruins Map (2nd)"
-BRACKET = re.compile(r"^\[(.+?)\]")                                # "[Merchant Kale] Torch" -> "Merchant Kale"
 # Location words for --flask-where.  "overworld" drops the dungeons, caves and late-game regions;
 # "early" keeps only the regions you can reach before the first major wall.
 DUNGEON_WORDS = ("catacomb", "evergaol", "hero's grave", "cave", "tunnel", "legacy dungeon",

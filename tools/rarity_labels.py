@@ -21,7 +21,7 @@ LABELS = {0: "COMMON", 1: "UNCOMMON", 2: "RARE", 3: "LEGENDARY"}
 # Weapon and protector ids overlap in the shipped tables, so the rarity map must stay per FMG.
 TABLES = {"WeaponName": "EquipParamWeapon", "ProtectorName": "EquipParamProtector"}
 PREFIXES = tuple(TABLES)
-TAG_RE = re.compile(r" \[(?:COMMON|UNCOMMON|RARE|LEGENDARY)\]$")
+TAG_RE = re.compile(r" \[(?:" + "|".join(LABELS.values()) + r")\]$")
 
 
 def read_names(path: Path) -> dict[str, dict[int, str]]:

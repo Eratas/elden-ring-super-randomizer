@@ -411,15 +411,23 @@ bool find_world_chr_man(std::uint8_t* module) {
         if (hit == nullptr) {
             break;
         }
-        void** slot = *reinterpret_cast<void***>(hit + 7 +
-                       *reinterpret_cast<const std::int32_t*>(hit + 3));
+        // A byte-pattern hit can be a false positive: probe every address BEFORE dereferencing it.
+        // The old code loaded *slot_address first, so a bogus disp32 faulted during DLL init even
+        // though readable() was called a line later (it validated the loaded value, not the address).
+        void* slot_address = hit + 7 + *reinterpret_cast<const std::int32_t*>(hit + 3);
         const void* runtime_class = hit + 19 +
                                     *reinterpret_cast<const std::int32_t*>(hit + 15);
         auto name_fn = reinterpret_cast<GetRuntimeClassName>(
             hit + 24 + *reinterpret_cast<const std::int32_t*>(hit + 20));
-        // A byte-pattern hit can be a false positive: never call an arbitrary indirect pointer.
-        if (!in_executable(reinterpret_cast<const void*>(name_fn), module) ||
-            !readable(runtime_class, 8) || !readable(slot, sizeof(void*))) {
+        if (!readable(slot_address, sizeof(void*)) ||
+            !in_executable(reinterpret_cast<const void*>(name_fn), module) ||
+            !readable(runtime_class, 8)) {
+            cursor = hit + 1;
+            left = section.size - static_cast<std::size_t>(cursor - section.begin);
+            continue;
+        }
+        void** slot = *reinterpret_cast<void***>(slot_address);
+        if (!readable(slot, sizeof(void*))) {
             cursor = hit + 1;
             left = section.size - static_cast<std::size_t>(cursor - section.begin);
             continue;
@@ -447,10 +455,15 @@ bool find_auto_equip_functions(std::uint8_t* module) {
     for (const Section& s : exec_sections(module)) {
         auto* inv = scan(s.begin, s.size, inventory_pattern);
         if (inv != nullptr) {
-            g_get_inventory_id = reinterpret_cast<GetInventoryIdFunction>(rel32_target(inv + 7));
+            void* candidate = rel32_target(inv + 7);
+            // An AOB on a different game build can resolve to a non-function address.  Only publish
+            // pointers that land inside one of this module's executable sections.
+            if (in_executable(candidate, module)) {
+                g_get_inventory_id = reinterpret_cast<GetInventoryIdFunction>(candidate);
+            }
         }
         auto* eq = scan(s.begin, s.size, equip_pattern);
-        if (eq != nullptr) {
+        if (eq != nullptr && in_executable(eq, module)) {
             g_equip_item = reinterpret_cast<EquipItemFunction>(eq);
         }
     }

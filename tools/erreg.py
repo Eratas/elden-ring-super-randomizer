@@ -5,7 +5,6 @@ Unmodified params are written back byte-for-byte.
 """
 from __future__ import annotations
 
-import os
 import re
 import struct
 import xml.etree.ElementTree as ET
@@ -76,16 +75,17 @@ def read_dcx(buf: bytes) -> Dcx:
     if fmt == b"ZSTD":
         try:
             fp = zstandard.get_frame_parameters(payload)
-            if fp.content_size != zstandard.CONTENTSIZE_UNKNOWN:
-                # known size (write_dcx writes it): cap it, so a corrupt/hostile frame that declares
-                # more than the DCX's own uncompressed size is rejected before it can expand (D2)
-                if fp.content_size > uncomp + 0x1000:
-                    raise ValueError(f"DCX: ZSTD frame declares {fp.content_size} bytes, over the {uncomp} expected")
-                out = zstandard.ZstdDecompressor().decompress(payload)
-            else:
-                # unknown size (older / external frames, e.g. the ERR regulation): stream it; the
-                # len(out) != uncomp check below still rejects a size mismatch
-                out = zstandard.ZstdDecompressor().decompressobj().decompress(payload)
+            if fp.content_size != zstandard.CONTENTSIZE_UNKNOWN and fp.content_size > uncomp + 0x1000:
+                # a hostile frame must not even be attempted when it declares more than the DCX's
+                # own uncompressed size (D2)
+                raise ValueError(f"DCX: ZSTD frame declares {fp.content_size} bytes, over the {uncomp} expected")
+            # Read at most uncomp+1 bytes.  `ZstdDecompressor.decompress(max_output_size=...)` is only
+            # an allocation hint in zstandard, so a frame with an unknown/lying content size could
+            # otherwise expand to gigabytes from a few compressed bytes before the mismatch check.
+            with zstandard.ZstdDecompressor().stream_reader(payload) as reader:
+                out = reader.read(uncomp + 1)
+                if len(out) > uncomp or reader.read(1):
+                    raise ValueError(f"DCX: ZSTD frame expands beyond the declared {uncomp} bytes")
         except zstandard.ZstdError as e:       # corrupt / empty / truncated frame -> clean ValueError
             raise ValueError(f"DCX: ZSTD decompression failed ({e})") from e
         codec = CODEC_ZSTD
@@ -102,7 +102,11 @@ def read_dcx(buf: bytes) -> Dcx:
         codec = CODEC_KRAKEN
     elif fmt == b"DFLT":                      # zlib: msgbnd / msb / emevd written by the randomizers; read only
         try:
-            out = zlib.decompress(payload)
+            # max_length keeps a corrupt stream from expanding without bound before the size check.
+            inflater = zlib.decompressobj()
+            out = inflater.decompress(payload, uncomp + 1)
+            if not inflater.eof or len(out) > uncomp:
+                raise ValueError(f"DCX: DFLT (zlib) stream is truncated or expands beyond {uncomp} bytes")
         except zlib.error as e:                # corrupt / truncated zlib stream -> clean ValueError
             raise ValueError(f"DCX: DFLT (zlib) decompression failed ({e})") from e
         codec = CODEC_DEFLATE
@@ -202,17 +206,27 @@ def read_bnd4(buf: bytes) -> Bnd4:
     reverse = bit_big_endian or ((raw_fmt & 1) and not (raw_fmt & 0x80))
     fmt = _rev8(raw_fmt) if reverse else raw_fmt
     has_ids, has_names, long_off, compression = fmt & 0x02, fmt & 0x0C, fmt & 0x10, fmt & 0x20
+    # The coarse table-size guard above accepts a per-file header as small as one byte.  A truncated
+    # archive then fails with a raw struct.error from unpack_from instead of the documented ValueError.
+    min_header = 16 + (8 if long_off else 4) + (4 if has_ids else 0) + (4 if has_names else 0)
+    if file_header_size < min_header:
+        raise ValueError(f"BND4: file header size {file_header_size} is smaller than {min_header}")
     files, datas = [], []
     pos = 0x40
     for i in range(file_count):
         p = pos + 8  # flags + pad + (-1)
-        csize = struct.unpack_from("<q", buf, p)[0]; p += 8
+        csize = struct.unpack_from("<q", buf, p)[0]
+        p += 8
         if compression:
             p += 8
         if long_off:
-            doff = struct.unpack_from("<q", buf, p)[0]; p += 8
+            doff = struct.unpack_from("<q", buf, p)[0]
+            p += 8
         else:
-            doff = struct.unpack_from("<I", buf, p)[0]; p += 4
+            doff = struct.unpack_from("<I", buf, p)[0]
+            p += 4
+        if csize < 0 or doff < 0 or doff + csize > len(buf):
+            raise ValueError(f"BND4: file {i} data range {doff}+{csize} is outside the buffer")
         fid = i
         if has_ids:
             fid = struct.unpack_from("<i", buf, p)[0]; p += 4
@@ -377,6 +391,8 @@ class Param:
         if actual != paramdef.row_size:
             raise ValueError(f"row size {actual} != paramdef row size {paramdef.row_size}; wrong paramdef version?")
         rs = paramdef.row_size
+        if any(d[2] < 0 or d[2] + rs > len(buf) for d in descs):
+            raise ValueError("PARAM: a row's data offset is outside the buffer (truncated/corrupt)")
         self.rows: list[ParamRow] = [ParamRow(d[0], bytearray(buf[d[2]:d[2] + rs])) for d in descs]
         self.by_id: dict[int, ParamRow] = {r.id: r for r in self.rows}
         self.dirty = False      # set by set()/add_row(); untouched params are written back verbatim
@@ -407,7 +423,11 @@ class Param:
         p.pd = ParamDef("", 0, [], rs)
         p.header = bytes(raw[:0x40])
         pt_off = struct.unpack_from("<q", raw, 0x10)[0]
+        if pt_off < 0 or pt_off >= len(raw):
+            raise ValueError(f"{name}: the param-type string is outside the buffer")
         p.param_type = bytes(raw[pt_off:pt_off + 64]).split(b"\0")[0].decode()
+        if any(d[2] < 0 or d[2] + rs > len(raw) for d in descs):
+            raise ValueError(f"{name}: a row's data offset is outside the buffer (truncated/corrupt)")
         p.rows = [ParamRow(d[0], bytearray(raw[d[2]:d[2] + rs])) for d in descs]
         p.by_id = {r.id: r for r in p.rows}
         p.dirty = False
@@ -556,18 +576,11 @@ class Regulation:
                              f"{limit} (0x{limit:X}); the game would report corrupted save data. "
                              "Randomize less (e.g. fewer --stat-groups, no --somber-infusable)"
                              + (" or use --compression kraken." if codec == CODEC_ZSTD else "."))
-        # atomic: a reader (or a backup-and-replace) must never see a half-written regulation.bin
-        target = Path(path)
-        tmp = target.with_name(target.name + ".tmp")
-        try:
-            tmp.write_bytes(out)
-            os.replace(tmp, target)
-        except BaseException:
-            try:
-                tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
-            raise
+        # atomic + fsync: a reader must never see a half-written regulation.bin, and a power cut
+        # after the rename must not leave an empty file behind
+        import atomicio  # local: keeps the binary reader importable without the writer helper
+
+        atomicio.atomic_write(Path(path), out)
         return len(out)
 
     def output_limit(self, max_size: int = REGULATION_MAX_SIZE) -> int:

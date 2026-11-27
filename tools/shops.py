@@ -182,7 +182,6 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
             S.set(new, "iconId", -1)
             S.set(new, "menuIconId", -1)
             added.append((new_id, cat, src.id))
-        changed[cat] = changed.get(cat, 0)
 
     total = sum(changed.values())
     total_items = sum(len(v) for v in pools.values())
@@ -192,13 +191,15 @@ def randomize(reg: erreg.Regulation, rng: random.Random, kinds: set[int] | None 
              f"{', '.join(f'{changed.get(c, 0)} {KIND_OF_CATEGORY[c]}' for c in sorted(pools))}",
              f"# shop stock: {len(added)} slots added to small general shops (target {target})",
              "# slot  :  old item  ->  new item"]
+    shown = 0
     for rid, cat, old, new in rows:
         if new == old:
             continue
-        if len(lines) > MAX_REPORT_LINES:
-            lines.append(f"# ... {total - MAX_REPORT_LINES} more changes in the table")
+        if shown >= MAX_REPORT_LINES:
+            lines.append(f"# ... {total - shown} more changes in the table")
             break
         lines.append(f"{rid:>8}  {names[cat].get(old, str(old)):<40} ->  {names[cat].get(new, str(new))}")
+        shown += 1
     for rid, cat, src in added[:20]:
         lines.append(f"{rid:>8}  (new)  {KIND_OF_CATEGORY[cat]:<12} (template row {src})")
     return lines

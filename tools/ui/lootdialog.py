@@ -115,8 +115,8 @@ class LootDialog:
         self.text.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        self.note = ttk.Label(self.top, text=self.app.t("dlg:tip_note", "Tick the passes you want to judge "
-                                                              "in the main window first."),
+        self.note = ttk.Label(self.top, text=self.app.t("dlg:tip_note", "In the main window, tick the passes "
+                                                              "you want to judge first."),
                               style="Warn.TLabel")
         self.note.pack(fill="x", padx=10, pady=4)
         self.run = ttk.Button(self.top, text=self.app.t("dlg:simulate", "Simulate"), style="Run.TButton",
@@ -143,7 +143,15 @@ class LootDialog:
         values["dry_run"] = False
         values["repack"] = False
         raw = self.seed.get().strip()
-        values["seed"] = int(raw) if raw else None
+        try:
+            values["seed"] = int(raw) if raw else None
+        except ValueError:
+            # int() used to raise straight out of this Tk callback: the window showed a raw traceback
+            # and the dialog stayed usable but confused instead of naming the bad field.
+            messagebox.showerror(self.app.t("dlg:title_cannot", "Cannot simulate"),
+                                 self.app.t("dlg:seed_number", "Seed must be a whole number."),
+                                 parent=self.top)
+            return
         try:
             values = options.validate(values)
         except ValueError as e:
@@ -164,8 +172,9 @@ class LootDialog:
     def _worker(self, argv: list[str]) -> None:
         import randomize
         out = Collector()
-        old = sys.stdout
+        old_out, old_err = sys.stdout, sys.stderr
         sys.stdout = out
+        sys.stderr = out                       # fail() errors belong in this panel too
         code = 0
         try:
             code = randomize.main(argv, quiet=True)   # only the loot sample reaches the text area
@@ -175,10 +184,12 @@ class LootDialog:
         except BaseException:
             out.lines.append(traceback.format_exc())
         finally:
-            # restore the real stdout only if it is still ours (see App._worker): a run that started
-            # while this dialog was closing must not have its stdout clobbered by this thread
+            # restore only if still ours (see App._worker): a run that finished meanwhile must not
+            # have either stream clobbered by this thread
             if sys.stdout is out:
-                sys.stdout = old
+                sys.stdout = old_out
+            if sys.stderr is out:
+                sys.stderr = old_err
         self.q.put(("result", out.lines))
 
     def _poll(self) -> None:
@@ -204,6 +215,15 @@ class LootDialog:
                 pass
 
     def _close(self) -> None:
+        if self.busy:
+            # The worker is still running and owns sys.stdout.  Clearing sim_busy here would let the
+            # main window start a run that then shares stdout with it; keep the guard until the
+            # result is consumed (or the main window itself is closed, which ends all daemon threads).
+            messagebox.showinfo(self.app.t("dlg:title_busy", "Simulation running"),
+                                self.app.t("dlg:busy_body", "Wait for the simulation to finish before "
+                                                           "closing this window."),
+                                parent=self.top)
+            return
         self.app.sim_busy = False
         self.busy = False
         self.top.destroy()

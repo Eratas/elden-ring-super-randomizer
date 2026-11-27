@@ -57,6 +57,10 @@ HERE = Path(__file__).resolve().parent.parent
 CONFIG = ((Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else HERE) / "settings.json")
 RECENT_MAX = 8
 MIN_SIZE = (860, 540)
+CMD_MAX = 170               # command preview length before the ellipsis
+OUTPUTS_MAX = 24            # remembered input->output pairs
+CMD_MAX = 170               # command preview length before the ellipsis
+OUTPUTS_MAX = 24            # remembered input->output pairs
 DEFAULT_OPEN = {"files": True, "loot": True, "prices": False, "weapons": False,
                 "weapon_effects": False, "gems": False, "gear": False, "drops": False,
                 "goods": False, "spells": False, "world": False, "advanced": False}
@@ -84,11 +88,36 @@ SECTION_TIPS = {
 
 
 def load_config() -> dict:
+    """Read settings.json, dropping fields with the wrong shape instead of crashing the window.
+
+    A half-written or hand-edited settings file used to take the whole GUI down at startup: __init__
+    called `.get()` on `recent` and `values` without checking they were still dicts.
+    """
     try:
         got = json.loads(Path(CONFIG).read_text(encoding="utf-8"))
-        return got if isinstance(got, dict) else {}
     except (OSError, ValueError):
         return {}
+    if not isinstance(got, dict):
+        return {}
+    for key in ("values", "outputs", "sections"):
+        if not isinstance(got.get(key), dict):
+            got.pop(key, None)
+    own = got.get("my_presets")
+    if isinstance(own, dict):
+        got["my_presets"] = {name: value for name, value in own.items() if isinstance(value, dict)}
+    else:
+        got.pop("my_presets", None)
+    recent = got.get("recent")
+    if not isinstance(recent, dict):
+        got.pop("recent", None)
+    else:
+        for key in PATH_KEYS:
+            entries = recent.get(key)
+            if isinstance(entries, list):
+                recent[key] = [str(item) for item in entries if isinstance(item, str)]
+            else:
+                recent.pop(key, None)
+    return got
 
 
 def save_config(cfg: dict) -> None:
@@ -96,6 +125,21 @@ def save_config(cfg: dict) -> None:
         Path(CONFIG).write_text(json.dumps(cfg, indent=1, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
+
+
+def preset_text(key: str, value: object) -> str:
+    """The widget form of a validated value, so a saved preset can be applied again.
+
+    validate() turns numeric pairs into tuples, stat groups into lists and paths into tuples of
+    strings.  str() on those produced "(0.8, 1.2)", which _as_float_pair rejected on the next run;
+    the separator also has to match the row (semicolon for paths, comma for pairs and groups).
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (tuple, list)):
+        separator = ";" if options.BY_KEY[key].kind == "paths" else ","
+        return separator.join(str(x) for x in value)
+    return str(value)
 
 
 class App:
@@ -125,6 +169,9 @@ class App:
         self._t0 = 0.0
         self._save_job = None
         self._failed = False
+        # One simulator at a time.  The dialog is non-modal, so without this handle a second click on
+        # "Loot simulator" opened a second dialog; both workers then fought over the global sys.stdout.
+        self._loot: LootDialog | None = None
 
         root.title("Elden Ring Super Randomizer")
         root.minsize(*MIN_SIZE)
@@ -419,7 +466,6 @@ class App:
                 continue
             sec = Section(page.body, title, open_=DEFAULT_OPEN.get(key, False),
                           tip=self.t(f"ui:sec_tip:{key}", SECTION_TIPS.get(key, "")))
-            sec.header.configure(text=(("\u25be  " if sec.is_open else "\u25b8  ") + self.t(f"ui:sec:{key}", title)))
             sec.title = self.t(f"ui:sec:{key}", title)
             sec._label()
             sec.pack(fill="x")
@@ -527,7 +573,8 @@ class App:
             return
 
         if o.kind == "groups":
-            w = groups_row(sec.body, row, o, self.vars[o.key], on_change=self._changed, padx=pad)
+            w = groups_row(sec.body, row, o, self.vars[o.key], on_change=self._changed, padx=pad,
+                           item_tip=self.t("ui:groups_tip", "Randomize the {item} numbers."))
             self.widgets[o.key] = [w]
             self.kinds[o.key] = ["groups"]
             return
@@ -681,7 +728,6 @@ class App:
             return filedialog.askdirectory(title="msg folder", initialdir=start_dir)
         return pick
 
-    # ------------------------------------------------------------------ events
     # ------------------------------------------------------------------ presets
     def _export_presets(self) -> None:
         from tkinter import filedialog
@@ -734,7 +780,7 @@ class App:
             except ValueError as e:
                 skipped.append(f"{name} ({e})")
                 continue
-            self.my_presets[str(name)] = {k: v for k, v in checked.items() if k in options.BY_KEY}
+            self.my_presets[str(name)] = {k: preset_text(k, v) for k, v in checked.items() if k in options.BY_KEY}
             good += 1
         self.cfg["my_presets"] = self.my_presets
         self.preset_box.configure(values=self._preset_labels())
@@ -772,7 +818,7 @@ class App:
                 if isinstance(var, tk.BooleanVar):
                     var.set(bool(value))
                 else:
-                    var.set("" if value is None else str(value))
+                    var.set(preset_text(key, value))
         finally:
             self.syncing = False
         self._remember_paths()
@@ -807,7 +853,7 @@ class App:
                 self.t("dlg:save_exists", "\"{name}\" already exists. Replace it?").format(name=name),
                 parent=self.root):
             return
-        self.my_presets[name] = {k: v for k, v in values.items() if k in options.BY_KEY}
+        self.my_presets[name] = {k: preset_text(k, v) for k, v in values.items() if k in options.BY_KEY}
         self.cfg["my_presets"] = self.my_presets
         self.preset_box.configure(values=self._preset_labels())
         self.preset_var.set(name)
@@ -832,7 +878,7 @@ class App:
     def _changed(self, *_args) -> None:
         if self.syncing or not self.ready:
             return
-        if self.preset_var.get() != "Custom":
+        if self.preset_var.get() != self.t("ui:custom", "Custom"):
             self.preset_var.set(self.t("ui:custom", "Custom"))   # a manual change means the bundle no longer applies
             self.cfg["preset"] = None
         self._follow_input()
@@ -925,7 +971,7 @@ class App:
             self.cmd_var.set("")
             return
         text = " ".join(self._quote(a) for a in argv)
-        self.cmd_var.set(text if len(text) <= 170 else text[:167] + "...")
+        self.cmd_var.set(text if len(text) <= CMD_MAX else text[:CMD_MAX - 3] + "...")
 
     @staticmethod
     def _quote(a: str) -> str:
@@ -1068,8 +1114,8 @@ class App:
         out = (self.vars["output"].get() or "").strip()
         if inp and out:
             self.outputs[inp] = out
-            if len(self.outputs) > 24:                  # keep the file small, drop the oldest
-                for key in list(self.outputs)[:-24]:
+            if len(self.outputs) > OUTPUTS_MAX:        # keep the file small, drop the oldest
+                for key in list(self.outputs)[:-OUTPUTS_MAX]:
                     self.outputs.pop(key, None)
             self.cfg["outputs"] = self.outputs
         save_config(self.cfg)
@@ -1142,7 +1188,15 @@ class App:
         return None
 
     def _loot_dialog(self) -> None:
-        LootDialog(self)
+        if self.running:
+            return
+        if self._loot is not None and self._loot.top.winfo_exists():
+            self._loot.top.lift()
+            self._loot.top.focus_set()
+            return
+        if self.sim_busy:
+            return
+        self._loot = LootDialog(self)
 
     def _run(self, mode: str) -> None:
         if self.running or getattr(self, "sim_busy", False):
@@ -1198,8 +1252,9 @@ class App:
     def _worker(self, argv: list[str]) -> None:
         import randomize
         writer = QueueWriter(self.queue)
-        old = sys.stdout
+        old_out, old_err = sys.stdout, sys.stderr
         sys.stdout = writer
+        sys.stderr = writer                    # fail() writes there; the log must still explain failures
         try:
             code = randomize.main(argv, progress=lambda phase: self.queue.put(("phase", phase)))
             self.queue.put(("exit", code))
@@ -1208,10 +1263,12 @@ class App:
         except BaseException:
             self.queue.put(("error", traceback.format_exc()))
         finally:
-            # restore the real stdout only if it is still ours: a LootDialog worker (or a second run)
-            # that finished first must not leave sys.stdout pointing at a dead Collector / QueueWriter
+            # restore only if still ours: a LootDialog worker that finished first must not leave
+            # either stream pointing at a dead Collector / QueueWriter
             if sys.stdout is writer:
-                sys.stdout = old
+                sys.stdout = old_out
+            if sys.stderr is writer:
+                sys.stderr = old_err
             self.queue.put(("finished", None))
 
     def _tick(self) -> None:
@@ -1366,6 +1423,31 @@ class App:
                                            "loot_variants.txt next to it.")
         messagebox.showinfo(self.t("ui:install_done", "DLL installed"), done, parent=self.root)
 
+    def _restore_roots(self) -> list[Path]:
+        """Folders a rollback may write to, from the *current* selection — never from the manifest.
+
+        A backup can be moved or downloaded; its ``original`` paths are untrusted data.  The game
+        folder (input) and any selected msg folders are the only legitimate destinations.
+        """
+        roots = [backup.program_dir()]
+        try:
+            values = options.validate(self.values())
+        except ValueError:
+            values = self.values()
+        for key in ("input", "archives"):
+            raw = values.get(key) or ()
+            if isinstance(raw, str):
+                raw = [part for part in raw.split(";") if part.strip()]
+            for item in raw:
+                try:
+                    path = Path(item).resolve()
+                except OSError:
+                    continue
+                root = path if path.is_dir() else path.parent
+                if root.is_dir() and root not in roots:
+                    roots.append(root)
+        return roots
+
     def _revert(self) -> None:
         """Restore the most recent backup, after a confirmation."""
         if self.running:
@@ -1387,7 +1469,7 @@ class App:
             return
         try:
             problems = backup.verify_backup(latest)
-            restored = [] if problems else backup.restore(latest)
+            restored = [] if problems else backup.restore(latest, allowed_roots=self._restore_roots())
             reason = "; ".join(problems[:8]) if problems else ""
         except (OSError, ValueError) as error:
             restored = []
@@ -1491,7 +1573,7 @@ class App:
                 parent=self.root):
             return
         try:
-            restored = backup.restore(folder)
+            restored = backup.restore(folder, allowed_roots=self._restore_roots())
         except (OSError, ValueError) as error:
             messagebox.showerror(self.t("ui:rollback_failed", "Rollback failed"), str(error),
                                  parent=self.root)
@@ -1550,7 +1632,7 @@ class App:
             f"{self.t('ui:about_credits', 'Credits')}:\n"
             "  WenchengDShao \u2014 the original elden_ring_further_random\n"
             "  Eratas \u2014 the Super Randomizer fork (this build)\n"
-            "  The tools/ modules and the 13 language translations\n"
+            f"  The tools/ modules and the {len(i18n.LANGUAGES) - 1} language translations\n"
         )
         txt = tk.Text(frame, width=72, height=13, wrap="word", relief="flat",
                       background=theme.PANEL, foreground=theme.FG, highlightthickness=0)

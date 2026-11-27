@@ -22,11 +22,11 @@ from pathlib import Path
 
 import erreg
 import talkmsg
+from constants import AFFINITY_IDS as AFFINITIES
 from textarchives import ITEM_ARCHIVE as ARCHIVE
 from textarchives import MSG_DIR
 
 HERE = Path(__file__).resolve().parent
-AFFINITIES = range(1, 13)                         # id = base + affinity * 100 (+ upgrade level)
 FMG_NAME, FMG_CAPTION = "WeaponName", "WeaponCaption"
 ERROR_MARK = "[ERROR]"                            # cut weapons are named "[ERROR]Heavy ...": not a pattern to learn from
 # English fallback, in the game's own order.  A modded archive that does not name one weapon at all 13

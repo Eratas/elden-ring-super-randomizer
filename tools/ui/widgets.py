@@ -14,6 +14,7 @@ from . import theme
 
 PAD = 12                 # page padding, left and right
 INDENT = 24              # options that depend on another one are shifted right by this much
+WRAP_INSET = 28          # space reserved for the check box and its padding
 
 
 class Tooltip:
@@ -228,7 +229,7 @@ class HelpCheck(tk.Checkbutton):
         Tooltip(self, tip)
 
     def _wrap(self, event) -> None:
-        width = event.width - 28
+        width = event.width - WRAP_INSET
         if width > 40:
             self.configure(wraplength=width)
 
@@ -295,7 +296,8 @@ def _browse(combo, var: tk.StringVar, browse) -> None:
         var.set(path)
 
 
-def groups_row(body, row: int, opt, var: tk.StringVar, on_change=None, padx: int = 0):
+def groups_row(body, row: int, opt, var: tk.StringVar, on_change=None, padx: int = 0,
+               item_tip: str | None = None):
     """`label | [attack] [guard] ...` — small boxes that together write one comma-separated value."""
     label_at(body, row, opt.label, opt.tip, padx)
     bar = ttk.Frame(body, style="TFrame")
@@ -307,7 +309,7 @@ def groups_row(body, row: int, opt, var: tk.StringVar, on_change=None, padx: int
         cb = ttk.Checkbutton(bar, text=item, variable=v, style="Check.TCheckbutton",
                              command=lambda: _commit_groups(boxes, var, on_change))
         cb.grid(row=0, column=i, padx=(0, 10))
-        Tooltip(cb, f"Randomize the {item} numbers.")
+        Tooltip(cb, item_tip.format(item=item) if item_tip else f"Randomize the {item} numbers.")
     _read_groups(boxes, var)
     var.trace_add("write", lambda *_: _read_groups(boxes, var))
     return bar

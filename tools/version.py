@@ -2,7 +2,8 @@
 
 Shown in the window footer.  The update check is offline on purpose: nothing phones home.  A release
 can ship a one-line `latest_version.txt` next to the program (or in tools/); when it is newer than
-`__version__`, the window says so.  Bump `__version__` here and nowhere else.
+`__version__`, the window says so.  Bump `__version__` here and the tuple in
+tools/version_info.txt together.
 """
 from __future__ import annotations
 
@@ -43,7 +44,9 @@ def read_latest() -> str | None:
                 return cached[1]
             continue
         try:
-            text = path.read_text(encoding="utf-8").strip()
+            # utf-8-sig strips a BOM: Windows editors commonly add one, and "\ufeff1.0.15" parsed as
+            # an empty version tuple, silently disabling the update notice.
+            text = path.read_text(encoding="utf-8-sig").strip()
         except OSError:
             text = ""
         value = text.splitlines()[0].strip() if text else None

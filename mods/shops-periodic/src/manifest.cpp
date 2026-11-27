@@ -1,10 +1,12 @@
 // manifest.cpp - parses the periodic-shops manifest (tools/shops.py::periodic_manifest).
 #include "manifest.h"
 
+#include <cerrno>
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace shops_periodic {
 
@@ -82,7 +84,26 @@ bool parse_bind(const char* line, std::uint64_t& out, std::string& error) {
         error = "expected: bind <size> <hex>";
         return false;
     }
-    out = std::strtoull(hex.c_str(), nullptr, 16);
+    // A truncated or overflowing hex token used to become 0, and the manifest was then accepted as
+    // valid with a stale bind.  The writer always emits exactly 16 hex digits.
+    if (hex.size() != 16) {
+        error = "bind hex must be 16 digits";
+        return false;
+    }
+    for (char c : hex) {
+        if (!std::isxdigit(static_cast<unsigned char>(c))) {
+            error = "bind hex has a non-hex digit";
+            return false;
+        }
+    }
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long value = std::strtoull(hex.c_str(), &end, 16);
+    if (errno == ERANGE || end != hex.c_str() + hex.size()) {
+        error = "bind hex is out of range";
+        return false;
+    }
+    out = value;
     return true;
 }
 

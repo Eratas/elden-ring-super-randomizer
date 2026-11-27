@@ -22,15 +22,15 @@ import random
 from pathlib import Path
 
 import erreg
+from constants import SLOTS
 from enemy_drops import EnemyDrops
 from flasks import CATEGORY_NAMES, CATEGORY_OF_SHOP_TYPE, load_locations
 
 HERE = Path(__file__).resolve().parent
 
-SLOTS = 8
 CATEGORIES = {"goods": 1, "weapon": 2, "armor": 3, "talisman": 4, "ashes": 5}
 SHOP_FOR = {cat: shop for shop, cat in CATEGORY_OF_SHOP_TYPE.items() if cat in CATEGORIES.values()}
-WORD = {1: "good", 2: "weapon", 3: "armor", 4: "talisman", 5: "ash of war"}
+WORD = {1: "goods", 2: "weapon", 3: "armor", 4: "talisman", 5: "ash of war"}
 SLOT_WORDS = ("Armor", "Armour", "Helm", "Helmet", "Hat", "Crown", "Circlet", "Mask", "Robe",
               "Garb", "Vest", "Gauntlets", "Gauntlet", "Gloves", "Greaves", "Greave", "Boots",
               "Shoes", "Trousers")
@@ -46,7 +46,7 @@ def _set_key(name: str) -> str | None:
 def _item_name(names: dict[int, str], iid: int, cat: int) -> str:
     if cat == 2:                                   # weapon: base + affinity*100 + level
         base, level = iid - iid % 10000, iid % 100
-        return f"{names.get(base, f'weapon {base}')}" + (f" +{level}" if level else "")
+        return names.get(base, f"weapon {base}") + (f" +{level}" if level else "")
     return names.get(iid, f"{WORD.get(cat, 'item')} {iid}")
 
 

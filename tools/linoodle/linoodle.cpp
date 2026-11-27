@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cstdlib>
 
 #include "windows_library.h"
@@ -16,20 +17,32 @@ public:
         m_decompressFunc = reinterpret_cast<tDecompressFunc>(m_oodleLib.GetExport("OodleLZ_Decompress"));
         m_compressFunc = reinterpret_cast<tCompressFunc>(m_oodleLib.GetExport("OodleLZ_Compress"));
         m_optionsFunc = reinterpret_cast<tOptionsFunc>(m_oodleLib.GetExport("OodleLZ_CompressOptions_GetDefault"));
+        if (!valid()) {
+            // A DLL with a different export set used to be called through a null pointer.  Report
+            // once and let every entry point below fail soft.
+            std::fprintf(stderr, "linoodle: oo2core DLL is missing an Oodle export; loader inert\n");
+        }
+    }
+    bool valid() const
+    {
+        return m_decompressFunc != nullptr && m_compressFunc != nullptr && m_optionsFunc != nullptr;
     }
     void * OptionsDefault(int64_t codec, int64_t level)
     {
+        if (!valid()) return nullptr;
         WindowsLibrary::SetupCall();
         return m_optionsFunc(codec, level);
     }
 
     size_t Decompress(uint8_t * srcBuf, size_t srcLen, uint8_t * dstBuf, size_t dstLen, int64_t fuzz, int64_t crc, int64_t verbose, uint8_t * dstBase, size_t e, void * cb, void * cbCtx, void * scratch, size_t scratchSize, int64_t threadPhase)
     {
+        if (!valid()) return 0;
         WindowsLibrary::SetupCall();
         return m_decompressFunc(srcBuf, srcLen, dstBuf, dstLen, fuzz, crc, verbose, dstBase, e, cb, cbCtx, scratch, scratchSize, threadPhase);
     }
     size_t Compress(int64_t codec, uint8_t * srcBuf, size_t srcLen, uint8_t * dstBuf, int64_t level, void * opts, size_t offs, size_t unused, void * scratch, size_t scratchSize)
     {
+        if (!valid()) return 0;
         WindowsLibrary::SetupCall();
         return m_compressFunc(codec, srcBuf, srcLen, dstBuf, level, opts, offs, unused, scratch, scratchSize);
     }

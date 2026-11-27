@@ -13,7 +13,7 @@ Staffs and seals share animation bank 41 (wepmotionCategory), so sorcery motions
 and vice versa resolve to existing animations; whether every cross-category pairing also deals damage
 the way the catalyst expects is untested in-game.
 
---spell-stats (--random-stats, stat group "spells"): FP cost drawn from weighted tiers (0-10: 50 %, 11-20: 30 %,
+--spell-stats (--random-stats, stat group "spells"): FP cost drawn from weighted tiers (0-10: 50%, 11-20: 30%,
 21-40: 20 %), stamina cost likewise (0-20 / 21-40 / 41-60), the charged costs keep the row's ratio,
 the INT / FAI / ARC requirements are the vanilla set of a random pool spell (read before the effects
 move, so the game's own 1-2 attribute combinations at their own frequency; sum <= 60, scaled down
@@ -127,6 +127,8 @@ class Spells:
         """Move EFFECT_FIELDS (and, unless split, ANIM_FIELDS) between the pool spells.  Returns the
            report lines: `id name <- effect donor (id) [| animation donor (id)]`."""
         P, pool, names = self.P, self.pool, self.names
+        if not pool:
+            return ["# spell  <-  effect taken from: no player spells in this regulation; nothing changed"]
         bundles = [{f: P.get(r, f) for f in EFFECT_FIELDS + ANIM_FIELDS} for r in pool]
         if mode == "shuffle":
             src = derangement(len(pool), rng)

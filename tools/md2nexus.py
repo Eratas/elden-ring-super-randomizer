@@ -50,7 +50,8 @@ SOURCE = ROOT / "README.md"
 TARGET = ROOT / "NEXUS_DESCRIPTION.txt"
 STRICT_TARGET = ROOT / "NEXUS_DESCRIPTION.strict.txt"
 
-# Every BBCode tag this renderer may emit.  All of them are in the Nexus wiki's tag list except [code]:
+# BBCode tags permitted in a render, a superset of what the renderer emits.  All are in the Nexus
+# wiki's tag list except [code]:
 # that one is what Nexus's own Markdown->BBCode converters emit for fenced blocks.  The strict render
 # swaps it for [quote], which is documented, so the strict artifact only ever uses wiki tags.
 ALLOWED_TAGS = {"b", "i", "u", "s", "heading", "line", "list", "*", "url", "code", "quote",
@@ -355,7 +356,7 @@ def main(argv: list[str]) -> int:
         else:
             target.write_text(rendered, encoding="utf-8")
             print(f"md2nexus: wrote {target.name} "
-                  f"({len(rendered)} bytes, {len(rendered.splitlines())} lines)")
+                  f"({len(rendered.encode('utf-8'))} bytes, {len(rendered.splitlines())} lines)")
 
     if check:
         if stale:

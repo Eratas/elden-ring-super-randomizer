@@ -81,7 +81,7 @@ TIPS: dict[str, str] = {
         "stronger setting, a little smaller and a little slower. zstd needs no DLL and writes a file "
         "about a third larger. auto uses kraken when the DLL is found and zstd when it is not.\n\n"
         "Example: the same content measured 1.59 MB as kraken and 2.16 MB as zstd. Risk: a zstd file "
-        "can pass the game's 2,359,296-byte limit and be refused at load."
+        "can pass the game's 2,359,296-byte limit and be refused by the tool before writing."
     ),
     "compression_level": (
         "How much work the encoder spends: fast or max.\n\n"
@@ -399,7 +399,7 @@ TIPS: dict[str, str] = {
         "attack covers damage per element; guard covers damage negation and guard boost; requirements "
         "covers the attribute minimums; scaling covers the letters and their weights; effects covers "
         "critical, poise damage and status build-up; stamina covers the stamina cost multiplier. An "
-        "empty selection means all six, and anything unticked stays exactly as the weapon had it.\n\n"
+        "empty selection means all seven, and anything unticked stays exactly as the weapon had it.\n\n"
         "Example: ticking attack and scaling only changes how a weapon hits, never what it asks for. "
         "Requires Randomize weapon stats."
     ),
@@ -693,7 +693,10 @@ TIPS: dict[str, str] = {
         "weapon itself, but a powerful weapon can end up behind a trivial enemy."
     ),
     "random_dropped_weapons": (
-        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, gifts) shows a random weapon.\n\nThe pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere. Slots take distinct weapon rows where the world has them: two rows of one appearance are two instances (different stats), so the same appearance can be found in two loot spots with different stats; where the world has no other row, the repeat is forced. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\nExample: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
+        "Every weapon slot in the enemy drop lots and the map lots (chest pickups, boss rewards, "
+        "gifts) shows a random weapon.\n\n"
+        "The pass rewrites the weapon id of every weapon slot to a fresh draw from the pool that 'Move weapons to random enemies' uses - the weapons the input hands out somewhere. Slots take distinct weapon rows where the world has them: two rows of one appearance are two instances (different stats), so the same appearance can be found in two loot spots with different stats; where the world has no other row, the repeat is forced. It changes what you find when you pick up a drop, not where loot drops and not what a weapon is; the drop still comes from the same lot, but the weapon it shows is a new, random one every run.\n\n"
+        "Example: the [Omen] drop of 214000990 (Omen Cleaver) now drops a different random weapon. Risk: it changes what drops, not what weapons are - see Randomize weapon stats."
     ),
     "random_dropped_shop_weapons": (
         "Rerolls the weapon slots of every weapon shop (ShopLineupParam).\n\n"

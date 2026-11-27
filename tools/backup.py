@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -28,19 +29,10 @@ BACKUP_DIR_NAME = "backups"
 
 
 def _atomic_copy(src: Path, dst: Path) -> None:
-    """Copy src onto dst atomically: write a sibling temp file, then os.replace() over dst, so a
-    crash or full disk mid-copy can never leave a half-written file over the user's original."""
-    import tempfile
+    """Copy src onto dst atomically, via the shared fsync-aware helper in atomicio."""
+    import atomicio  # local: keeps the backup module importable on its own
 
-    fd, name = tempfile.mkstemp(prefix=dst.name + ".", suffix=".tmp", dir=dst.parent)
-    tmp = Path(name)
-    os.close(fd)
-    try:
-        shutil.copy2(src, tmp)
-        os.replace(tmp, dst)
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        raise
+    atomicio.atomic_copy(src, dst)
 
 
 ARCHIVE_NAME = "item_dlc02.msgbnd.dcx"
@@ -82,7 +74,9 @@ def _msg_files(archives: list[Path]) -> list[Path]:
     for a in archives:
         p = Path(a)
         if p.is_dir():
-            out.extend(sorted(x for x in p.rglob("*") if x.is_file()))
+            # A symlink under a msg folder can point outside the mod tree; copying its target into
+            # a backup (or a release zip) leaks files the user never selected.
+            out.extend(sorted(x for x in p.rglob("*") if x.is_file() and not x.is_symlink()))
         elif p.is_file():
             out.append(p)
     # deterministic, and stable even when the caller passes overlapping folders
@@ -176,11 +170,19 @@ def prune_backups(keep: int = KEEP_BACKUPS) -> int:
     return removed
 
 
-def restore(backup: Path) -> list[Path]:
-    """Copy every file of ``backup`` back to where it came from.  Returns the restored paths."""
+def restore(backup: Path, *, allowed_roots: Sequence[Path]) -> list[Path]:
+    """Copy every file of ``backup`` back where it came from.  Returns the restored paths.
+
+    ``allowed_roots`` comes from the *caller's live state* (the currently selected input and archive
+    folders, plus the program folder), never from the manifest.  A downloaded backup folder can
+    otherwise name any absolute path in ``original`` and overwrite it on rollback.
+    """
     problems = verify_backup(backup)
     if problems:
         raise ValueError("backup is incomplete: " + "; ".join(problems[:8]))
+    roots = [Path(root).resolve() for root in allowed_roots]
+    if not roots:
+        raise ValueError("restore needs at least one allowed destination root")
     manifest = json.loads((Path(backup) / MANIFEST).read_text(encoding="utf-8"))
     restored: list[Path] = []
     for entry in manifest:
@@ -189,7 +191,12 @@ def restore(backup: Path) -> list[Path]:
         src = Path(backup) / Path(entry["name"]).name
         if not src.is_file():
             continue
-        dst = Path(entry["original"])
+        dst = Path(entry["original"]).resolve()
+        if not any(dst.is_relative_to(root) for root in roots):
+            raise ValueError(
+                f"backup wants to write outside the allowed folders: {dst}\n"
+                "Allowed: " + ", ".join(str(root) for root in roots)
+            )
         dst.parent.mkdir(parents=True, exist_ok=True)
         _atomic_copy(src, dst)
         restored.append(dst)

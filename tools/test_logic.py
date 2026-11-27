@@ -79,7 +79,7 @@ _FAILS: list[str] = []
 
 
 def check(cond: bool, msg: str) -> None:
-    """Record one assertion; `msg` describes what broke (expected vs actual) when it fails."""
+    """Record one assertion; `msg` names the failed expectation (with the actual value where useful)."""
     global _CHECKS
     _CHECKS += 1
     if not cond:
@@ -1168,12 +1168,26 @@ def test_backup() -> None:
 
         src.write_bytes(b"CLOBBERED")
         archive.write_bytes(b"CLOBBERED")
-        restored = backup.restore(made)
+        restored = backup.restore(made, allowed_roots=[root])
         check(len(restored) == 2, f"restore reported {len(restored)} files, expected 2")
         check(src.read_bytes() == original[src.resolve()],
               "restore did not put regulation.bin back byte-for-byte")
         check(archive.read_bytes() == original[archive.resolve()],
               "restore did not put the msg archive back byte-for-byte")
+
+        # A manifest from a downloaded backup folder must not be able to name an arbitrary target.
+        manifest_path = made / backup.MANIFEST
+        good_manifest = manifest_path.read_text(encoding="utf-8")
+        escaped = json.loads(good_manifest)
+        escaped[0]["original"] = str(root.parent / "outside" / "evil.bin")
+        manifest_path.write_text(json.dumps(escaped), encoding="utf-8")
+        rejected = False
+        try:
+            backup.restore(made, allowed_roots=[root])
+        except ValueError:
+            rejected = True
+        check(rejected, "restore accepted an original path outside the allowed roots")
+        manifest_path.write_text(good_manifest, encoding="utf-8")
 
         for _ in range(5):
             backup.make_backup([src])
@@ -1194,7 +1208,7 @@ def test_backup() -> None:
               "backup_and_replace did not copy the generated file over the input")
         check(archive.read_bytes() == patched.read_bytes(),
               "backup_and_replace did not copy the patched archive over the source")
-        backup.restore(made)
+        backup.restore(made, allowed_roots=[root])
         check(src.read_bytes() == original[src.resolve()],
               "restore after backup_and_replace did not undo the regulation.bin replacement")
         check(archive.read_bytes() == original[archive.resolve()],
@@ -1269,6 +1283,21 @@ def test_version_resource() -> None:
         got = tuple(int(x) for x in re.findall(r"\d+", match.group(1)))
         check(got[:len(want)] == want,
               f"version_info.txt {field} {got} != version.py {want}")
+
+    # A Windows editor can save latest_version.txt with a UTF-8 BOM.  utf-8 (not utf-8-sig) made
+    # version_tuple() return () and the update notice silently disappear.
+    with tempfile.TemporaryDirectory() as folder:
+        latest = Path(folder) / "latest_version.txt"
+        latest.write_text("\ufeff9.9.9\n", encoding="utf-8")
+        old_here, old_cache = version.HERE, version._LATEST_CACHE
+        try:
+            version.HERE = Path(folder)
+            version._LATEST_CACHE = {}
+            check(version.read_latest() == "9.9.9",
+                  f"a BOM in latest_version.txt was not stripped: {version.read_latest()!r}")
+            check(version.is_newer("9.9.9", version.__version__), "the BOM version was not seen as newer")
+        finally:
+            version.HERE, version._LATEST_CACHE = old_here, old_cache
 
 
 # --------------------------------------------------------------------------- Nexus description
@@ -1642,7 +1671,8 @@ def test_backup_full_msg() -> None:
         src.write_bytes(b"CLOBBERED")
         for p in given:
             p.write_bytes(b"CLOBBERED")
-        check(len(backup.restore(made)) == 4, "restore did not return all four files")
+        check(len(backup.restore(made, allowed_roots=[root])) == 4,
+              "restore did not return all four files")
         check(src.read_bytes() == b"REG", "regulation.bin was not restored")
         check((msg / "engus" / "menu_dlc02.msgbnd.dcx").read_bytes() == b"MENU",
               "the menu archive was not restored")
@@ -1843,14 +1873,90 @@ def test_presets() -> None:
         except (ValueError, SystemExit) as e:
             check(False, f"preset {preset['key']} does not validate: {e}")
             continue
-        check(valid["input"] and valid["output"], f"preset {preset['key']} has no input/output")
+        # validate() fills input/output from defaults, so the old assertion was a tautology.  The real
+        # contract is that a preset never silently turns off the safety default.
+        check(valid.get("backup_replace") is True,
+              f"preset {preset['key']} silently disables Backup and replace")
         if preset["key"] in ("borderlands", "borderlands_armory"):
             check(valid.get("loot_variants") is True,
                   f"preset {preset['key']} lost --loot-variants: the headline feature would be off")
+    chaos = next(p["values"] for p in presets.PRESETS if p["key"] == "chaos")
+    for key in ("random_weapon_holder_shuffle", "random_weapon_status_roll", "random_dropped_weapons",
+                "loot_variants", "rarity_labels"):
+        check(chaos.get(key) is True,
+              f"Full chaos claims 'every pass on' but leaves {key} off")
     # The GUI presets must not end up with a name-less or tip-less button.
     for preset in presets.PRESETS:
         check(bool(preset.get("label")) and len(preset.get("tip", "")) > 40,
               f"preset {preset['key']} has no label or tip")
+
+
+def test_content_copy() -> None:
+    """Runtime manifests must follow the replaced regulation; reports must stay in the output folder."""
+    with tempfile.TemporaryDirectory() as root:
+        base = Path(root)
+        out, mod = base / "out", base / "mod"
+        out.mkdir()
+        mod.mkdir()
+        generated = out / "regulation.bin"
+        generated.write_bytes(b"GENERATED")
+        (out / "loot_variants.txt").write_text("bind 9 deadbeef\n", encoding="utf-8")
+        (out / "shops_periodic.txt").write_text("bind 9 cafebabe\n", encoding="utf-8")
+        (out / "weapons.txt").write_text("report", encoding="utf-8")
+        replaced = mod / "regulation.bin"
+        replaced.write_bytes(b"ORIGINAL")
+
+        names = ("loot_variants.txt", "shops_periodic.txt")
+        copied = randomize.copy_content_to_input(generated, replaced, names)
+        check(copied == list(names), f"content copy returned {copied}, expected {list(names)}")
+        check((mod / "loot_variants.txt").is_file() and (mod / "shops_periodic.txt").is_file(),
+              "runtime manifests were not copied beside the replaced regulation")
+        check(not (mod / "weapons.txt").exists(), "a human report was copied into the mod folder")
+        check(randomize.copy_content_to_input(generated, generated, names) == [],
+              "content copy should do nothing when input and output share a folder")
+        check(randomize.copy_content_to_input(generated, replaced, ("absent.txt",)) == [],
+              "a missing manifest should be skipped without raising")
+
+
+def test_input_hardening() -> None:
+    """Truncated/bogus binary structures must fail with ValueError, never struct.error or silent data loss."""
+    # read_bnd4: a per-file header of one byte passes the coarse table-size guard but cannot hold the
+    # csize field the loop unpacks.  It used to escape as struct.error.
+    buf = bytearray(0x41)
+    buf[:4] = b"BND4"
+    struct.pack_into("<i", buf, 0x0C, 1)
+    struct.pack_into("<q", buf, 0x20, 1)
+    struct.pack_into("<q", buf, 0x28, 0x40)
+    try:
+        erreg.read_bnd4(bytes(buf))
+        check(False, "read_bnd4 accepted a one-byte file header")
+    except ValueError:
+        pass
+    except Exception as e:
+        check(False, f"read_bnd4 raised {type(e).__name__} instead of ValueError: {e}")
+
+    # Param: a row offset past the end used to yield a truncated (or empty) row silently.
+    raw = bytearray(0x80)
+    raw[0x2D] = 0x85
+    struct.pack_into("<H", raw, 0x0A, 1)
+    struct.pack_into("<q", raw, 0x10, 0x60)
+    raw[0x60:0x6A] = b"TestParam\0"
+    struct.pack_into("<iiqq", raw, 0x40, 1, 0, 0x1000, 0)
+    try:
+        erreg.Param(bytes(raw), erreg.ParamDef("TestParam", 0, [], 16))
+        check(False, "Param accepted a row whose data offset is outside the buffer")
+    except ValueError:
+        pass
+    except Exception as e:
+        check(False, f"Param raised {type(e).__name__} instead of ValueError: {e}")
+
+    # A range of zero is rejected by new_prices deep in the engine; validate must name the field first.
+    try:
+        options.validate(dict(_argv_dict(), random_durations=True, duration_mode="range",
+                              duration_min=0, duration_max=100))
+        check(False, "validate accepted a zero duration minimum")
+    except ValueError:
+        pass
 
 
 def main() -> int:
@@ -1864,7 +1970,8 @@ def main() -> int:
     for fn in SELF_TEST_FNS + (test_corrupt_input, test_nexus_doc, test_md2nexus_fuzz,
                                test_dropshuffle_protection, test_backup_full_msg, test_install_runtime,
                                test_presets, test_release_package, test_rarity_label_tables,
-                               test_aob_verifier, test_ash_chance_empty, test_pair_defaults):
+                               test_aob_verifier, test_ash_chance_empty, test_pair_defaults,
+                               test_input_hardening, test_content_copy):
         fn()
     if fuzz_path:
         print(f"real-file fuzz on {fuzz_path} ...")

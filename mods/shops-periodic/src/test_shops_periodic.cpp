@@ -59,6 +59,11 @@ int main(int argc, char** argv) {
     check(parse_bind("bind 2111760 fe3e25833098e16b", parsed_bind, bind_error)
           && parsed_bind == 0xfe3e25833098e16bULL, "parse_bind did not read the FNV hash");
     check(!parse_bind("bind 2111760", parsed_bind, bind_error), "parse_bind accepted a missing hash");
+    check(!parse_bind("bind 2111760 abc", parsed_bind, bind_error), "parse_bind accepted a non-hex hash");
+    check(!parse_bind("bind 2111760 ffffffffffffffffff", parsed_bind, bind_error),
+          "parse_bind accepted a 17-digit (overflowing) hash");
+    check(!parse_bind("bind 2111760 fe3e25833098e16", parsed_bind, bind_error),
+          "parse_bind accepted a truncated hash");
     check(m.valid(), "manifest invalid after load");
     check(!m.pools.empty(), "no pools parsed");
     check(m.shop_count() > 0, "no shop blocks parsed");

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Install the optional loot-variants native mod into a Mod Engine 3 game folder.
+"""Install an optional native mod (loot-variants or shops-periodic) into a Mod Engine 3 folder.
 
---loot-variants writes loot_variants.txt; the DLL that acts on it is a separate, optional file.  This
+--loot-variants writes loot_variants.txt and --random-shop-stock writes shops_periodic.txt; the DLLs
+that act on them are separate, optional files.  This
 module finds the DLL the build produced and copies it (plus a fresh ini, if there is none) into the
 `dll\\offline` folder that Mod Engine auto-loads.  Nothing here ever touches regulation.bin or a save.
 
@@ -14,7 +15,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -107,17 +107,9 @@ def _digest(path: Path) -> str:
 
 def _copy_atomic(src: Path, dst: Path) -> None:
     """Write to a sibling temp file then replace, so readers never see a partial DLL."""
-    import tempfile
+    import atomicio  # local: keeps this module importable on its own
 
-    fd, name = tempfile.mkstemp(prefix=dst.name + ".", suffix=".tmp", dir=dst.parent)
-    tmp = Path(name)
-    os.close(fd)
-    try:
-        shutil.copy2(src, tmp)
-        os.replace(tmp, dst)
-    finally:
-        if tmp.exists():
-            tmp.unlink()
+    atomicio.atomic_copy(src, dst)
 
 
 def install(source: str | Path | None = None, dll_dir: str | Path | None = None,

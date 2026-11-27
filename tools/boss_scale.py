@@ -16,6 +16,14 @@ import erreg
 
 HERE = Path(__file__).resolve().parent
 
+# hp and getSoul are signed 32-bit fields in NpcParam.  An unbounded scale (or a boss with an
+# already-large bounty) used to overflow struct.pack_into and abort the run in its last phase.
+_I32_MAX = 2_147_483_647
+
+
+def _clamp_i32(value: float, minimum: int = 0) -> int:
+    return max(minimum, min(_I32_MAX, round(value)))
+
 
 def boss_ids(N, min_runes: int = 0) -> set[int]:
     """The rows that count as bosses - one definition, shared with the loot boss-bonus (bosses.py)."""
@@ -33,7 +41,7 @@ def apply(reg: erreg.Regulation, rng: random.Random, boss: set[int], orig: dict,
         lo, hi = hp_scale
         for r in N.rows:
             if r.id in boss:
-                N.set(r, "hp", round(N.get(r, "hp") * rng.uniform(lo, hi)))
+                N.set(r, "hp", _clamp_i32(N.get(r, "hp") * rng.uniform(lo, hi), 1))
         lines.append(f"# boss HP x U({lo:g},{hi:g}): {len(boss)} bosses scaled")
     if couple and orig:
         # reads the CURRENT hp (already multiplied above when boss HP scaling ran first), so a scaled
@@ -41,12 +49,12 @@ def apply(reg: erreg.Regulation, rng: random.Random, boss: set[int], orig: dict,
         for r in N.rows:
             oh, os_ = orig.get(r.id, (0, 0))
             if oh > 0:
-                N.set(r, "getSoul", round(N.get(r, "hp") * os_ / oh))
+                N.set(r, "getSoul", _clamp_i32(N.get(r, "hp") * os_ / oh))
         lines.append("# runes coupled to HP (each enemy's bounty tracks its hit points)")
     if rune_scale and tuple(rune_scale) != (1.0, 1.0):
         lo, hi = rune_scale
         for r in N.rows:
             if r.id in boss:
-                N.set(r, "getSoul", round_price(N.get(r, "getSoul") * rng.uniform(lo, hi)))
+                N.set(r, "getSoul", _clamp_i32(round_price(N.get(r, "getSoul") * rng.uniform(lo, hi))))
         lines.append(f"# boss runes x U({lo:g},{hi:g}): {len(boss)} bosses scaled")
     return lines

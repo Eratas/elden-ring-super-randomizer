@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GUI: ./randomize_gui.sh   (needs tkinter: on Ubuntu / WSL  sudo apt install python3-tk)
+# GUI: ./randomize_gui.sh [options] (passed to tools/gui.py; needs tkinter: sudo apt install python3-tk)
 set -e
 cd "$(dirname "$0")"
 VENV="$HOME/.venvs/er_mod"

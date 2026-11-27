@@ -1,4 +1,4 @@
-# Smoke-test plan — EldenRingSuperRandomizer.exe (the new build)
+# Smoke-test plan — EldenRingSuperRandomizer.exe
 
 Exe: `dist\EldenRingSuperRandomizer.exe`. **The exe is the window only** — PyInstaller builds it
 `--windowed`, so it has no console and does not take the randomizer's flags (they are silently
@@ -68,7 +68,7 @@ The weapon-effect switches were renamed in the Weapons section (Shuffle on-hit e
 holder effects, Roll statuses on hit) and a fourth joined them:
 
 ```
-randomize.bat --random-loot-effects --input <reg.bin> --output <out.bin> --dry-run
+randomize.bat --random-weapon-status-roll --random-loot-effects --input <reg.bin> --output <out.bin> --dry-run
 ```
 
 Checks in `weapons.txt`:
@@ -97,5 +97,5 @@ PyInstaller output.
 
 - `dist\msg\engus\item_dlc02.msgbnd.dcx` sits next to the exe — the user adds
   `oo2core_6_win64.dll` from the game folder for real runs (the tool never ships it).
-- The user with a question while testing: hover any field for its tooltip; the new tooltips explain
+- Hover any field for its tooltip; the tooltips explain
   the random_stats/status-pass interplay.

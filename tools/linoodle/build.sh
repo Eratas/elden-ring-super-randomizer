@@ -20,8 +20,14 @@ else
 fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-git clone --depth 1 --recurse-submodules -q https://github.com/McSimp/linoodle.git "$work/linoodle"
+# Pinned upstream commit (resolved from McSimp/linoodle HEAD on 2026-11-27).  The sed patches below
+# match exact source lines, so a moving HEAD could silently break or change what gets compiled.
+git init -q "$work/linoodle"
 cd "$work/linoodle"
+git remote add origin https://github.com/McSimp/linoodle.git
+git fetch -q --depth 1 origin 90b8d825f7f89272f03f52b5d1db4708e07eb83f
+git checkout -q FETCH_HEAD
+git submodule update --init --recursive -q
 sed -i 's/-Werror/-w/g' pe-parse/cmake/compilation_flags.cmake      # third-party code: no -Werror, no warnings
 sed -i '0,/#include/s//#include <utility>\n#include <cstdint>\n#include/' windows_library.cpp
 sed -i '0,/#include/s//#include <clocale>\n#include/' windows_api.cpp            # LC_ALL with clang / zig

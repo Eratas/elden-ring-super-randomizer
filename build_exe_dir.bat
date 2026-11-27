@@ -33,7 +33,7 @@ if not defined TCL_LIBRARY if not defined TK_LIBRARY (
 )
 "%VENV%\Scripts\python.exe" -c "import PyInstaller" >nul 2>&1 || (
   echo Installing PyInstaller into %VENV% ...
-  "%VENV%\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check pyinstaller || goto :fail
+  "%VENV%\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check pyinstaller==6.22.3 || goto :fail
 )
 rem --onedir (the default; --onefile is what build_exe.bat uses) keeps the runtime out of %TEMP%.
 rem --version-file embeds PE version metadata; --hidden-import test_logic enables the exe's --self-test.

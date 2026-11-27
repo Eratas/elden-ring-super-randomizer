@@ -32,6 +32,7 @@ constexpr std::uint32_t kMaxLevel = 25;
 // the one ReinforceParamProtector stores for +N (its rows hold N << 24 at offset 44).
 constexpr std::uint32_t kArmorBit = 0x10000000u;
 constexpr std::uint32_t kArmorIdMask = 0x00FFFFFFu;
+constexpr std::uint32_t kArmorLevelMask = 0x0000000Fu;   // bits 24-27
 constexpr std::uint32_t kArmorMaxLevel = 10;
 constexpr int kCurveEven = 0;
 constexpr int kCurveCommon = 1;
@@ -73,6 +74,8 @@ struct Manifest {
 
 // xorshift64*: tiny, deterministic and identical in the DLL and the test.  Not cryptographic; it
 // only decides which of a weapon's own variants a pickup shows.
+constexpr std::uint64_t kDefaultSeed = 0x9E3779B97F4A7C15ull;
+
 struct Rng {
     std::uint64_t state = 0x9E3779B97F4A7C15ull;
 
@@ -432,7 +435,7 @@ inline Rolled roll_item(std::uint32_t item_id, const Manifest& manifest, const O
         const std::uint32_t base = item_id & kArmorIdMask;
         const auto piece = manifest.armor.find(base);
         if (piece != manifest.armor.end()) {
-            std::uint32_t level = (item_id >> 24) & 0x0Fu;
+            std::uint32_t level = (item_id >> 24) & kArmorLevelMask;
             if (options.reroll_level && piece->second.max_level > 0) {
                 level = detail::roll_level(piece->second.max_level, options.level_curve, rng);
             } else if (level > piece->second.max_level) {

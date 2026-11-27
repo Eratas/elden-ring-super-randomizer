@@ -11,7 +11,9 @@ use it, see [README.md](README.md).
   (needs MSVC) and the install fails; `findpython.bat` and the launchers deliberately skip it.
 * Two dependencies only: `zstandard` (zstd output) and `cryptography` (the file's AES-256-CBC
   encryption). `oo2core_6_win64.dll` is **not** a dependency: it is RAD Game Tools' and ships with the
-  game; without it the tool writes zstd instead of kraken.
+  game; without it the tool writes zstd instead of kraken. Runtime and dev versions are pinned in
+  `tools/requirements.txt` and `requirements-dev.txt`; the exe builders pin PyInstaller, and the
+  Linux loader build fetches one fixed upstream linoodle commit.
 
 ## Set up a virtual environment
 
@@ -67,7 +69,8 @@ pip install -r requirements-dev.txt    rem installs ruff (dev only; the tool its
 python tools\lint.py             rem or directly: python -m ruff check tools\ --select F,E9
 ```
 
-`gate.py` runs it as its last step, so a green gate also means no undefined names (an annotation that
+`gate.py` runs it as its last step, so with ruff installed a green gate also means no undefined
+  names (an annotation that
 references a module that was never imported), unused locals, or f-strings without a placeholder
 slipped in.
 
@@ -147,7 +150,8 @@ Ashes, a single moveset, a regulation with no timed buffs) failing soft.
   labels, tips and docs use UK spelling (`armour`). Keep that split for new options; the older
   `armour_keep_sets` key is the historical exception.
 * `tools/randomize.py` — the engine: parse, run the passes, write the output and the reports.
-* `tools/backup.py` — backup-and-replace, revert and backup pruning.
+* `tools/backup.py` — backup-and-replace, revert and backup pruning. Rollback destinations are an allowlist built from the window's current input/archive folders, never from the backup manifest.
+* `tools/atomicio.py` — the one fsync-aware temp-file-and-rename writer used by the regulation, backup and installer paths.
 * `tools/test_logic.py` — the logic tests above; also used by `gui.py --self-test` inside the frozen exe.
   Add `--self-test-headless` to skip the message box and get a real exit code in scripts / CI.
 * `tools/test_passes_synthetic.py` — the randomizer passes (weapons, gems, gear, spells, goods, shops,
@@ -167,8 +171,9 @@ Ashes, a single moveset, a regulation with no timed buffs) failing soft.
 
 `regulation.bin` is one table shared by the whole game, so a static rewrite cannot give two copies of
 the same sword different stats. The optional DLL is the only path to **per-pickup** variety. The static
-tool writes `loot_variants.txt` next to the regulation; the DLL reads it and rerolls the give id at the
-moment the game grants the item. Without the DLL the regulation is still a complete random run — the
+tool writes `loot_variants.txt` into the output folder and, with Backup and replace, copies it beside
+the replaced regulation.bin; the DLL reads it there and rerolls the give id at the moment the game
+grants the item. Without the DLL the regulation is still a complete random run — the
 manifest is simply unused.
 
 Three switches stay separate and compose:
@@ -259,8 +264,9 @@ it composes with randomizer output.
 ## Runtime mod: shops-periodic
 
 Optional second DLL (`mods/shops-periodic/`) for Borderlands-style merchant stock: reroll the items on
-offer **while** the game runs. `tools/shops.py::periodic_manifest()` writes `shops_periodic.txt` next
-to `regulation.bin` on every `--random-shop-stock` run. Like `loot_variants.txt`, it is content, not a
+offer **while** the game runs. `tools/shops.py::periodic_manifest()` writes `shops_periodic.txt` into
+the output folder on every `--random-shop-stock` run, and Backup and replace copies it beside
+`regulation.bin`. Like `loot_variants.txt`, it is content, not a
 report: it is written after compression, bound to the bytes actually written, and survives
 `--no-reports`:
 

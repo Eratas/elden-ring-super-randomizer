@@ -62,7 +62,7 @@ def scan(data: bytes, pattern: str, limit: int = 20) -> list[int]:
         if begin < 0 or begin + len(needle) > len(data):
             start = pos + 1
             continue
-        if begin >= 0 and all(m == 0 or data[begin + i] == b
+        if all(m == 0 or data[begin + i] == b
                               for i, (m, b) in enumerate(zip(mask, needle))):
             hits.append(begin)
         start = pos + 1

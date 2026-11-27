@@ -31,6 +31,7 @@ from __future__ import annotations
 import io
 import math
 import random
+import shutil
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -114,15 +115,41 @@ def utf8_stdio() -> None:
             pass
 
 
+def copy_content_to_input(out: Path, input_file: Path, names: tuple[str, ...]) -> list[str]:
+    """Follow the replaced regulation.bin with its machine-readable companion content.
+
+    The runtime DLLs look for loot_variants.txt / shops_periodic.txt next to themselves or next to
+    regulation.bin - not in the report folder.  Without this copy a backup-and-replace run produced
+    a correct manifest that the game could never see.  Reports stay in the output folder; a missing
+    or unwritable file is logged and skipped instead of aborting an otherwise complete run.
+    """
+    source_dir = Path(out).parent.resolve()
+    target_dir = Path(input_file).resolve().parent
+    if source_dir == target_dir:
+        return []
+    copied: list[str] = []
+    for name in names:
+        source = source_dir / name
+        if not source.is_file():
+            continue
+        try:
+            shutil.copy2(source, target_dir / name)
+        except OSError as error:
+            print(f"# content: could not copy {name} next to {input_file}: {error}")
+            continue
+        copied.append(name)
+    return copied
+
+
 def fail(message: str) -> NoReturn:
     """Print a one-line error and stop with a non-zero exit code.
 
-    The text goes to stdout, not into SystemExit: the window runs the engine in a worker thread, logs
-    its stdout and drops a string SystemExit code, so a raise of SystemExit with a message would fail
-    the run there without saying why.  A missing or mistyped --input used to end in a raw pathlib
+    The text goes to stderr, not into SystemExit: a string SystemExit code would fail the window's
+    worker without saying why.  Both the CLI (machine data on stdout) and the window (which redirects
+    stderr into the same log) see it.  A missing or mistyped --input used to end in a raw pathlib
     traceback, which is the single most likely user error there is.
     """
-    print(f"# error: {message}")
+    print(f"# error: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -187,7 +214,7 @@ def anim_sources(P: erreg.Param, pool: list, src: list[int], mode: str, rng: ran
             receivers.setdefault(cat[src[i]], []).append(i)
         for c, idx in receivers.items():
             donors = by_cat[c][:]
-            while len(donors) < len(idx):            # only in random mode; shuffle keeps the multiset
+            while len(donors) < len(idx):            # defensive: this group has at least as many entries
                 donors += by_cat[c]
             rng.shuffle(donors)
             for i, j in zip(idx, donors):
@@ -382,8 +409,8 @@ def archive_guard(flag: str, src: Path, output: Path, dry_run: bool) -> None:
 def shipped_warning(flag: str, archives: list[Path]) -> list[str]:
     """What an option prints (and puts into weapons.txt) when it falls back to the shipped text archives."""
     return [f"# {flag.lstrip('-')}: using the shipped text archives: " + ", ".join(str(a) for a in archives),
-            "# warning: using the msg/ files provided by this program could cause the disagreement between "
-            "the name and the actual items"]
+            "# warning: using the msg/ files provided by this program could cause disagreement between a "
+            "name and the actual item"]
 
 
 # ---------------------------------------------------------------- the run
@@ -534,7 +561,7 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             qlines = goods.randomize(reg, names, rng)
             print("\n".join(l for l in qlines if l.startswith("#")))
         nglines: list[str] = []                            # read-only warning about goods without names
-        if v["goods_name_gaps"]:                            # ... done above the Goods phase
+        if v["goods_name_gaps"]:                            # read-only warning about goods without names
             say(phases.NAMES_GAPS)
             nglines = names_gaps.goods_gaps(reg)
             print("\n".join(l for l in nglines if l.startswith("#")))
@@ -802,7 +829,8 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
     limit = reg.output_limit(v["max_size"] or erreg.REGULATION_MAX_SIZE)
     print(f"# wrote {out} ({codec}, {size} bytes, limit {limit}; {limit - size} bytes to spare)")
     # The manifest is content, not a report: --no-reports must not suppress it, because without it the
-    # runtime mod has nothing to roll from.  It lands next to regulation.bin, where the DLL looks for it.
+    # runtime mod has nothing to roll from.  It lands in the output folder; backup-and-replace then
+    # follows the regulation into the mod folder via copy_content_to_input().
     if variants is not None:
         manifest = out.parent / loot_variants.MANIFEST_NAME
         # Bind the manifest to the bytes actually written, not to the in-memory table: a stale manifest
@@ -908,6 +936,15 @@ def main(argv: list[str] | None = None, progress=None, quiet: bool = False) -> i
             print(f"# backup and replace: then replaced {v['input']}"
                   + (f" and {len(archs)} msg archive(s)" if archs else "")
                   + "; use the backup folder to undo")
+            content_names = tuple(name for present, name in (
+                (variants is not None, loot_variants.MANIFEST_NAME),
+                (make_periodic, shops.PERIODIC_MANIFEST),
+            ) if present)
+            copied_content = copy_content_to_input(out, Path(v["input"]), content_names)
+            if copied_content:
+                print("# runtime content next to the replaced regulation.bin: "
+                      + ", ".join(copied_content)
+                      + "; restart the game so the installed DLL reads it")
         else:
             print("# backup and replace: input file not found, nothing was backed up")
     say(phases.DONE)

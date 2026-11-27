@@ -8,7 +8,9 @@ Keep them few and meaningful.  Each one must work on a vanilla regulation.bin an
 Reforged one, and each one must leave the output under the game's 2.36 MB limit at the default
 compression (kraken, maximum effort).
 
-Values use the option keys from options.py; a key that is not listed keeps whatever the player had.
+Values use the option keys from options.py.  The window resets every switch before applying a bundle,
+so a key that is not listed ends up OFF - even safety defaults, which is why ``backup_replace`` is
+spelled out in all 17 presets.
 """
 from __future__ import annotations
 
@@ -21,6 +23,8 @@ PRESETS: tuple[dict, ...] = (
                "things. With the loot-variants runtime DLL installed, every pickup rolls its own affinity, "
                "level and Ash of War, so five copies of one sword are five different swords.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": False, "random_default_ash": True,
             "random_stats": True, "stat_groups": "", "stamina_rate": "0,2.0",
@@ -43,6 +47,8 @@ PRESETS: tuple[dict, ...] = (
                "you pick up. Weapons keep their vanilla placements so the armour is the star. Goods, "
                "spells and prices are untouched.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": False, "random_movesets": False, "random_default_ash": False,
             "random_stats": False,
@@ -64,6 +70,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "The traditional set: what consumables and spells do, and what shops charge. Weapons keep "
                "their movesets and stats, so the game still feels like itself.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": True, "mode": "shuffle", "split_anim": "none", "include_flasks": False,
             "include_remembrances": False, "goods_quantity": False,
             "spells": True, "spell_stats": False,
@@ -83,6 +91,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "A little of everything that cannot break the game: consumables and spells swap, prices move, "
                "buffs last a different time. Weapons, armour and drops are untouched, so it is a safe first run.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": True, "mode": "shuffle", "split_anim": "none", "include_flasks": False,
             "include_remembrances": False, "goods_quantity": False,
             "spells": True, "spell_stats": False,
@@ -103,6 +113,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Weapons get new movesets, new skills and new stats on every affinity, and every weapon can "
                "drop anywhere. No consumable or price changes, so the RPG side stays readable.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": True, "moveset_mode": "affinity",
             "random_default_ash": True, "random_stats": True, "stat_groups": "", "stamina_rate": "0.8,1.2",
@@ -122,6 +134,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Armour numbers are shaken and rolled again, sets stay coherent, and armour and talismans can "
                "drop off any enemy. Weapons, goods and prices are untouched.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": False, "random_movesets": False, "random_default_ash": False,
             "random_stats": False, "random_enemy_drops": False, "random_loot_levels": False,
@@ -140,6 +154,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Every Ash of War gets another ash's skill and on-hit effects, and ashes can drop off any "
                "enemy. Weapons keep their own movesets and stats.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": False, "random_default_ash": False,
             "random_stats": False, "random_enemy_drops": True, "enemy_drop_rolls": 1,
@@ -157,6 +173,8 @@ PRESETS: tuple[dict, ...] = (
         "label": "Prices only",
         "tip": "What shops charge and what they pay. Nothing else changes, so it is the safest possible run.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False,
             "random_prices": True, "price_mode": "shuffle", "sell_prices": True,
             "sell_equipment": True,
@@ -175,6 +193,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Enemies are worth more and hit back: rune drops and hit points are redrawn, bosses roll the "
                "best upgrade curve, and every enemy always drops one item.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": False, "random_movesets": False, "random_default_ash": False,
             "random_stats": False,
@@ -193,10 +213,12 @@ PRESETS: tuple[dict, ...] = (
     {
         "key": "boss-hunt",
         "label": "Boss hunt",
-        "tip": "Bosses stay the hard part: enemy HP is redrawn, but every boss is scaled back up (1.5-2x HP "
+        "tip": "Bosses stay the hard part: enemy HP is redrawn, but every boss is scaled back up (1.5–2× HP "
                "and runes) and bounty tracks HP, so a boss is always worth the fight and never a pushover. "
                "Ordinary enemies stay random.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": False, "random_movesets": False, "random_default_ash": False,
             "random_stats": False,
@@ -217,6 +239,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "A fresh start: every weapon, its moveset and where it drops are random, but nothing is "
                "cruel. No enemy becomes a bullet sponge, so a new character can play from the beginning.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": True, "moveset_mode": "affinity",
             "random_default_ash": True, "random_stats": True, "stat_groups": "", "stamina_rate": "0.8,1.2",
@@ -240,6 +264,8 @@ PRESETS: tuple[dict, ...] = (
                "random gear, and both enemy HP and rune bounties are redrawn within a band - no bullet "
                "sponges and no rat worth a dragon. A safe default that still changes everything.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": True, "moveset_mode": "affinity",
             "random_default_ash": True, "random_stats": True, "stat_groups": "",
@@ -264,6 +290,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Weapons roll the biggest attack they can and enemies have little health: every fight is "
                "over in a hit or two, yours included. Expect wild weapons and fragile foes.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": False, "spells": False, "random_prices": False,
             "somber_infusable": True, "random_movesets": True, "moveset_mode": "affinity",
             "random_default_ash": True, "random_stats": True, "stat_groups": "attack",
@@ -287,6 +315,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "Everything at once: every pass on, every drop random, every stat rolled. Expect a very "
                "different game, and give the compression its minutes.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "goods": True, "mode": "shuffle", "split_anim": "none", "include_flasks": False,
             "include_remembrances": False, "goods_quantity": True,
             "spells": True, "spell_stats": True,
@@ -305,6 +335,9 @@ PRESETS: tuple[dict, ...] = (
             "random_talisman_drops": True, "random_ashes_drops": True,
             "random_shop_stock": True, "shop_stock_kinds": "",
             "random_weapon_onhit_shuffle": True, "req_mode": "tight",
+            # "every pass on" is a promise: these five are not implied by the master switches.
+            "random_weapon_holder_shuffle": True, "random_weapon_status_roll": True,
+            "random_dropped_weapons": True, "loot_variants": True, "rarity_labels": True,
         },
     },
     {
@@ -314,6 +347,8 @@ PRESETS: tuple[dict, ...] = (
                "drops something, and a rare unique occasionally comes along with the ordinary loot. Safe and "
                "familiar.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "random_enemy_drops": True, "enemy_drop_rolls": 3, "enemy_drop_chance": 10,
             "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 1, "material_drops": False,
             "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,
@@ -327,6 +362,8 @@ PRESETS: tuple[dict, ...] = (
         "tip": "A bigger loot surface: every enemy gets 5 rolls at 25%, and uniques show up far more often "
                "than usual.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "random_enemy_drops": True, "enemy_drop_rolls": 5, "enemy_drop_chance": 25,
             "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 8, "material_drops": False,
             "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,
@@ -339,6 +376,8 @@ PRESETS: tuple[dict, ...] = (
         "label": "Generous loot texture",
         "tip": "Very rich loot: every enemy gets 8 rolls at 30%, and uniques are common.",
         "values": {
+            # A preset resets every switch it does not list, so the safety default has to be explicit.
+            "backup_replace": True,
             "random_enemy_drops": True, "enemy_drop_rolls": 8, "enemy_drop_chance": 30,
             "enemy_drop_kinds": "", "unique_drops": True, "unique_rate": 20, "material_drops": False,
             "random_enemy_hp": False, "random_loot_levels": False, "random_runes": False,

@@ -26,13 +26,15 @@ if not exist "%VENV%\Scripts\python.exe" %PY% -m venv "%VENV%" || goto :fail
   goto :fail
 )
 set PYTHONDONTWRITEBYTECODE=1
+set "RC=0"
 "%VENV%\Scripts\python.exe" -I tools\gui.py
 if errorlevel 1 (
+  set "RC=1"
   echo.
   echo The GUI did not exit normally; see the messages above.
   pause
 )
-exit /b 0
+exit /b %RC%
 
 :fail
 echo.

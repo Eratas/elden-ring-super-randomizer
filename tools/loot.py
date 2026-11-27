@@ -29,6 +29,7 @@ from pathlib import Path
 import bosses
 import erreg
 import zones
+from constants import CURVE_ORDER, SLOTS
 from enemy_drops import EnemyDrops
 from flasks import load_locations
 
@@ -37,7 +38,6 @@ HERE = Path(__file__).resolve().parent
 CATEGORY_WEAPON = 2
 SHOP_TYPE_WEAPON = 0
 SOMBER_MAX, STANDARD_MAX = 10, 25
-SLOTS = 8
 
 TIERS: dict[str, tuple[tuple[float, float, float], ...]] = {
     "even": ((0.0, 1.0, 1.0),),
@@ -46,7 +46,6 @@ TIERS: dict[str, tuple[tuple[float, float, float], ...]] = {
     "legendary": ((0.00, 0.10, 0.70), (0.10, 0.32, 0.20), (0.32, 0.56, 0.07),
                   (0.56, 0.80, 0.025), (0.80, 1.00, 0.005)),
 }
-CURVE_ORDER = ("even", "common", "legendary")
 TOP_SHARE = 0.80                    # at or above this share of the ceiling a drop counts as a top roll
 LEGENDARY_SHARE = 0.90              # at or above this share it is announced as a legendary drop
 
@@ -267,8 +266,9 @@ class Loot:
             lines = legendary + lines
         if top_drops:
             top_drops.sort(reverse=True)
-            lines += ["", f"# best {min(len(top_drops), 12)} drops of this seed (by share of the ceiling):"]
-            for _share, level, name, top, is_legendary in top_drops[:12]:
+            top_n = 12
+            lines += ["", f"# best {min(len(top_drops), top_n)} drops of this seed (by share of the ceiling):"]
+            for _share, level, name, top, is_legendary in top_drops[:top_n]:
                 tag = "LEGENDARY" if is_legendary else "top"
                 lines.append(f"#   {tag:<9} {name:<44} +{level}  (of +{top})")
         return lines

@@ -22,7 +22,7 @@ struct Manifest {
     std::map<std::uint32_t, std::vector<std::uint32_t>> pools;   // category -> curated ids
     std::vector<std::vector<std::pair<std::uint32_t, std::uint32_t>>> shops;  // block -> [(slot id, cat)]
 
-    bool valid() const { return pools.size() > 0 && !shops.empty(); }
+    bool valid() const { return !pools.empty() && !shops.empty(); }
     // Returns a random item id from the pool of `cat`, or 0 when the pool is empty (caller skips).
     template <typename Rng>
     std::uint32_t roll_item(std::uint32_t cat, Rng& rng) const {
