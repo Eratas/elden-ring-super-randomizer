@@ -37,6 +37,7 @@ struct Config {
 struct ParamConfig {
     std::string aob;
     int disp_offset = -1;              // >= 0: disp32 at match+offset; -1: the match is the rows base
+    bool deref = false;                // 1: the resolved address holds the pointer to follow once
     std::uint32_t rows_offset = 0;     // bytes from the resolved pointer to the first row entry
     std::uint32_t row_count = 0;       // number of row entries to index
     std::uint32_t row_stride = 0;      // bytes between row entries
@@ -224,6 +225,14 @@ bool resolve_rows(HMODULE module, const ParamConfig& cfg, std::uint8_t*& rows, s
             std::memcpy(&displacement, hit + at, sizeof(displacement));
             resolved = hit + at + sizeof(std::int32_t) + displacement;
         }
+        if (cfg.deref) {
+            // The verified ParamRepository AOB points at its singleton *slot*.  Follow it once so
+            // rows_offset can be measured from the live object, as the memory probe reports it.
+            if (!readable(resolved, sizeof(void*))) {
+                continue;
+            }
+            resolved = *reinterpret_cast<std::uint8_t**>(resolved);
+        }
         const auto address = reinterpret_cast<std::uintptr_t>(resolved);
         if (!readable(resolved, sizeof(void*)) || cfg.rows_offset > UINTPTR_MAX - address) {
             continue;
@@ -356,6 +365,7 @@ extern "C" __declspec(dllexport) bool shops_periodic_init(const char* manifest_p
 
     g_param.aob = ini_value(ini_text, "param", "aob", "");
     parse_i32(ini_value(ini_text, "param", "aob_disp", "-1"), g_param.disp_offset);
+    g_param.deref = ini_value(ini_text, "param", "deref", "0") != "0";
     parse_u32(ini_value(ini_text, "param", "rows_offset", "0"), g_param.rows_offset);
     parse_u32(ini_value(ini_text, "param", "row_count", "0"), g_param.row_count);
     parse_u32(ini_value(ini_text, "param", "row_stride", "0"), g_param.row_stride);
@@ -380,8 +390,9 @@ extern "C" __declspec(dllexport) bool shops_periodic_init(const char* manifest_p
                 g_rows.swap(indexed);
                 g_armed = true;
                 std::printf("[shops_periodic] armed: %zu row ids (%u unreadable), seed %u, "
-                            "stride %u, id+%u, equip+%u\n", g_rows.size(), unreadable, g_seed.load(),
-                            g_param.row_stride, g_param.id_offset, g_param.equip_id_offset);
+                            "stride %u, deref %u, id+%u, equip+%u\n", g_rows.size(), unreadable,
+                            g_seed.load(), g_param.row_stride, g_param.deref ? 1 : 0,
+                            g_param.id_offset, g_param.equip_id_offset);
             } else {
                 std::printf("[shops_periodic] inert: no readable ShopLineupParam rows (%u unreadable entries)\n",
                             unreadable);

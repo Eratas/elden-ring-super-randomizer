@@ -295,9 +295,10 @@ guessed game offsets in the source.
 To arm it: `python tools\verify_aobs.py` checks the installed `eldenring.exe`, including the
 single-hit `ParamRepository singleton` pattern whose slot holds the live repository pointer. With the
 game running and a save loaded, `python tools\probe_param_rows.py` follows that slot read-only and
-prints candidate array bases; the game's own name table maps `ShopLineupParam` to id `0x1A`. Use that
-evidence to set `row_count`, `row_stride`, `row_pointer`, `id_offset` and `equip_id_offset` for that
-build, then uncomment `[param]` in the sample ini. Startup logs
+prints candidate array bases as offsets from the repository object; the game's own name table maps
+`ShopLineupParam` to id `0x1A`. Use that evidence to set `row_count`, `row_stride`, `row_pointer`,
+`id_offset` and `equip_id_offset` for that build, then uncomment `[param]` in the sample ini with
+`aob_disp = 3` and `deref = 1` so the DLL follows the verified singleton slot. Startup logs
 `armed: N row ids ...` when indexing succeeded, or the exact reason it stayed inert. Every resolved
 address is probed with `VirtualQuery` before a `u32` write; a wrong geometry cannot fault the process.
 In-game periodic reroll is **UNVERIFIED** until a play session confirms the log and the merchant stock;
