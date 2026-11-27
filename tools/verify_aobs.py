@@ -8,7 +8,8 @@ Run after updating Elden Ring:
     python tools/verify_aobs.py --pattern "48 8b ?? ????????"   # test a candidate ShopLineupParam AOB
 
 If a give-call pattern no longer matches, that call site is skipped; the DLL only logs `inert` when
-*both* give patterns fail. The other three patterns only gate the optional auto-equip feature. This
+*both* give patterns fail. The other patterns gate optional features: auto-equip, and the
+ParamRepository singleton used to locate ShopLineupParam rows. This
 script tells you *which* pattern broke so the source can be updated. The two give-call patterns must
 resolve to the same target: that is the function the detour hooks at every call site.
 """
@@ -32,6 +33,12 @@ PATTERNS = {
     "WorldChrMan singleton": ("48 8B ?? ???????? 48 85 ?? 75 2E 48 8D 0D ???????? "
                               "E8 ???????? 4C 8B C8 4C 8D 05 ???????? BA ?? ?? 00 00 "
                               "48 8D 0D ???????? E8 ????????", 0, 1),
+    # Found by chasing the UTF-16 "ShopLineupParam" name in the game's param-name table.  Displacements
+    # are literal on purpose: a game update should fail this check rather than silently point at a
+    # different singleton.  The slot it loads is where the live ParamRepository pointer lives.
+    "ParamRepository singleton": ("48 8B 05 DD 9B CD 03 48 85 C0 75 05 E8 4B 5A C7 00 "
+                                   "48 8D 0D D4 65 B0 02 48 89 48 38 48 8D 0D D9 65 B0 02 "
+                                   "48 89 48 40 48 8B C8", 0, 1),
 }
 
 
